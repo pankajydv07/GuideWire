@@ -1,8 +1,3 @@
-Based on all the research and source documents already read, here is your fully synthesized, concise, hackathon-ready README:
-
-***
-
-```markdown
 # RiderShield — Parametric Income Protection for Q-Commerce Riders
 
 > **Automatic income protection for delivery riders.**  
@@ -676,8 +671,3 @@ ridershield/
 
 *Built with ❤️ for India's 10M+ gig workers — the invisible backbone of quick commerce.
 DEVTrails 2026 Hackathon Submission.*
-```
-
-***
-
-The README is designed to be copied directly into your GitHub repo as `README.md`.  It strictly follows the hackathon judging rubric — persona scenarios and workflow first, then premium model and triggers, then platform justification, then AI/ML depth, then tech stack and dev plan — while keeping everything concise and judge-scannable. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/59765090/13f1e4a1-2d46-42a8-9988-3f727532f642/README-1.md)
