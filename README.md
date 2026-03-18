@@ -1,8 +1,3 @@
-Based on all the research and source documents already read, here is your fully synthesized, concise, hackathon-ready README:
-
-***
-
-```markdown
 # RiderShield — Parametric Income Protection for Q-Commerce Riders
 
 > **Automatic income protection for delivery riders.**  
@@ -145,30 +140,22 @@ failure) from 10 AM–2 PM. No orders dispatch. 4 hours, zero income.
 
 ## 3. Application Workflow
 
-```
-
-[Rider Onboards] → [Selects Weekly Cover] → [Premium Paid via UPI]
-↓
-[Policy Activated for Calendar Week]
-↓
-[Background: Data Collector polls APIs every 5 min]
-↓ ↓ ↓ ↓
-[Weather] [Traffic] [Platform/Store] [Payment Rails]
-↓
-[Trigger Service evaluates zone × slot × rider status]
-↓
-[Disruption Event Created]
-↓
-[Claims Service: identify insured online riders in zone]
-↓
-[Income Estimator: expected vs actual earnings]
-↓
-[Fraud Service: GPS, peer comparison, behavioural checks]
-↓
-[Payout Service: instant UPI credit]
-↓
-[Push Notification to Rider + Dashboard Update]
-
+```mermaid
+flowchart TD
+    A[Rider Onboards] --> B[Selects Weekly Cover] --> C[Premium Paid via UPI]
+    C --> D[Policy Activated for Calendar Week]
+    D --> E[Background: Data Collector polls APIs every 5 min]
+    E --> F1[Weather]
+    E --> F2[Traffic]
+    E --> F3[Platform/Store]
+    E --> F4[Payment Rails]
+    F1 & F2 & F3 & F4 --> G[Trigger Service evaluates zone × slot × rider status]
+    G --> H[Disruption Event Created]
+    H --> I[Claims Service: identify insured online riders in zone]
+    I --> J[Income Estimator: expected vs actual earnings]
+    J --> K[Fraud Service: GPS, peer comparison, behavioural checks]
+    K --> L[Payout Service: instant UPI credit]
+    L --> M[Push Notification to Rider + Dashboard Update]
 ```
 
 ### Rider-Facing Steps
@@ -392,51 +379,53 @@ These models represent a credible, investor-grade roadmap even if not fully ship
 
 ### 7.3 AI Data Flow
 
-```
-
-External APIs → Kafka → Feature Store (Redis + TimescaleDB)
-↓
-Risk Model (LightGBM) → Premium per slot → Policy Service
-↓
-Trigger Service → Disruption Event
-↓
-Income Estimator → Claim Gap Calculation
-↓
-Fraud Model (Isolation Forest + Rules) → Approve / Flag / Reject
-↓
-Payout Service → UPI Credit
-
+```mermaid
+flowchart TD
+    A[External APIs] --> B[Kafka]
+    B --> C[Feature Store: Redis + TimescaleDB]
+    C --> D[Risk Model: LightGBM]
+    D --> E[Premium per slot]
+    E --> F[Policy Service]
+    D --> G[Trigger Service]
+    G --> H[Disruption Event]
+    H --> I[Income Estimator]
+    I --> J[Claim Gap Calculation]
+    J --> K[Fraud Model: Isolation Forest + Rules]
+    K --> L[Approve / Flag / Reject]
+    L --> M[Payout Service]
+    M --> N[UPI Credit]
 ```
 
 ---
 
 ## 8. System Architecture
 
-```
+```mermaid
+graph TB
+    subgraph RiderApp["RIDER MOBILE APP (PWA)"]
+        App["Onboarding | Slot Selection | Policy | Dashboard | Alerts"]
+    end
 
-┌─────────────────────────────────────────────────────────────────┐
-│                    RIDER MOBILE APP (PWA)                       │
-│   Onboarding │ Slot Selection │ Policy │ Dashboard │ Alerts     │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ HTTPS / REST
-┌──────────────────────────▼──────────────────────────────────────┐
-│                      API GATEWAY (FastAPI)                      │
-│  Rider Service │ Policy Service │ Claims Service │ Payout Svc   │
-│  Risk Service  │ Fraud Service  │ Trigger Service               │
-└──────┬──────────────────┬──────────────────────┬───────────────┘
-       │                  │                      │
-┌──────▼──────┐  ┌────────▼────────┐  ┌─────────▼───────────────┐
-│ PostgreSQL  │  │  Kafka (Events) │  │  ML Service (FastAPI)    │
-│ (Core Data) │  │  Time-Series DB │  │  Risk Model │ Fraud Model│
-└─────────────┘  └────────┬────────┘  └─────────────────────────┘
-                          │
-              ┌───────────▼──────────────┐
-              │  DATA COLLECTOR          │
-              │  Weather │ Traffic       │
-              │  Platform │ Payments     │
-              │  Events │ Community Sig  │
-              └──────────────────────────┘
+    subgraph APIGateway["API GATEWAY (FastAPI)"]
+        Svc1["Rider Service | Policy Service | Claims Service | Payout Svc"]
+        Svc2["Risk Service | Fraud Service | Trigger Service"]
+    end
 
+    subgraph DataML["Data & ML Layer"]
+        PG[(PostgreSQL - Core Data)]
+        Kafka["Kafka Events / Time-Series DB"]
+        ML["ML Service (FastAPI) - Risk Model | Fraud Model"]
+    end
+
+    subgraph Collector["DATA COLLECTOR"]
+        Ext["Weather | Traffic | Platform | Payments | Events | Community Sig"]
+    end
+
+    RiderApp -->|HTTPS / REST| APIGateway
+    APIGateway --> PG
+    APIGateway --> Kafka
+    APIGateway --> ML
+    Kafka --> Collector
 ```
 
 ### Core Domain Entities
@@ -676,8 +665,3 @@ ridershield/
 
 *Built with ❤️ for India's 10M+ gig workers — the invisible backbone of quick commerce.
 DEVTrails 2026 Hackathon Submission.*
-```
-
-***
-
-The README is designed to be copied directly into your GitHub repo as `README.md`.  It strictly follows the hackathon judging rubric — persona scenarios and workflow first, then premium model and triggers, then platform justification, then AI/ML depth, then tech stack and dev plan — while keeping everything concise and judge-scannable. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/59765090/13f1e4a1-2d46-42a8-9988-3f727532f642/README-1.md)
