@@ -2,7 +2,9 @@
 
 > **Automatic income protection for delivery riders.**  
 > When rain, gridlock, GPS glitches, or platform failures kill your earnings —  
-> RiderShield detects it and pays you. No claims. No paperwork. No waiting.
+> RiderShield detects it and pays you. No claims. No paperwork. No waiting.  
+> And when a disruption slips through undetected, riders can submit a geo-tagged manual claim —
+> evaluated against real weather, traffic, and location data in minutes, not weeks.
 
 ---
 
@@ -333,6 +335,9 @@ A claim is auto-initiated only when **all three conditions are met**:
 Multiple simultaneous triggers (rain + traffic + store outage) count as **one disruption event**
 — no double-payouts per slot.
 
+> **When none of the above conditions are met** but the rider believes they experienced a genuine
+> disruption, they can initiate a rider-led **Manual Claim** — see [Section 5.4](#54-manual-claim-request-fallback-for-undetected-disruptions) below.
+
 ---
 
 ### 5.4 Manual Claim Request (Fallback for Undetected Disruptions)
@@ -513,18 +518,19 @@ flowchart TD
 ```mermaid
 graph TB
     subgraph RiderApp["RIDER MOBILE APP (PWA)"]
-        App["Onboarding | Slot Selection | Policy | Dashboard | Alerts"]
+        App["Onboarding | Slot Selection | Policy | Dashboard | Alerts | Manual Claim + Photo"]
     end
 
     subgraph APIGateway["API GATEWAY (FastAPI)"]
-        Svc1["Rider Service | Policy Service | Claims Service | Payout Svc"]
-        Svc2["Risk Service | Fraud Service | Trigger Service"]
+        Svc1["Rider Service | Policy Service | Claims Service | Manual Claims Service | Payout Svc"]
+        Svc2["Risk Service | Fraud Service | Trigger Service | Geo-Validation Service"]
     end
 
     subgraph DataML["Data & ML Layer"]
         PG[(PostgreSQL - Core Data)]
         Kafka["Kafka Events / Time-Series DB"]
-        ML["ML Service (FastAPI) - Risk Model | Fraud Model"]
+        ML["ML Service (FastAPI) - Risk Model | Fraud Model | Spam Score"]
+        FS[(File Storage - Geo-Tagged Photos)]
     end
 
     subgraph Collector["DATA COLLECTOR"]
@@ -532,9 +538,11 @@ graph TB
     end
 
     RiderApp -->|HTTPS / REST| APIGateway
+    RiderApp -->|Photo Upload| FS
     APIGateway --> PG
     APIGateway --> Kafka
     APIGateway --> ML
+    APIGateway --> FS
     Kafka --> Collector
 ```
 
@@ -569,11 +577,12 @@ graph TB
 | **Weather** | OpenWeatherMap + IMD | Free tier, India coverage, rainfall/AQI/temp |
 | **Traffic** | Google Maps / TomTom Traffic API | Real congestion data; fallback to mocks |
 | **Platform Data** | Simulated / Mocked APIs | Dark store status, order volume — simulated for prototype |
+| **File Storage** | Local FS (dev) / AWS S3 (prod) | Geo-tagged photo evidence for manual claims; EXIF parsed via Pillow |
 | **Infra** | Docker + Docker Compose | One-command local deploy for demo and judges |
 
 **Guidewire Integration Path (Future):**
 - PolicyCenter (APD) for policy lifecycle management.
-- ClaimCenter for zero-touch claim initiation via App Events / Webhooks.
+- ClaimCenter for zero-touch claim initiation (automatic triggers) and manual claim adjudication via App Events / Webhooks.
 - Jutro Digital Platform for enterprise mobile UI.
 - Integration Gateway for external API orchestration.
 
@@ -644,7 +653,7 @@ graph TB
 | **Disruption coverage** | Weather only | 12+ categories: algorithmic, regulatory, access, payments |
 | **Pricing granularity** | Daily or flat weekly rate | 30–60 min micro-slot risk modeling |
 | **Triggers** | Static, hand-tuned thresholds | Data-driven, self-calibrating per zone and season |
-| **Fraud detection** | Simple GPS check | 4-layer: geo, behavioural, graph, counterfactual |
+| **Fraud detection** | Simple GPS check | 5-layer: geo, behavioural, graph, counterfactual, geo-tagged photo validation (manual claims) |
 | **Unique triggers** | None | GPS multipath shadowbans, elevator bans, VIP blockades, uncompensated wait time |
 | **Explainability** | Black box | Slot-level risk reasons shown to rider and insurer |
 | **Claim process** | File → adjuster → wait | Zero-touch parametric: trigger = claim = payout; **plus manual claim fallback with geo-tagged photo, weather/traffic corroboration, and spam detection for edge cases** |
@@ -693,6 +702,7 @@ benefit — riders get near-free insurance, platforms reduce churn, we scale 10�
 | Catastrophic zone events (city-wide flood) | Reinsurance + aggregate stop-loss cap per zone |
 | Model inaccuracy early on | Conservative loading (25%), continuous retraining, A/B testing |
 | Fraud epidemic | 4-layer detection, manual review queue, payout caps per rider per week |
+| **Manual claim abuse** | Geo-tagged photo GPS vs. live telemetry cross-check, EXIF timestamp validation, weather/traffic API corroboration, composite spam score — auto-reject at ≥ 70; capped at 1 manual claim per policy week per rider |
 
 ---
 
@@ -744,6 +754,8 @@ OPENWEATHER_API_KEY=your_key
 GOOGLE_MAPS_API_KEY=your_key
 RAZORPAY_KEY_ID=your_test_key
 RAZORPAY_KEY_SECRET=your_test_secret
+PHOTO_STORAGE_PATH=./uploads          # local dev; use S3_BUCKET_NAME in prod
+MAX_PHOTO_SIZE_MB=10                  # max size for geo-tagged claim photos
 
 # admin-dashboard/.env.local
 NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -757,12 +769,13 @@ API_URL=http://localhost:8000
 ```
 ridershield/
 ├── backend/              # FastAPI — core services + ML models
-│   ├── services/         # rider, policy, claims, fraud, payout
-│   ├── ml/               # risk model, fraud model, trigger calibration
+│   ├── services/         # rider, policy, claims, manual_claims, geo_validation, fraud, payout
+│   ├── ml/               # risk model, fraud model, trigger calibration, spam score
 │   └── integrations/     # weather, traffic, platform, payment APIs
 ├── admin-dashboard/      # Next.js insurer/admin UI
-├── mobile-app/           # React Native rider app
+├── mobile-app/           # React Native rider app (includes geo-tagged photo capture)
 ├── data/                 # Synthetic data + seed scripts
+├── uploads/              # Geo-tagged photo evidence (dev only; use S3 in prod)
 ├── docker-compose.yml
 └── docs/                 # Architecture diagrams, API docs
 ```
@@ -779,6 +792,13 @@ ridershield/
   in India.
 - Reinsurance arrangements for catastrophic zone events are a commercial layer not built
   in the prototype.
+- **Manual claim photo storage** uses a local filesystem in the prototype; production requires
+  a secure, signed-URL object store (AWS S3 / GCS) with image integrity verification.
+- **EXIF GPS extraction** relies on camera-embedded metadata; photos shared via messaging apps
+  often have EXIF stripped — in those cases the system falls back to the device GPS recorded by
+  the rider app at upload time.
+- Manual claims are rate-limited to **1 per policy week per rider** in the prototype; the
+  production cap should be informed by real claim data and the portfolio loss ratio.
 
 ---
 
