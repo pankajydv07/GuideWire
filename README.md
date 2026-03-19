@@ -25,7 +25,6 @@
 12. [Competitive Differentiation](#12-competitive-differentiation)  
 13. [Business Viability](#13-business-viability)  
 14. [Adversarial Defense & Anti-Spoofing Strategy](#14-adversarial-defense--anti-spoofing-strategy)  
-15. [Getting Started](#15-getting-started)
 
 ---
 
