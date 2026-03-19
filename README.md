@@ -172,7 +172,7 @@ flowchart TD
     E --> F1[Weather]
     E --> F2[Traffic]
     E --> F3[Platform/Store]
-    E --> F4[Payment Rails]
+    E --> F4[Others]
     F1 & F2 & F3 & F4 --> G[Trigger Service evaluates zone × slot × rider status]
     G --> H{Disruption Detected?}
     H -- Yes --> I[Disruption Event Created]
@@ -308,7 +308,6 @@ human judgment, no claim form.
 | **Store** | Dark store closed | `store_status = CLOSED` | Platform API (simulated) |
 | **Store** | Inventory stockout | `stock_level = CRITICAL` | Platform API (simulated) |
 | **Platform** | App / API outage | `platform_status = DOWN` in zone | Platform status API |
-| **Payments** | UPI downtime | `upi_status = DEGRADED` | NPCI status / Razorpay |
 | **Regulatory** | Curfew / ban | `curfew_active = TRUE` | News feed / govt portal |
 | **Community Signal** | Mass order collapse | > 70% riders in zone see simultaneous drop | Internal rider data |
 
@@ -407,7 +406,7 @@ POST  /api/admin/claims/{claim_id}/reject    # Admin rejects → rider notified 
 | **Rider behaviour** | Riders manage their entire livelihood via smartphone, between trips, at dark-store queues. Desktop is irrelevant. |
 | **Avoiding app overload** | Riders already run delivery apps, maps, and payment apps. A heavy native install adds friction. A PWA installs from browser and sits on the home screen. |
 | **Cross-platform coverage** | Same React Native / Next.js codebase works on Android and iOS without separate builds. |
-| **Iteration speed** | PWA enables push-to-prod without app store review cycles — critical for a hackathon. |
+| **Iteration speed** | PWA enables push-to-prod without app store review cycles. |
 | **Backend-heavy product** | Most intelligence (triggers, ML, payouts) lives server-side. Native sensors are not critical for Phase 1. |
 
 **Future (Phase 3+):** A native app layer or a **Guidewire Jutro Digital Platform**
@@ -792,7 +791,7 @@ Pydantic model) remains identical.
 
 ## 11. Development Plan
 
-### Phase 1 — Foundation *(Current)*
+### Phase 1 — Foundation 
 
 **Goal:** Working skeleton — riders onboard, buy policies, data flows in.
 
@@ -809,7 +808,7 @@ Pydantic model) remains identical.
 
 ---
 
-### Phase 2 — Automation *(Core Product)*
+### Phase 2 — Automation 
 
 **Goal:** Full zero-touch flow — disruption detected → claim → payout — working end-to-end.
 
@@ -852,7 +851,7 @@ Pydantic model) remains identical.
 
 | Aspect | Typical Approach | RiderShield |
 |---|---|---|
-| **Disruption coverage** | Weather only | 12+ categories: algorithmic, regulatory, access, payments |
+| **Disruption coverage** | Weather, Traffic only | 12+ categories: algorithmic, regulatory, access, payments |
 | **Pricing granularity** | Daily or flat weekly rate | 30–60 min micro-slot risk modeling |
 | **Triggers** | Static, hand-tuned thresholds | Data-driven, self-calibrating per zone and season |
 | **Fraud detection** | Simple GPS check | 5-layer: geo, behavioural, graph, counterfactual, geo-tagged photo validation (manual claims) |
@@ -1178,82 +1177,6 @@ distress are never punished for the signals that bad weather itself creates; and
 ring-level escalation protocol with batch holds, silent flags, retroactive audits, platform
 partner alerts, and per-zone payout velocity caps that protects liquidity before a ring
 can drain it. No GPS spoofing app defeats all five layers simultaneously.
-
----
-
-## 15. Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- Python 3.11+
-- PostgreSQL 15+
-- Redis 7+
-- Docker + Docker Compose
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/your-username/ridershield.git
-cd ridershield
-
-# Start infrastructure (PostgreSQL, Redis, Kafka, TimescaleDB)
-docker-compose up -d
-
-# Backend API
-cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-
-# Admin dashboard
-cd ../admin-dashboard
-npm install
-npm run dev
-
-# Rider mobile app
-cd ../mobile-app
-npm install
-npx expo start
-```
-
-### Environment Variables
-
-```env
-# backend/.env
-DATABASE_URL=postgresql://user:pass@localhost:5432/ridershield
-REDIS_URL=redis://localhost:6379
-OPENWEATHER_API_KEY=your_key
-GOOGLE_MAPS_API_KEY=your_key
-RAZORPAY_KEY_ID=your_test_key
-RAZORPAY_KEY_SECRET=your_test_secret
-PHOTO_STORAGE_PATH=./uploads          # local dev; use S3_BUCKET_NAME in prod
-MAX_PHOTO_SIZE_MB=10                  # max size for geo-tagged claim photos
-
-# admin-dashboard/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# mobile-app/.env
-API_URL=http://localhost:8000
-```
-
-### Repo Structure
-
-```
-ridershield/
-├── backend/              # FastAPI — core services + ML models
-│   ├── services/         # rider, policy, claims, manual_claims, geo_validation, fraud, payout
-│   ├── ml/               # risk model, fraud model, trigger calibration, spam score
-│   └── integrations/     # weather, traffic, platform, payment APIs
-├── admin-dashboard/      # Next.js insurer/admin UI
-├── mobile-app/           # React Native rider app (includes geo-tagged photo capture)
-├── data/                 # Synthetic data + seed scripts
-├── uploads/              # Geo-tagged photo evidence (dev only; use S3 in prod)
-├── docker-compose.yml
-└── docs/                 # Architecture diagrams, API docs
-```
 
 ---
 
