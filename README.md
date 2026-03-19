@@ -20,11 +20,12 @@
 7. [AI/ML Integration](#7-aiml-integration)  
 8. [System Architecture](#8-system-architecture)  
 9. [Tech Stack](#9-tech-stack)  
-10. [Development Plan](#10-development-plan)  
-11. [Competitive Differentiation](#11-competitive-differentiation)  
-12. [Business Viability](#12-business-viability)  
-13. [Adversarial Defense & Anti-Spoofing Strategy](#13-adversarial-defense--anti-spoofing-strategy)  
-14. [Getting Started](#14-getting-started)
+10. [Platform Data Simulation](#10-platform-data-simulation)  
+11. [Development Plan](#11-development-plan)  
+12. [Competitive Differentiation](#12-competitive-differentiation)  
+13. [Business Viability](#13-business-viability)  
+14. [Adversarial Defense & Anti-Spoofing Strategy](#14-adversarial-defense--anti-spoofing-strategy)  
+15. [Getting Started](#15-getting-started)
 
 ---
 
@@ -589,7 +590,207 @@ graph TB
 
 ---
 
-## 10. Development Plan
+## 10. Platform Data Simulation
+
+Real-time access to delivery platform APIs (Zepto, Blinkit, Swiggy Instamart) is not
+available for a prototype. This section documents exactly how the platform data layer is
+simulated, what it produces, how realistic the output is, and how it plugs into the live
+system workflow.
+
+---
+
+### 10.1 Why Simulation Is Necessary
+
+Delivery platforms do not expose public APIs for per-rider order data, store health, or
+earnings streams. Production integrations would require formal B2B partnerships, NDA-bound
+data-sharing agreements, and sandboxed API credentials — none of which are feasible for a
+hackathon prototype. The simulation layer provides a **functionally identical interface**:
+the rest of the system consumes simulated platform events through the same contract it would
+use with a real API, making the substitution transparent to every downstream service.
+
+---
+
+### 10.2 Simulated Parameters
+
+The simulation covers all platform signals that the Trigger Service and Claims Service
+require to operate end-to-end.
+
+#### Rider & Order Signals
+
+| Parameter | Description | Simulated Range / Values |
+|---|---|---|
+| `orders_per_hour` | Number of orders dispatched to the rider in the current slot | 0–18 orders/hr (zone- and time-dependent) |
+| `order_rate_drop_pct` | Percentage fall in order rate vs. the rider's rolling 4-week average | 0–100 % |
+| `rider_status` | Whether the delivery app reports the rider as online | `ONLINE` / `OFFLINE` |
+| `orders_dispatched` | Running count of orders the platform sent to the rider this shift | Integer ≥ 0 |
+| `orders_accepted` | Orders the rider accepted | Integer ≤ `orders_dispatched` |
+| `orders_declined` | Orders declined (used to detect algorithmic suppression) | Integer ≥ 0 |
+| `dispatch_latency_sec` | Time (seconds) between store ready and dispatch notification | 30–600 s (normal 60–90 s) |
+| `active_navigation_events` | Count of in-app navigation events (proxy for genuine trip activity) | Integer ≥ 0 |
+
+#### Earnings Signals
+
+| Parameter | Description | Simulated Range / Values |
+|---|---|---|
+| `earnings_current_slot` | Rupee earnings in the current 30-min micro-slot | ₹0–₹300 |
+| `earnings_rolling_baseline` | Rider's 4-week average earnings for the same slot type | ₹80–₹250 (seeded from persona profile) |
+| `earnings_per_order` | Per-order payout including distance incentive | ₹12–₹35 |
+| `surge_multiplier` | Platform surge factor active in the zone at this moment | 1.0–2.5× |
+| `weekly_earnings_to_date` | Cumulative earnings so far in the active policy week | ₹0–₹4,500 |
+
+#### Store & Inventory Signals
+
+| Parameter | Description | Simulated Values |
+|---|---|---|
+| `store_status` | Operational state of the rider's primary dark store | `OPEN` / `CLOSED` / `DEGRADED` |
+| `store_order_throughput` | Orders processed per hour at the store | 0–200 orders/hr |
+| `stock_level` | Aggregate inventory health of the store | `NORMAL` / `LOW` / `CRITICAL` |
+| `pickup_queue_depth` | Number of riders currently waiting at the store for their order | 0–25 riders |
+| `avg_pickup_wait_sec` | Average time (seconds) riders are waiting at the pickup counter | 30–900 s (SLA threshold: 300 s) |
+| `store_outage_reason` | Human-readable reason when `store_status = CLOSED` | `EQUIPMENT_FAILURE` / `POWER_CUT` / `MAINTENANCE` / `FLOOD` |
+
+#### Platform Health Signals
+
+| Parameter | Description | Simulated Values |
+|---|---|---|
+| `platform_status` | Whether the platform's own backend is reachable | `UP` / `DEGRADED` / `DOWN` |
+| `api_error_rate_pct` | Percentage of API calls returning errors in this zone | 0–100 % |
+| `shadowban_active` | Flag indicating the platform has suppressed the rider's visibility | `true` / `false` |
+| `shadowban_duration_min` | Minutes the rider has been in suppressed state | 0–240 min |
+| `allocation_anomaly` | Flag set when rider's allocation is ≥ 40 % below the zone median | `true` / `false` |
+
+---
+
+### 10.3 Simulation Approach
+
+#### Architecture
+
+The simulation is implemented as a **`PlatformSimulator` module** inside the
+`backend/integrations/platform_simulator.py` file. It exposes the same interface as the
+real platform integration adapter, so the Data Collector calls it identically whether
+talking to a live API or a simulator.
+
+```
+Data Collector (polls every 5 min)
+  └─► PlatformSimulator.get_rider_snapshot(rider_id, zone_id, slot_ts)
+        └─► Returns: PlatformSnapshot (all parameters above, as a typed Pydantic model)
+```
+
+#### Statistical Model
+
+Simulated values are not random noise — they are drawn from **parameterised statistical
+distributions anchored to published Q-commerce benchmarks**:
+
+| Aspect | Approach |
+|---|---|
+| **Baseline order rates** | Normal distribution μ = 10 orders/hr, σ = 2.5, clipped to [0, 18]. Mean adjusted per time-of-day profile (see table below). |
+| **Earnings per order** | Log-normal distribution with μ = ₹18, σ = ₹5 (matches reported Zepto/Blinkit incentive structures). |
+| **Store status transitions** | Markov chain: `OPEN → DEGRADED` (p = 0.02/hr), `DEGRADED → CLOSED` (p = 0.15/hr), `CLOSED → OPEN` (p = 0.30/hr). |
+| **Dispatch latency** | Gamma distribution (k = 2, θ = 45 s) with a heavy tail to simulate queue spikes. |
+| **Pickup queue depth** | Poisson(λ = 4) during normal hours; λ scales to 12 during inventory-stockout injection. |
+| **Surge multiplier** | Discrete: 1.0× (70 %), 1.25× (15 %), 1.5× (10 %), 2.0× (4 %), 2.5× (1 %). |
+
+#### Time-of-Day Demand Profile
+
+Order rates are modulated by a deterministic demand curve that reflects real Q-commerce
+traffic patterns in Indian metros:
+
+| Time Window | Demand Multiplier | Typical `orders_per_hour` |
+|---|---|---|
+| 06:00–08:30 | 0.5× | 4–6 |
+| 08:30–11:00 | 0.9× | 8–10 |
+| 11:00–14:00 | 1.1× | 9–12 |
+| 14:00–17:00 | 0.6× | 4–7 |
+| 17:00–20:00 | 1.4× | 12–16 |
+| 20:00–22:30 | 1.2× | 10–14 |
+| 22:30–06:00 | 0.3× | 0–4 |
+
+#### Disruption Injection
+
+The simulator accepts an optional **`DisruptionScenario`** object that overrides the
+baseline distributions to reproduce a named disruption type. This is how demo scenarios
+(Sections 2.1–2.4) are triggered deterministically:
+
+| Scenario Key | What Changes |
+|---|---|
+| `HEAVY_RAIN` | `orders_per_hour` drops to 20–35 % of baseline; `rider_status` may flip `OFFLINE` for 10 % of riders; `store_order_throughput` falls 40 %. |
+| `STORE_CLOSURE` | `store_status = CLOSED`; `orders_dispatched = 0`; `stock_level = CRITICAL` for adjacent stores. |
+| `PLATFORM_OUTAGE` | `platform_status = DOWN`; `api_error_rate_pct = 95–100 %`; all `orders_dispatched = 0`. |
+| `GPS_SHADOWBAN` | `shadowban_active = true`; `shadowban_duration_min` ramps from 0 to 120; rider's `orders_per_hour` → 0 while zone peers remain at baseline. |
+| `DARK_STORE_QUEUE` | `pickup_queue_depth` spikes to 15–25; `avg_pickup_wait_sec` exceeds 300 s SLA. |
+| `ALGORITHMIC_SHOCK` | `allocation_anomaly = true`; rider's `order_rate_drop_pct` = 50–70 % while zone median is unchanged. |
+
+#### Reproducibility & Seeding
+
+The simulator uses a **deterministic seed** derived from `(rider_id, zone_id, iso_week)`
+so that repeated test runs produce identical results. Integration tests fix the seed
+explicitly; the live demo uses a rotating daily seed to generate fresh-looking data each day.
+
+---
+
+### 10.4 Realism Assessment
+
+| Dimension | Realism Level | Notes |
+|---|---|---|
+| **Order rate magnitudes** | ✅ High | Derived from publicly reported Zepto/Blinkit rider earnings of ₹15,000–₹25,000/month back-calculated to hourly order rates. |
+| **Earnings per order** | ✅ High | Matches ₹12–₹35 range reported in rider forums and investigative journalism (2023–2025). |
+| **Time-of-day demand shape** | ✅ High | Demand curve modelled on publicly reported Q-commerce peak-hour patterns (dinner rush 6–9 PM, lunch 12–2 PM). |
+| **Store status transitions** | ✅ Moderate–High | Markov transition probabilities calibrated to anecdotal dark-store outage frequency (1–2 closures/week per store). |
+| **Surge multiplier distribution** | ✅ Moderate | Discrete distribution matches approximate Blinkit/Zepto surge structures; exact weights are estimates. |
+| **Dispatch latency distribution** | ✅ Moderate | Gamma shape captures right-skew (occasional long waits); exact parameters are estimated from rider reports. |
+| **GPS multipath / shadowban mechanics** | ⚠️ Approximated | Shadowban duration and allocation-drop magnitude are plausible estimates — no published ground truth for these events. |
+| **Cross-rider peer comparison signals** | ✅ High | Generated by running the simulator independently for each rider in the zone and comparing outputs — structurally identical to how real peer signals would work. |
+| **Platform API error patterns** | ⚠️ Approximated | Error rate during outages set to 95–100 %; real platform partial-failure patterns are more complex. |
+
+**Bottom line:** The simulation is calibrated to be accurate enough to validate the trigger
+logic, income estimation, and fraud detection algorithms. It is **not** a substitute for
+real platform data for actuary-grade pricing — that requires a production pilot with a
+platform partner.
+
+---
+
+### 10.5 Integration into the System Workflow
+
+The simulated platform layer is a **drop-in replacement** for the real platform API adapter.
+It participates in the full data pipeline without any special handling by downstream services:
+
+```mermaid
+flowchart TD
+    A[Data Collector — polls every 5 min] --> B{Platform API available?}
+    B -- Yes (production) --> C[Real Platform REST API\nZepto / Blinkit / Swiggy Instamart]
+    B -- No (prototype / test) --> D[PlatformSimulator\nbackend/integrations/platform_simulator.py]
+    C --> E[PlatformSnapshot: Pydantic model]
+    D --> E
+    E --> F[Kafka topic: platform.snapshots]
+    F --> G[Trigger Service\nevaluates store_status, platform_status,\nallocation_anomaly, shadowban_active]
+    F --> H[Feature Store: Redis + TimescaleDB\nstores earnings, order rates, surge multiplier]
+    G --> I{Trigger condition met?}
+    I -- Yes --> J[DisruptionEvent created]
+    J --> K[Claims Service\nidentifies insured online riders in zone]
+    K --> L[Income Estimator\nearnings_rolling_baseline vs earnings_current_slot]
+    L --> M[Fraud Service\nGPS · peer comparison · platform trip logs]
+    M --> N[Payout Service → UPI credit]
+    H --> L
+```
+
+**Key integration points:**
+
+| Service | How It Uses Platform Data |
+|---|---|
+| **Trigger Service** | Reads `store_status`, `platform_status`, `allocation_anomaly`, `shadowban_active`, and `api_error_rate_pct` from the Kafka topic to evaluate store-closure, outage, and algorithmic-shock triggers. |
+| **Income Estimator** | Reads `earnings_current_slot`, `earnings_rolling_baseline`, `earnings_per_order`, and `surge_multiplier` from the Feature Store to calculate the income gap for payout. |
+| **Community Signal Agent** | Aggregates `order_rate_drop_pct` across all zone riders to detect mass order collapses (> 70 % drop triggers community signal). |
+| **Fraud Service** | Cross-references `active_navigation_events` and `orders_dispatched` with GPS telemetry to confirm the rider was genuinely active — a spoofer's delivery app shows no trip events. |
+| **Dark Store Queue Trigger** | Reads `pickup_queue_depth` and `avg_pickup_wait_sec` to detect chronic unpaid wait-time disruptions (SLA breach when wait > 300 s across ≥ 3 riders at the same store). |
+
+**Switching to a real API in production** requires only replacing the `PlatformSimulator`
+with a real `PlatformAPIAdapter` that implements the same `get_rider_snapshot()` interface.
+Every service above continues to work unchanged — the data contract (the `PlatformSnapshot`
+Pydantic model) remains identical.
+
+---
+
+## 11. Development Plan
 
 ### Phase 1 — Foundation *(Current)*
 
@@ -647,7 +848,7 @@ graph TB
 
 ---
 
-## 11. Competitive Differentiation
+## 12. Competitive Differentiation
 
 | Aspect | Typical Approach | RiderShield |
 |---|---|---|
@@ -661,7 +862,7 @@ graph TB
 
 ---
 
-## 12. Business Viability
+## 13. Business Viability
 
 ### Unit Economics (Per Rider, Monthly)
 
@@ -707,7 +908,7 @@ benefit — riders get near-free insurance, platforms reduce churn, we scale 10�
 
 ---
 
-## 13. Adversarial Defense & Anti-Spoofing Strategy
+## 14. Adversarial Defense & Anti-Spoofing Strategy
 
 > **Context:** A coordinated syndicate of 500 delivery workers organized via Telegram and
 > used GPS-spoofing apps to fake their presence inside a red-alert weather zone — triggering
@@ -724,7 +925,7 @@ drop from a prior baseline, and a zone-wide peer impact pattern.
 
 ---
 
-### 13.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
+### 14.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
 
 Every automatic payout requires multi-modal corroboration across the following signal stack.
 No single signal can approve or reject a claim on its own.
@@ -760,7 +961,7 @@ adjusted per declared disruption type, zone road density, and observed traffic c
 
 ---
 
-### 13.2 The Data — What Catches a Coordinated Fraud Ring
+### 14.2 The Data — What Catches a Coordinated Fraud Ring
 
 Individual fraud detection fails at scale. A ring of 500 acting in concert leaves a
 **graph-level and behavioral signature** that is invisible in any single claim but
@@ -782,8 +983,8 @@ statistically unmistakable in aggregate. The fraud engine organizes evidence int
 |---|---|
 | **Online/offline timing pattern** | Riders who go "online" on the delivery platform *exclusively* during known red-alert weather windows — and never during normal conditions — are statistically anomalous. Isolation Forest flags this pattern as a behavioral fingerprint. |
 | **Claim-to-earn ratio** | A legitimate rider has a history of earning before claiming. Rolling 4-week earn/claim ratio tracked per rider. A fraudster's account with near-zero earnings history and a sudden high-value claim scores heavily in the fraud model. |
-| **Zone entry timing** | Genuine riders are already present in a zone before disruption begins. Fraudsters "teleport" into the zone at the exact moment a trigger fires (see §13.1 for configurable threshold parameters). |
-| **Geo-velocity impossibility** | Rider in Zone A at T=0 and Zone B (≥ 3 km away) at T+90 seconds during a declared red-alert event is physically impossible (see §13.1 for configurable threshold parameters). |
+| **Zone entry timing** | Genuine riders are already present in a zone before disruption begins. Fraudsters "teleport" into the zone at the exact moment a trigger fires (see §14.1 for configurable threshold parameters). |
+| **Geo-velocity impossibility** | Rider in Zone A at T=0 and Zone B (≥ 3 km away) at T+90 seconds during a declared red-alert event is physically impossible (see §14.1 for configurable threshold parameters). |
 | **Claim timing burst** | Legitimate disruptions produce staggered, organic claim arrivals following a Poisson distribution. A ring submitting claims after a Telegram broadcast creates a sharp impulse — hundreds of claims in a 2–5 minute window. Poisson-rate test: > 3σ deviation from the zone's historical mean triggers a zone-level fraud hold. |
 
 #### Layer 3 — Graph / Ring Detection
@@ -824,7 +1025,7 @@ Three graph queries execute on every disruption event:
 
 ---
 
-### 13.3 The UX Balance — Tiered Response Without Punishing Honest Workers
+### 14.3 The UX Balance — Tiered Response Without Punishing Honest Workers
 
 A real rider experiencing a genuine network drop in bad weather will look superficially
 similar to a spoofer: degraded GPS, weak cell signal, intermittent platform activity. The
@@ -917,7 +1118,7 @@ claims. It operates in three ranked passes simultaneously:
 
 ---
 
-### 13.4 Ring-Level Escalation Protocol
+### 14.4 Ring-Level Escalation Protocol
 
 When a coordinated ring is detected — a graph cluster of ≥ 10 accounts showing
 synchronized suspicious behavior — the following protocol activates automatically:
@@ -947,7 +1148,7 @@ synchronized suspicious behavior — the following protocol activates automatica
 
 ---
 
-### 13.5 Policy Safeguards & Architecture Summary
+### 14.5 Policy Safeguards & Architecture Summary
 
 **Policy safeguards that protect honest riders:**
 - Claims are **never** rejected on a single GPS signal alone — a single signal is never
@@ -980,7 +1181,7 @@ can drain it. No GPS spoofing app defeats all five layers simultaneously.
 
 ---
 
-## 14. Getting Started
+## 15. Getting Started
 
 ### Prerequisites
 
