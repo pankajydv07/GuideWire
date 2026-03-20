@@ -806,67 +806,42 @@ Pydantic model) remains identical.
 
 ---
 
-### Phase 2 — Automation & Protection [March 21 – April 4] (Weeks 3–4)
-
-> **Theme:** "Protect Your Worker"
+### Phase 2 — Automation 
 
 **Goal:** Full zero-touch flow — disruption detected → claim → payout — working end-to-end.
 
-#### Hackathon Deliverables
-
-- **A 2-minute demo video** uploaded to a publicly accessible link.
-- **Executable source code** showcasing:
-  - **Registration Process**
-  - **Insurance Policy Management**
-  - **Dynamic Premium Calculation**
-  - **Claims Management**
-
-#### Our Implementation Plan
-
 | Deliverable | Details |
 |---|---|
-| Registration process (polish) | End-to-end onboarding: name, phone, KYC, platform link, zone, slot preferences — fully functional and demo-ready |
-| Insurance policy management | Plan selection (Essential / Balanced / Max Protect), policy lifecycle (activate, view, renew, cancel), coverage status tracking |
-| Dynamic premium engine | LightGBM risk model on synthetic data, zone-level scoring, hyper-local risk factors, explainable premium per slot |
-| 5 automated triggers | Heavy rain, congestion, dark-store closure, platform outage, regulatory event — using OpenWeatherMap + mocked APIs |
-| Community Signal agent | Detects mass order collapse across zone riders (>70% affected) |
-| Claims automation | Trigger → income gap calc → basic fraud check → payout (zero-touch) |
+| Dynamic premium engine | LightGBM risk model on synthetic data, zone-level scoring |
+| 5 automated triggers | Heavy rain, congestion, dark-store closure, platform outage, regulatory event |
+| Community Signal agent | Detects mass order collapse across zone riders |
+| Claims automation | Trigger → income gap calc → fraud check → payout |
 | **Manual claim submission** | Rider-facing "Request Manual Claim" flow with geo-tagged photo upload, disruption type selection, and description |
 | **Geo-validation service** | Extracts EXIF GPS from photo; compares to rider's live telemetry GPS; flags location mismatches > 500 m |
 | **Weather & traffic corroboration** | OpenWeatherMap + Google Maps queried for the photo's location/time to verify the claimed disruption type |
 | **Spam detection pipeline** | Composite spam score from location mismatch, time anomaly, weather/traffic cross-check; auto-rejects score ≥ 70 |
 | **Admin manual-claim review queue** | Ranked by spam score; one-click approve/reject with corroboration summary |
-| 2-minute demo video | Registration → policy management → dynamic premium → simulated disruption → auto-payout + manual-claim fallback, uploaded publicly |
+| Mock payouts | Razorpay/UPI sandbox, push notification on payout |
+| v1 fraud checks | Geo-consistency + peer comparison (rule-based + Isolation Forest) |
+| 2-minute demo video | Onboarding → plan selection → simulated disruption → auto-payout + manual-claim fallback demo |
 
-**Exit criterion:** A 2-minute demo shows the complete registration → policy management → dynamic premium → zero-touch claim payout flow.
+**Exit criterion:** A 2-minute demo shows the complete parametric trigger → zero-touch payout flow.
 
 ---
 
-### Phase 3 — Scale & Optimise [April 5 – 17] (Weeks 5–6)
+### Phase 3 — Intelligence & Scale
 
-> **Theme:** "Perfect for Your Worker"
-
-**Goal:** Smart, observable, pitch-ready system with advanced fraud detection, instant payouts, and intelligent dashboards.
-
-#### Hackathon Deliverables
-
-- **Advanced Fraud Detection:** Catch delivery-specific fraud (e.g., GPS spoofing, fake weather claims using historical data).
-- **Instant Payout System (Simulated):** Integrate mock payment gateways (Razorpay test mode, Stripe sandbox, or UPI simulators) to demonstrate how the worker receives their lost wages instantly.
-- **Intelligent Dashboard:**
-  - **For Workers:** Earnings protected, active weekly coverage.
-  - **For Insurers (Admin):** Loss ratios, predictive analytics on next week's likely weather/disruption claims.
-
-#### Our Implementation Plan
+**Goal:** Smart, observable, pitch-ready system.
 
 | Deliverable | Details |
 |---|---|
-| Advanced fraud detection | Geo-consistency, peer comparison, Isolation Forest, behavioural autoencoder, collusion graph (Neo4j), counterfactual estimator, geo-velocity impossibility checks |
-| Instant payouts (simulated) | Full Razorpay test mode / Stripe sandbox / UPI simulator with webhook reconciliation, push notification on payout via FCM |
-| Rider intelligent dashboard | Earnings protected, active weekly coverage, risk alerts, claim history, next-week risk forecast, manual claim status tracker |
-| Admin intelligent dashboard | Loss ratios, predictive analytics, live disruption heatmap (zone × time), fraud alert queue, payout analytics, manual claim review |
+| Advanced fraud detection | Behavioural autoencoder, collusion graph, counterfactual estimator |
+| Instant payouts | Full Razorpay sandbox with webhook reconciliation |
+| Rider intelligent dashboard | Risk alerts, claim history, next-week risk forecast |
+| Admin heatmap dashboard | Zone-wise loss ratios, fraud queue, payout analytics |
 | Knowledge Graph v0 | Neo4j graph of zones, roads, stores, events — propagation logic |
 | Model improvements | Temporal model upgrade (TCN/Transformer), self-calibrating thresholds |
-| Final submission package | Demo + pitch deck + full repo with Docker Compose |
+| Final submission package | 5-minute demo + pitch deck + full repo with Docker Compose |
 
 ---
 
