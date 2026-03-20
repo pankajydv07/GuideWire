@@ -860,52 +860,6 @@ Pydantic model) remains identical.
 
 ---
 
-## 13. Business Viability
-
-### Unit Economics (Per Rider, Monthly)
-
-| Metric | Value |
-|---|---|
-| Weekly premium | ₹79 (avg, Balanced plan) |
-| Monthly premium (4.3 weeks) | ₹340 |
-| Disruption rate | ~15% of weeks have a claimable event |
-| Average payout when disrupted | ₹450 |
-| Expected monthly claims | ₹29 |
-| Gross margin | ~32% |
-| Net profit per rider/month | ~₹80 (after ops + fraud load) |
-
-**Target Loss Ratio:** 65–70% (standard for parametric products).
-
-### Market Opportunity
-
-| Segment | Size |
-|---|---|
-| Q-commerce riders India (2026 est.) | ~150,000 |
-| TAM (10% adoption @ ₹500/month) | ₹90 crores/year |
-| SOM Year 1 (2% adoption, 3,000 riders) | ₹1.8 crores/year |
-
-### Scaling Path
-
-1. **Months 1–6:** Pilot in Bengaluru — 500 riders, 2 dark store clusters.
-2. **Months 7–12:** Expand to 3 cities (Delhi, Mumbai, Hyderabad) — 3,000 riders.
-3. **Year 2:** 10 cities, 15,000 riders, platform (Zepto/Blinkit) B2B2C partnerships.
-4. **Year 3:** National coverage, extend to food-delivery and e-commerce riders.
-
-**B2B2C Lever:** Platforms subsidise 30–50% of weekly premium as a rider retention/welfare
-benefit — riders get near-free insurance, platforms reduce churn, we scale 10×.
-
-### Known Risks & Mitigations
-
-| Risk | Mitigation |
-|---|---|
-| Adverse selection (only high-risk riders buy) | Micro-slot pricing makes high-risk coverage accurately priced |
-| Catastrophic zone events (city-wide flood) | Reinsurance + aggregate stop-loss cap per zone |
-| Model inaccuracy early on | Conservative loading (25%), continuous retraining, A/B testing |
-| Fraud epidemic | 4-layer detection, manual review queue, payout caps per rider per week |
-| **Manual claim abuse** | Geo-tagged photo GPS vs. live telemetry cross-check, EXIF timestamp validation, weather/traffic API corroboration, composite spam score — auto-reject at ≥ 70; capped at 1 manual claim per policy week per rider |
-
----
-
 ## 14. Adversarial Defense & Anti-Spoofing Strategy
 
 > **Context:** A coordinated syndicate of 500 delivery workers organized via Telegram used
