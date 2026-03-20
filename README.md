@@ -22,9 +22,8 @@
 9. [Tech Stack](#9-tech-stack)  
 10. [Platform Data Simulation](#10-platform-data-simulation)  
 11. [Development Plan](#11-development-plan)  
-12. [Competitive Differentiation](#12-competitive-differentiation)  
-13. [Business Viability](#13-business-viability)  
-14. [Adversarial Defense & Anti-Spoofing Strategy](#14-adversarial-defense--anti-spoofing-strategy)  
+12. [Competitive Differentiation](#12-competitive-differentiation)   
+13. [Adversarial Defense & Anti-Spoofing Strategy](#14-adversarial-defense--anti-spoofing-strategy)  
 
 ---
 
@@ -860,7 +859,7 @@ Pydantic model) remains identical.
 
 ---
 
-## 14. Adversarial Defense & Anti-Spoofing Strategy
+## 13. Adversarial Defense & Anti-Spoofing Strategy
 
 > **Context:** A coordinated syndicate of 500 delivery workers organized via Telegram used
 > GPS-spoofing apps to fake their presence inside a red-alert weather zone — triggering
@@ -875,7 +874,7 @@ drop from a prior baseline, and a zone-wide peer impact pattern.
 
 ---
 
-### 14.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
+### 13.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
 
 Every automatic payout requires multi-modal corroboration across the following signal stack.
 No single signal can approve or reject a claim on its own.
@@ -910,7 +909,7 @@ observed traffic conditions.
 
 ---
 
-### 14.2 The Data — What Catches a Coordinated Fraud Ring
+### 13.2 The Data — What Catches a Coordinated Fraud Ring
 
 Individual fraud detection fails at scale. A ring of 500 acting in concert leaves a
 **graph-level and behavioral signature** that is statistically unmistakable in aggregate.
@@ -971,7 +970,7 @@ Three graph queries execute on every disruption event:
 
 ---
 
-### 14.3 The UX Balance — Tiered Response Without Punishing Honest Workers
+### 13.3 The UX Balance — Tiered Response Without Punishing Honest Workers
 
 A real rider experiencing a genuine network drop in bad weather will look superficially
 similar to a spoofer: degraded GPS, weak cell signal, intermittent platform activity. The
@@ -1056,7 +1055,7 @@ When a zone-level burst event triggers a hold, the system operates in three rank
 
 ---
 
-### 14.4 Ring-Level Escalation Protocol
+### 13.4 Ring-Level Escalation Protocol
 
 When a coordinated ring is detected — a graph cluster of ≥ 10 accounts showing synchronized
 suspicious behavior — the following protocol activates automatically:
@@ -1084,7 +1083,7 @@ suspicious behavior — the following protocol activates automatically:
 
 ---
 
-### 14.5 Policy Safeguards & Architecture Summary
+### 13.5 Policy Safeguards & Architecture Summary
 
 **Policy safeguards that protect honest riders:**
 - Claims are **never** rejected on a single GPS signal alone — auto-reject (score 86–100)
