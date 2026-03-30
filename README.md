@@ -7,6 +7,7 @@
 > evaluated against real weather, traffic, and location data in minutes, not weeks.
 
 ---
+![alt text](system-design.png)
 
 ## Table of Contents
 
