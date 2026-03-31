@@ -1,664 +1,1145 @@
-# RiderShield — Parametric Insurance for Quick-Commerce Delivery Riders
+# RiderShield — Parametric Income Protection for Q-Commerce Riders
 
-> **Automatic income protection for delivery riders.** When heavy rain, flooding, or traffic kills your earnings — RiderShield detects it and pays you. No claims. No paperwork. No waiting.
+> **Automatic income protection for delivery riders.**  
+> When rain, gridlock, GPS glitches, or platform failures kill your earnings —  
+> RiderShield detects it and pays you. No claims. No paperwork. No waiting.  
+> And when a disruption slips through undetected, riders can submit a geo-tagged manual claim —
+> evaluated against real weather, traffic, and location data in minutes, not weeks.
 
 ---
+![alt text](system-design.png)
 
 ## Table of Contents
 
-1. [What Is This?](#what-is-this)
-2. [The Problem We're Solving](#the-problem-were-solving)
-3. [How It Works — Rider's Perspective](#how-it-works--riders-perspective)
-4. [Weekly Premium Model](#weekly-premium-model)
-5. [Parametric Triggers — What Counts as a "Disruption"](#parametric-triggers--what-counts-as-a-disruption)
-6. [Real Persona Scenarios](#real-persona-scenarios)
-7. [Why a Mobile App (Not Web)](#why-a-mobile-app-not-web)
-8. [AI and Machine Learning — How We Use It](#ai-and-machine-learning--how-we-use-it)
-9. [System Architecture](#system-architecture)
-10. [Tech Stack](#tech-stack)
-11. [Development Plan](#development-plan)
-12. [Unique Features](#unique-features)
-13. [Getting Started](#getting-started)
+1. [Problem Statement](#1-problem-statement)  
+2. [Persona & Scenarios](#2-persona--scenarios)  
+3. [Application Workflow](#3-application-workflow)  
+4. [Weekly Premium Model](#4-weekly-premium-model)  
+5. [Parametric Triggers](#5-parametric-triggers)  
+   - 5.4 [Manual Claim Request (Fallback)](#54-manual-claim-request-fallback-for-undetected-disruptions)  
+6. [Platform Choice — Mobile-First PWA](#6-platform-choice--mobile-first-pwa)  
+7. [AI/ML Integration](#7-aiml-integration)  
+8. [System Architecture](#8-system-architecture)  
+9. [Tech Stack](#9-tech-stack)  
+10. [Platform Data Simulation](#10-platform-data-simulation)  
+11. [Development Plan](#11-development-plan)  
+12. [Adversarial Defense & Anti-Spoofing Strategy](#12-adversarial-defense--anti-spoofing-strategy)  
 
 ---
 
-## What Is This?
+## 1. Problem Statement
 
-RiderShield is an insurance app built specifically for quick-commerce delivery riders — people who deliver for platforms like **Blinkit**, **Zepto**, and **Swiggy Instamart**.
+India's quick-commerce sector (~$11.5B, growing rapidly) runs on an invisible workforce of
+delivery partners operating for Blinkit, Zepto, and Swiggy Instamart. These riders:
 
-These riders earn per delivery. When something outside their control happens — heavy rain, a road flooded, a store shut down — their orders drop and their income disappears. There's no sick leave, no employer safety net, no insurance that covers this.
+- Earn **₹15,000–₹25,000/month**, entirely per-delivery — no fixed salary, no employer safety net.
+- Lose **20–30% of monthly income** to external disruptions completely outside their control.
+- Operate in hyper-local 2–5 km zones around dark stores, making them acutely sensitive to
+  micro-level disruptions — a flooded underpass, a GPS glitch, a store outage.
+- Function on **weekly cash flow cycles**, servicing debt on phones and bikes bought to do
+  the job.
 
-**RiderShield fixes that.**
+Traditional indemnity insurance structurally fails here:
 
-A rider pays a small weekly premium (as low as ₹15/week). The app constantly monitors weather, traffic, air quality, and store status in the rider's delivery zone. When conditions cross a threshold — say, rainfall goes above 40mm — the system automatically detects the disruption, calculates how much income the rider lost, and sends a payout directly to their wallet.
+| Problem | Why Traditional Insurance Fails |
+|---|---|
+| No fixed salary | Can't underwrite a variable daily income |
+| Manual claims | Riders can't wait 30 days; they need money this week |
+| Asset focus | Insurance covers vehicle damage, not lost earnings |
+| Proof burden | "It rained and I lost orders" is not provable to a claims adjuster |
 
-No forms. No phone calls. No "claim denied." The system *knows* it rained. It *knows* your orders dropped. It pays you.
+**Parametric insurance solves all of this.** Instead of proving a loss, the system uses
+measurable, objective data signals (rainfall mm, congestion index, store status) as automatic
+triggers. If the data says it happened, you get paid. Period.
 
----
-
-## The Problem We're Solving
-
-Quick-commerce delivery riders in India face a fundamental unfairness:
-
-| Situation | What Happens | Who Pays the Price |
-|-----------|-------------|-------------------|
-| Heavy rain floods roads | Customers stop ordering, stores close | Rider earns ₹0 |
-| Traffic gridlock from accident | Deliveries take 3x longer, fewer trips | Rider earns 30% of normal |
-| Air quality index hits hazardous | Government advises staying indoors | Rider has no orders |
-| Platform shuts a dark store | Riders assigned to that store have no work | Rider earns ₹0 |
-| Government-declared curfew | Everything stops | Rider earns ₹0 |
-
-Traditional insurance doesn't work here because:
-
-- **No employer** — riders are gig workers, not employees
-- **No fixed salary** — can't insure something that changes daily
-- **Manual claims take weeks** — riders can't wait, they need money today
-- **Hard to prove loss** — "it rained and I lost money" isn't something a normal insurer can verify
-
-**Parametric insurance solves all of this.** Instead of proving a loss, the system uses measurable data (rainfall in mm, traffic congestion score, etc.) as automatic triggers. If the data says it happened, you get paid. Period.
+**Coverage scope (DEVTrails mandate strictly followed):** Income loss from external disruptions
+only. Health, life, vehicle damage, and accidents are explicitly excluded.
 
 ---
 
-## How It Works — Rider's Perspective
+## 2. Persona & Scenarios
 
-Here's what a rider actually experiences:
+### Primary Persona — Arjun, 24, Q-Commerce Rider, Bengaluru
 
-### Step 1: Sign Up (2 minutes)
-
-1. Open the RiderShield app
-2. Enter your name, phone number, and delivery platform (Blinkit/Zepto/Instamart)
-3. Select your delivery zone (e.g., "Hyderabad — Gachibowli")
-4. Done — you have an account
-
-### Step 2: Buy Insurance (30 seconds)
-
-1. You see a coverage card: **"₹15/week → Up to ₹800 coverage"**
-2. Tap "Buy Coverage"
-3. Pay ₹15 via UPI/card (Stripe test mode for now)
-4. Your policy is active immediately
-
-### Step 3: Keep Delivering (You Do Nothing)
-
-- The app runs in the background
-- It tracks weather, traffic, and conditions in your zone
-- You just focus on your deliveries
-
-### Step 4: Disruption Happens
-
-- Heavy rain starts in your zone at 2 PM
-- By 4 PM, rainfall crosses 40mm
-- Your orders drop from the usual 12/hour to 3/hour
-- **The system detects this automatically**
-
-### Step 5: You Get Paid (No Action Required)
-
-1. You get a notification: *"Disruption detected in Gachibowli — Heavy Rain"*
-2. The system calculates your income loss
-3. A second notification arrives: *"₹500 payout sent to your wallet"*
-4. The money is in your in-app wallet
-5. You can view the full breakdown: expected income, actual income, loss, payout
-
-**That's it.** No forms, no photos of rain, no waiting 30 days. The data proved the disruption. You got paid.
+- Works for Zepto from 2 dark stores in Indiranagar/Koramangala.
+- Typical pattern: evening peaks (6–11 PM), weekend mornings (8–11 AM).
+- Earns ~₹18,000/month. Weekly payout from Zepto every Monday.
+- Operates within a 3-km radius. Income collapses if his zone, his dark store, or the
+  platform has issues.
+- Pain points: monsoon flooding, GPS drift in high-rises, dark store queues, sudden
+  political rallies blocking his route.
 
 ---
 
-## Weekly Premium Model
+### Scenario 1: Heavy Rain + Flooding — Rohit, Hyderabad
 
-### How the Price Works
+**Context:** Rohit averages 12 orders/hr (₹15/order). Tuesday 3–7 PM, heavy rain hits Gachibowli.
 
-Every rider pays a **weekly premium** — a small amount at the start of each week that buys them coverage for 7 days.
+| Step | Action |
+|---|---|
+| 3:05 PM | OpenWeatherMap reports 52mm rainfall in Gachibowli (threshold: 40mm) |
+| 3:06 PM | Trigger Service fires a disruption event for Zone: Gachibowli |
+| 3:07 PM | Claims Service identifies Rohit as an insured, online rider in this zone |
+| 3:08 PM | Income Estimator: Expected ₹720 (12 × 4hrs × ₹15), Actual ₹180 (3 orders/hr) |
+| 3:09 PM | Fraud Service: GPS confirms Rohit is in zone ✓, peer earnings confirm disruption ✓ |
+| 3:10 PM | **Payout ₹540 sent to Rohit's UPI wallet** |
 
-| Component | Details |
-|-----------|---------|
-| **Billing frequency** | Weekly (every Monday) |
-| **Base premium** | ₹15/week |
-| **Coverage limit** | Up to ₹800/week |
-| **Payout calculation** | Actual income loss, capped at the coverage limit |
+Rohit gets a push notification with a full breakdown. He did nothing except stay online.
 
-### Why Weekly, Not Monthly?
+---
 
-- Riders think in days and weeks, not months. A ₹15 weekly payment feels manageable.
-- Weekly pricing lets us adjust premiums dynamically — monsoon season might cost ₹20/week, dry season ₹10/week.
-- If a rider skips a week (takes time off), they don't pay. Flexibility matters for gig workers.
+### Scenario 2: GPS Multipath Shadowban — Ankush, Noida
 
-### How the Premium Amount Is Decided
+**Context:** Ankush is delivering in DLF Cyber Hub, Gurugram — a dense urban canyon of
+high-rises that causes GPS multipath interference. His location drifts on the Zepto map;
+the platform algorithm interprets this as route deviation and shadowbans him for 2 hours.
+He loses ₹400 in that shift. Traditional insurance: useless. RiderShield:
 
-The premium isn't the same for everyone. It depends on **how risky your delivery zone is**:
+| Step | Action |
+|---|---|
+| System detects | Ankush's order allocation drops to 0 while peers in the same zone earn normally |
+| Community Signal | Only Ankush affected → individual signal, not zone-wide |
+| Platform API | "Rider active = TRUE, orders dispatched = 0 for 120 min" → trigger fires |
+| Fraud check | GPS signal verified as unstable (multipath flag from telemetry), not spoofing |
+| **Payout** | ₹380 credited (income gap for 2 disrupted slots) |
 
-| Factor | Example | Effect on Premium |
-|--------|---------|-------------------|
-| **Historical weather** | Zone gets 60+ rainy days/year | Premium goes up |
-| **Traffic patterns** | Zone has daily gridlock hours | Premium goes up slightly |
-| **Past disruptions** | Zone had 5 disruption events last month | Premium goes up |
-| **Order density** | Zone has very high order volume | Premium may go down (more data = better prediction) |
-| **Season** | Monsoon season (June–September) | Premium goes up |
-| **Past claims** | Rider had 3 claims last month | Premium stays same (parametric = no moral hazard) |
+---
 
-The **Risk Prediction AI Model** crunches these numbers and produces a **risk score** (0–100) for each zone. That score maps to a premium:
+### Scenario 3: Community Signal — 45 Riders, Andheri West, Mumbai
 
-| Risk Score | Zone Example | Weekly Premium |
-|------------|-------------|----------------|
-| 0–25 (Low) | Dry-season Bangalore suburb | ₹10 |
-| 26–50 (Medium) | Normal Hyderabad zone | ₹15 |
-| 51–75 (High) | Mumbai during pre-monsoon | ₹20 |
-| 76–100 (Very High) | Coastal zone during cyclone season | ₹25 |
+**Context:** Sunday evening. A water main breaks, flooding 3 streets near a cluster of dark
+stores. No weather API picks it up. No traffic event is logged. But:
+
+- 82% of 45 riders in the zone report an order collapse in the same 30-minute slot.
+- Community Signal Agent fires: threshold crossed (>70% of zone riders affected).
+- All 45 insured riders receive individual claim calculations based on their own baselines.
+- **Payouts distributed in batch — no API triggered it. The rider community was the sensor.**
+
+---
+
+### Scenario 4: Dark Store Outage — Priya, Delhi
+
+**Context:** Priya's primary dark store in Rajouri Garden shuts unexpectedly (equipment
+failure) from 10 AM–2 PM. No orders dispatch. 4 hours, zero income.
+
+- Platform API: `store_status = CLOSED` → trigger fires automatically.
+- Income gap: Expected ₹300 (10 orders/hr × ₹7.5/order × 4hrs), Actual ₹0.
+- GPS: Priya is near the store, confirms she was working. Fraud check passes.
+- **Payout: ₹300.**
+
+---
+
+### Scenario 5: Fraud Attempt — No Payout
+
+**Context:** A rider stays home on a sunny, normal-traffic day and hopes for a payout.
+
+- No parametric triggers fire for their zone.
+- GPS shows they were not in the delivery zone.
+- Peer riders in the same zone earned normally.
+- **Result: No disruption event, no claim, no payout.** Parametric triggers cannot be
+  gamed without an actual external event in the zone.
+
+### Scenario 6: Manual Claim — Undetected Local Disruption — Ravi, Pune
+
+**Context:** Heavy road-work near Ravi's usual zone creates a 2-hour gridlock, but it is too
+localised to breach the zone-wide congestion trigger threshold.  No disruption event fires
+automatically.
+
+- Ravi opens the app, taps **"Disruption not detected? Request Manual Claim"**.
+- He selects disruption type **Traffic** and writes a brief description of the road-work.
+- He takes a **geo-tagged photo** of the blocked road from his location.
+- The app records his GPS coordinates and the photo's EXIF timestamp, then submits both.
+- The system cross-checks:
+  - **Geo-tag vs telemetry:** Photo GPS matches Ravi's live app location — ✅ no mismatch.
+  - **EXIF timestamp vs incident time:** Photo taken within 5 minutes of the declared incident — ✅ no anomaly.
+  - **Traffic data:** Third-party traffic API confirms congestion index 72/100 at that coordinate at that time — ✅ corroborated.
+  - **Weather data:** Clear sky, no weather disruption — ✅ not a weather claim.
+  - **Spam score:** 0 / 100 — genuine claim.
+- Claim is fast-tracked to the admin review queue with a "low fraud risk" badge.
+- **Result: Manual claim approved within 4 hours; income gap credited via UPI.**
+
+---
+
+## 3. Application Workflow
+
+```mermaid
+flowchart TD
+    A[Rider Onboards] --> B[Selects Weekly Cover] --> C[Premium Paid via UPI]
+    C --> D[Policy Activated for Calendar Week]
+    D --> E[Background: Data Collector polls APIs every 5 min]
+    E --> F1[Weather]
+    E --> F2[Traffic]
+    E --> F3[Platform/Store]
+    E --> F4[Others]
+    F1 & F2 & F3 & F4 --> G[Trigger Service evaluates zone × slot × rider status]
+    G --> H{Disruption Detected?}
+    H -- Yes --> I[Disruption Event Created]
+    I --> J[Claims Service: identify insured online riders in zone]
+    J --> K[Income Estimator: expected vs actual earnings]
+    K --> L[Fraud Service: GPS, peer comparison, behavioural checks]
+    L --> M[Payout Service: instant UPI credit]
+    M --> N[Push Notification to Rider + Dashboard Update]
+    H -- No --> O{Rider reports disruption manually?}
+    O -- No --> P[No claim — slot closes normally]
+    O -- Yes --> Q[Rider submits Manual Claim + Geo-Tagged Photo]
+    Q --> R[Geo-Validation: photo GPS vs rider telemetry GPS]
+    R --> S[Weather & Traffic API: corroborate claimed disruption at location/time]
+    S --> T[Spam Detection: EXIF timestamp, location mismatch, peer comparison]
+    T --> U{Spam Score ≥ 70?}
+    U -- Yes --> V[Claim Rejected — spam flagged, rider notified]
+    U -- No --> W[Manual Claim queued for Admin Review]
+    W --> X{Admin Decision}
+    X -- Approve --> M
+    X -- Reject --> Y[Claim Rejected — reason sent to rider]
+```
+
+### Rider-Facing Steps
+
+1. **Sign Up** — Phone + KYC, link delivery platform(s), select city and zones.
+2. **Weekly Setup** — Declare typical working slots. System shows risk profile per slot
+   (color-coded: green → red) and suggests 3 plan tiers.
+3. **Buy Cover** — One weekly premium payment via UPI/wallet. Coverage activates immediately.
+4. **Work Normally** — App monitors in the background. No rider action needed.
+5. **Get Paid (Auto)** — Push notification + breakdown + UPI credit if a trigger fires automatically.
+6. **Manual Claim (Fallback)** — If no automatic trigger fires but the rider experienced a real
+   disruption, they can tap **"Request Manual Claim"**, select the disruption type, write a brief
+   description, and take a **geo-tagged photo** of the disruption from their location.  The system
+   validates the photo's GPS against the rider's live location, cross-checks weather and traffic
+   data, runs spam detection, and routes low-risk claims to a fast-track admin review queue.
+
+### Rider Dashboard
+
+- Active coverage status (slots covered, hours remaining).
+- Disruption alerts in real time.
+- Claim history and payout tracking with cause breakdown (weather / traffic / platform / regulatory).
+- **Manual Claim button** — visible whenever no automatic disruption fired for an active slot;
+  guides the rider through photo capture, disruption-type selection, and description entry.
+- Manual claim status tracker (submitted → under review → approved/rejected).
+- Next-week premium forecast and risk insights.
+
+### Admin/Insurer Dashboard
+
+- Live disruption heatmap (zone × time).
+- Loss ratio: payouts vs. premiums collected.
+- Fraud alert queue and review panel.
+- **Manual Claim review queue** — lists pending manual claims ranked by spam score (lowest first
+  for fast approval), with photo preview, geo-validation result, weather/traffic corroboration
+  summary, and one-click approve / reject.
+- Next-week risk projections per micro-zone.
+
+---
+
+## 4. Weekly Premium Model
+
+### Why Weekly?
+
+- Riders are paid weekly by platforms. A weekly insurance cycle is a natural fit — no
+  mismatch in cash flows.
+- Weekly pricing allows dynamic adjustment per season, zone risk, and forecast.
+- Riders who take a week off simply don't buy cover. No wasted money.
+
+### Micro-Slot Logic (Internal)
+
+The product appears simple to the rider (one weekly plan, one price) but internally prices at
+**30–60 minute micro-slot granularity**:
+
+- Working time is broken into slots (e.g., 7:00–7:30 AM, 7:30–8:00 AM, …).
+- For each slot we estimate:
+  - **Expected earnings** under normal conditions for that rider, zone, and time.
+  - **Disruption probability** — chance that external conditions push earnings below the
+    guaranteed floor.
+- Aggregate risk across all planned slots → weekly pure premium + admin load.
+
+**Why this matters:** An evening-only rider in a monsoon-prone zone pays a fair price. A
+morning rider in a low-disruption suburb pays less. Coverage is personalised and explainable.
+
+### Three Plan Tiers (Rider-Facing)
+
+| Plan | Coverage Scope | Guaranteed Earnings | Best For |
+|---|---|---|---|
+| **Essential** | High-risk slots only (e.g., monsoon evenings) | 70% of baseline | Budget-conscious riders |
+| **Balanced** | All usual working hours | 80% of baseline | Standard weekly workers |
+| **Max Protect** | Usual + optional late/early slots | 90% of baseline | Heavy-duty riders, peak season |
+
+### Illustrative Pricing
+
+| Zone Risk | Example | Weekly Premium |
+|---|---|---|
+| Low (score 0–25) | Dry-season Pune suburb | ₹20–₹35 |
+| Medium (score 26–50) | Normal Hyderabad zone | ₹50–₹80 |
+| High (score 51–75) | Mumbai pre-monsoon zone | ₹80–₹120 |
+| Very High (76–100) | Coastal zone during cyclone season | ₹120–₹150 |
+
+Premiums remain within a micro-insurance bracket to maximise adoption among riders
+earning ₹15,000–₹25,000/month.
 
 ### Payout Calculation
 
-When a disruption happens, the payout formula is simple:
-
-```
-Expected Income = (Average orders per hour) × (Hours disrupted) × (₹ per order)
-Actual Income   = (Actual orders during disruption) × (₹ per order)
-Income Loss     = Expected Income - Actual Income
-Payout          = min(Income Loss, Coverage Limit)
 ```
 
-**Example:**
-- Rohit averages 12 orders/hour, ₹15/order
-- Disruption lasted 4 hours
-- Expected: 12 × 4 × 15 = ₹720
-- Actual (only 3 orders/hour): 3 × 4 × 15 = ₹180
-- Loss: ₹720 - ₹180 = ₹540
-- Coverage limit: ₹800
-- **Payout: ₹540** (loss is below the limit, so full loss is covered)
+Expected Income = avg_orders_per_hr × disrupted_hrs × ₹_per_order
+Actual Income   = actual_orders × ₹_per_order
+Income Loss     = Expected − Actual
+Payout          = min(Income Loss, Weekly Coverage Limit)
+
+```
+
+Baselines are set per rider using 4-week rolling historical averages, adjusted for zone,
+day-of-week, and slot time. New riders use zone-level medians until personal history builds.
 
 ---
 
-## Parametric Triggers — What Counts as a "Disruption"
+## 5. Parametric Triggers
 
-A **parametric trigger** is a measurable, objective condition that automatically activates insurance coverage. No human judgment involved — if the number crosses the line, the system acts.
+A parametric trigger is a measurable, objective condition that fires automatically — no
+human judgment, no claim form.
 
-### Our Triggers
+### 5.1 Baseline Triggers
 
 | Category | Trigger | Threshold | Data Source |
-|----------|---------|-----------|-------------|
-| **Weather** | Rainfall | > 40mm in the zone | OpenWeatherMap API |
-| **Weather** | Extreme heat | Temperature > 42°C | OpenWeatherMap API |
-| **Air Quality** | AQI (pollution) | > 300 (hazardous) | OpenWeatherMap API |
-| **Traffic** | Congestion index | > 80 (severe gridlock) | Google Maps Traffic API |
-| **Traffic** | Road blockage | road_block = TRUE | Google Maps Traffic API |
-| **Infrastructure** | Dark store closure | store_status = CLOSED | Platform API (simulated) |
-| **Infrastructure** | Inventory shortage | stock_level = CRITICAL | Platform API (simulated) |
-| **Government** | Curfew | curfew_active = TRUE | Manual/news feed entry |
-| **Community Signal** | Rider order drop | > 70% drop across zone riders | Internal rider activity data |
+|---|---|---|---|
+| **Weather** | Rainfall intensity | > 40mm in 1hr in rider's zone | OpenWeatherMap / IMD |
+| **Weather** | Heat index | Wet-bulb temp > 32°C or air temp > 42°C | OpenWeatherMap |
+| **Air Quality** | AQI breach | > 300 (hazardous) or GRAP Stage 3/4 active | OpenAQ / CPCB |
+| **Traffic** | Congestion index | > 80/100 sustained for 60+ min | Google Maps / TomTom |
+| **Traffic** | Road closure | `road_blocked = TRUE` near dark store | Traffic APIs |
+| **Store** | Dark store closed | `store_status = CLOSED` | Platform API (simulated) |
+| **Store** | Inventory stockout | `stock_level = CRITICAL` | Platform API (simulated) |
+| **Platform** | App / API outage | `platform_status = DOWN` in zone | Platform status API |
+| **Regulatory** | Curfew / ban | `curfew_active = TRUE` | News feed / govt portal |
+| **Community Signal** | Mass order collapse | > 70% riders in zone see simultaneous drop | Internal rider data |
 
-### Why These Thresholds?
+### 5.2 Out-of-the-Box Triggers (Our Differentiators)
 
-- **40mm rainfall** — At this level, roads in Indian cities begin flooding. Waterlogging makes deliveries unsafe and impractical. Below 40mm, riders can still operate with rain gear.
-- **42°C temperature** — Government heat advisories typically trigger at this level. Rider safety concern.
-- **AQI > 300** — "Hazardous" on the AQI scale. Health risk for anyone outdoors for extended periods.
-- **Traffic index > 80** — At this congestion level, a 10-minute delivery takes 30+ minutes. Riders can barely complete 3-4 orders per hour instead of 12.
-- **70% order drop** — This is our "Community Signal" trigger. If most riders in a zone simultaneously see their orders collapse, something major happened — even if external APIs haven't caught it yet.
+These cover uniquely Indian urban frictions no competitor insures:
 
-### How Triggers Combine
+| Trigger | Mechanism |
+|---|---|
+| **Urban Canyon GPS Multipath** | High-rises cause GPS drift → platform shadowbans rider. Detected via order-allocation anomaly + telemetry instability flags. |
+| **Unpaid Dark Store Wait Time** | Chronic pickup queues due to inventory or billing issues. Triggered when dispatch delay > 5 min SLA across multiple riders at same store. |
+| **Gated Community / RWA Frictions** | Elevator bans, MyGate delays, late-night entry curfews. Detected via delivery time anomaly + geo-fence status. |
+| **VIP Convoy / Spontaneous Civic Events** | Sudden arterial blockades trapping entire local fleets. Detected via speed-anomaly and traffic graph propagation. |
+| **Algorithmic Visibility Shock** | Platform A/B tests or throttling suddenly reduce order allocation. Detected via peer-comparison ratio (rider orders vs zone orders). |
+| **GRAP-mandated vehicle bans** | Government mandates barring specific vehicle classes in high-AQI conditions. Linked to official GRAP stage APIs. |
+| **Warehouse / Supply Chain Cascade** | Upstream warehouse failure causing simultaneous multi-store stockouts. Detected via synchronized `no-slots` across dependent stores. |
 
-Triggers don't need to occur in isolation. The system evaluates them independently:
+### 5.3 Trigger Decision Logic
 
-- **Single trigger fires?** → Disruption detected, claims process starts
-- **Multiple triggers fire?** → Still one disruption event (no double-counting)
-- **Trigger fires but rider orders are normal?** → No claim (rider wasn't affected)
+A claim is auto-initiated only when **all three conditions are met**:
 
----
+1. A configured trigger condition is TRUE for the rider's zone and time slot.
+2. The rider's GPS / platform status confirms they were **online and in-zone**.
+3. Actual earnings fall **below the model-predicted baseline band** for those conditions.
 
-## Real Persona Scenarios
+Multiple simultaneous triggers (rain + traffic + store outage) count as **one disruption event**
+— no double-payouts per slot.
 
-### Scenario 1: Rohit — Heavy Rain in Hyderabad
-
-**Who:** Rohit, Blinkit rider, Gachibowli zone, averages 100 orders/day (₹15/order = ₹1,500/day income)
-
-**What happens:**
-- Tuesday afternoon, heavy rain begins in Gachibowli
-- By 3 PM, rainfall hits 52mm — crosses the 40mm trigger
-- Rohit's orders drop from ~12/hour to 3/hour
-- He works from 3 PM to 7 PM (4 hours) but barely gets orders
-
-**System response:**
-1. ⚡ Weather API reports 52mm rainfall in Gachibowli → **Trigger fires**
-2. Disruption Detection Agent creates a disruption event for the zone
-3. Claim Automation Agent identifies Rohit as an insured rider in this zone
-4. Income Loss Estimator calculates: Expected ₹720, Actual ₹180, Loss = ₹540
-5. Fraud Detection checks Rohit's GPS (was he actually in the zone?) → ✓ Clear
-6. **Payout: ₹540 sent to Rohit's wallet**
-7. Rohit gets a push notification with the breakdown
-
-**Rohit's experience:** He's sitting at home watching rain. His phone buzzes: "₹540 deposited — Heavy Rain disruption in Gachibowli." He didn't do anything.
+> **When none of the above conditions are met** but the rider believes they experienced a genuine
+> disruption, they can initiate a rider-led **Manual Claim** — see [Section 5.4](#54-manual-claim-request-fallback-for-undetected-disruptions) below.
 
 ---
 
-### Scenario 2: Priya — Dark Store Shutdown in Delhi
+### 5.4 Manual Claim Request (Fallback for Undetected Disruptions)
 
-**Who:** Priya, Zepto rider, Rajouri Garden zone, averages 80 orders/day
+When the automatic trigger system does **not** fire — either because the disruption is too
+localised, too brief, or falls below the zone-wide threshold — a rider on an active policy can
+request a manual claim.
 
-**What happens:**
-- Wednesday morning, Priya's assigned dark store shuts down unexpectedly (equipment failure)
-- No orders are dispatched from that store
-- Priya has no deliveries from 10 AM to 2 PM (4 hours)
+#### How it works
 
-**System response:**
-1. Platform API reports store_status = CLOSED for Rajouri Garden dark store → **Trigger fires**
-2. Disruption event created
-3. Priya identified as affected rider
-4. Income loss: Expected ₹300 (4 hours × 10 orders/hour × ₹7.5/order), Actual ₹0, Loss = ₹300
-5. Fraud check: Priya's GPS shows she was near the store area → ✓ Clear
-6. **Payout: ₹300**
+1. **Rider taps "Request Manual Claim"** in the app during or immediately after the disruption
+   window.
+2. **Selects disruption type:** Weather / Traffic / Store Closed / Platform Issue / Other.
+3. **Writes a brief description** (minimum 10 characters) explaining what happened.
+4. **Takes a geo-tagged photo** of the disruption (flooded road, blocked route, closed store
+   shutter, etc.).  The mobile app embeds the device GPS coordinates and timestamp in the photo's
+   EXIF metadata and also records them independently from the device location service.
 
----
+#### Evidence evaluation
 
-### Scenario 3: Community Signal — Mass Order Drop in Mumbai
+The system automatically evaluates four dimensions of the submitted evidence:
 
-**Who:** 45 Instamart riders in Andheri West zone
+| Check | What is verified | Positive outcome |
+|---|---|---|
+| **Weather corroboration** | Historical weather API (OpenWeatherMap / IMD) queried for the photo's GPS coordinates and EXIF timestamp | Rainfall > 7.6 mm/hr or wind > 40 km/h confirms a weather claim |
+| **Traffic corroboration** | Traffic API (Google Maps / TomTom) queried for the same location and time window | Congestion index ≥ 70/100 confirms a traffic claim |
+| **Known disruption match** | System checks if a `DisruptionEvent` record already exists for that zone and time slot | Existing event corroborates the claim and reduces spam score |
+| **Delivery partner narrative** | Rider's free-text description is stored and shown to the reviewer alongside weather and traffic data for holistic judgment | Supports manual review |
 
-**What happens:**
-- Sunday evening, a major water main breaks, flooding several streets
-- No weather trigger fires (it's not raining)
-- No traffic API picks it up yet
-- But across 45 riders in the zone, orders drop by 82% in one hour
+#### Spam / fraud detection for manual claims
 
-**System response:**
-1. No external API triggers fire
-2. Community Signal Agent detects: 82% average order drop across 45 riders → **Trigger fires**
-3. Disruption event created for Andheri West
-4. All 45 insured riders get individual claims
-5. Each claim calculated based on their personal expected vs actual income
-6. Fraud check on each claim
-7. **Payouts distributed to all affected riders**
+Manual claims carry a higher fraud risk than automatic parametric payouts, so the system runs a
+dedicated spam-detection pipeline on top of the standard fraud checks:
 
-This is what makes our Community Signal unique — it catches disruptions that no weather or traffic API can see.
+| Signal | How it is detected | Weight |
+|---|---|---|
+| **Location mismatch** | Photo's GPS (from EXIF or device) compared to rider's live telemetry GPS at the same timestamp.  Distance > 500 m → flagged. | High |
+| **Time anomaly** | Photo EXIF timestamp compared to the declared incident time.  Difference > 30 min → flagged. | Medium |
+| **Weather mismatch** | Rider claims weather disruption but weather API shows benign conditions at that location / time. | Medium |
+| **Traffic mismatch** | Rider claims traffic disruption but traffic API shows low congestion at that location / time. | Medium |
+| **Known disruption (corroborating)** | A matching `DisruptionEvent` exists in the DB — **reduces** spam score. | Negative (supports claim) |
 
----
+A composite **spam score (0–100)** is computed from these signals.  Claims scoring **≥ 70** are
+auto-rejected as spam; claims scoring **< 70** are routed to the admin review queue, sorted by
+ascending spam score so the lowest-risk claims are reviewed first.
 
-### Scenario 4: Fraud Attempt — Arjun Tries to Game the System
-
-**Who:** Arjun, rider who stays home on a sunny day and claims low orders
-
-**What happens:**
-- Nice weather, normal traffic, all stores are open
-- Arjun simply doesn't go out to deliver
-- No triggers fire in his zone
-
-**System response:**
-1. No parametric triggers activate → **No disruption event**
-2. No automatic claim is generated
-3. Even if Arjun could somehow file a manual claim, the Fraud Detection Agent checks:
-   - GPS: Arjun wasn't in his delivery zone → ✗ Flag
-   - Zone disruption: None detected → ✗ Flag
-   - Peer comparison: Other riders in the zone had normal orders → ✗ Flag
-4. **Claim rejected. No payout.**
-
-Parametric insurance is inherently fraud-resistant — you can't fake the weather.
-
----
-
-## Why a Mobile App (Not Web)
-
-We chose to build a **mobile app** (React Native / Expo) for the rider-facing side. Here's why:
-
-| Factor | Mobile App | Web App |
-|--------|-----------|---------|
-| **Rider's primary device** | Phone (always in hand while delivering) | Rarely opens a laptop |
-| **Push notifications** | Native push — instant disruption/payout alerts | Browser notifications — unreliable, often blocked |
-| **Background location** | Can verify rider GPS in real-time | Cannot track location |
-| **Always accessible** | Home screen icon, one tap | Must remember URL, open browser |
-| **Offline resilience** | Can cache policy info locally | Nothing works offline |
-| **Payment integration** | Can integrate with UPI/wallet apps directly | Redirects to payment pages |
-
-**The deciding factor:** Riders *live on their phones*. They check earnings, track deliveries, and navigate using their phone. A web app would feel like a side project. A mobile app feels like a tool built for them.
-
-**The Admin Dashboard** is built as a web app (Next.js) because admins sit at desks, use monitors, and need data-dense layouts that work better on large screens.
-
----
-
-## AI and Machine Learning — How We Use It
-
-RiderShield uses AI/ML in four specific places. Here's exactly what each does and why:
-
-### 1. Risk Prediction Model (Sets the Premium Price)
-
-**What it does:** Predicts how likely a disruption is for a specific delivery zone in the coming week.
-
-**How it works:**
-- Looks at 6 months of historical data for the zone: past weather, traffic patterns, store closures, order volumes
-- Produces a **risk score** from 0–100
-- That score determines the rider's weekly premium (higher risk = slightly higher premium)
-
-**Model type:** Gradient Boosted Trees (XGBoost)
-
-**Input features:**
-| Feature | Example |
-|---------|---------|
-| Historical rainfall (past 30 days) | 120mm total |
-| Average traffic congestion | Score 45/100 |
-| Number of past disruption events | 3 last month |
-| Order density in the zone | 500 orders/day |
-| Season indicator | Monsoon = 1 |
-| Day of week patterns | Weekday = 1 |
-
-**Output:** Risk score → Premium amount
-
-**Why this matters:** Without this model, every rider would pay the same premium regardless of zone risk. That's unfair — a rider in a flood-prone area shouldn't pay the same as one in an area that rarely gets rain. The model makes pricing fair.
-
----
-
-### 2. Disruption Detection Agent (Decides When Something Goes Wrong)
-
-**What it does:** Continuously monitors external data and rider activity, decides when a "disruption" has occurred.
-
-**How it works:**
-- Every 5 minutes, the Data Collector Agent pulls fresh data from weather, traffic, and platform APIs
-- The Disruption Detection Agent checks each zone against the parametric trigger thresholds
-- If any trigger is breached, it creates a **disruption event**
-
-**Built with:** LangGraph + LangChain (stateful agent workflow)
-
-**Agent flow:**
-```
-Data Collector → checks weather, traffic, AQI, store status
-       ↓
-Disruption Detector → compares against thresholds
-       ↓
-  [TRIGGER MET?]
-       ↓ Yes                    ↓ No
-Create Disruption Event     Wait 5 minutes, check again
-```
-
-**Why AI agents, not simple rules?** The Community Signal detection requires reasoning across multiple riders' activity patterns simultaneously. Also, as we add more trigger types, agents can compose rules flexibly without hardcoding every combination.
-
----
-
-### 3. Fraud Detection Model (Catches Bad Claims)
-
-**What it does:** Screens every automatic claim before payout to catch anomalies.
-
-**How it works:**
-- Takes each claim and looks for patterns that don't match normal behavior
-- Uses an **Isolation Forest** algorithm — it learns what "normal" looks like and flags anything unusual
-
-**What it checks:**
-| Check | What It Looks For | Red Flag Example |
-|-------|-------------------|------------------|
-| **GPS validation** | Was the rider actually in their claimed zone? | Rider's GPS shows them 20km away |
-| **Activity pattern** | Does the rider's delivery pattern match their history? | Rider normally does 80 orders, suddenly claims 0 on a sunny day |
-| **Peer comparison** | Are other riders in the zone also affected? | Only this one rider claims disruption, 50 others are fine |
-| **Duplicate check** | Has this rider already claimed for this event? | Same zone, same time window, second claim |
-| **Timing check** | Does the claim timing match the disruption window? | Disruption was 2–4 PM, rider claims 8 AM loss |
-
-**Model type:** Isolation Forest (unsupervised anomaly detection)
-
-**Why Isolation Forest?** It doesn't need labeled fraud data to start working (we won't have fraud examples on day 1). It learns the shape of "normal" claims and automatically finds outliers. As we collect more data, the model gets better.
-
----
-
-### 4. Income Loss Estimator (Calculates How Much to Pay)
-
-**What it does:** Figures out exactly how much income a specific rider lost during a specific disruption.
-
-**How it works:**
-- Looks at the rider's historical order pattern (same day of week, same hours)
-- Calculates what they *should have earned* during the disruption window
-- Compares to what they *actually earned*
-- The difference is the loss
-
-**Calculation:**
-```
-Expected Orders = Average orders for (day_of_week, hour_range) over past 4 weeks
-Expected Income = Expected Orders × Average earning per order
-Actual Income   = Actual orders completed during disruption × Average earning per order
-Income Loss     = Expected Income - Actual Income
-Payout          = min(Income Loss, Coverage Limit)
-```
-
-**Why per-rider calculation?** Every rider has different order volumes. A rider averaging ₹2,000/day loses more than one averaging ₹800/day from the same rainstorm. The payout should match *your* loss, not some flat number.
-
----
-
-## System Architecture
+#### Manual claim API endpoints
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        CLIENT LAYER                             │
-│  ┌──────────────────┐     ┌──────────────────────────────────┐  │
-│  │  Rider Mobile App │     │  Admin Dashboard (Next.js)       │  │
-│  │  (React Native)   │     │  - Disruption heatmap            │  │
-│  │  - Buy coverage   │     │  - Claims monitoring             │  │
-│  │  - View payouts   │     │  - Fraud alerts                  │  │
-│  │  - Notifications  │     │  - Payout analytics              │  │
-│  └────────┬─────────┘     └──────────────┬───────────────────┘  │
-│           │                              │                      │
-└───────────┼──────────────────────────────┼──────────────────────┘
-            │                              │
-            ▼                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      API GATEWAY (FastAPI)                       │
-│  ┌──────────┐ ┌────────────┐ ┌────────────┐ ┌───────────────┐  │
-│  │  Rider   │ │  Policy    │ │   Order    │ │   Claim       │  │
-│  │ Service  │ │  Service   │ │  Activity  │ │   Service     │  │
-│  │          │ │            │ │  Service   │ │               │  │
-│  └──────────┘ └────────────┘ └────────────┘ └───────────────┘  │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     AI DECISION LAYER                            │
-│                                                                  │
-│  ┌──────────────────┐     ┌──────────────────────────────────┐  │
-│  │ Data Collector    │────▶│ Disruption Detection Agent       │  │
-│  │ Agent (5-min poll)│     │ (checks triggers)                │  │
-│  └──────────────────┘     └──────────────┬───────────────────┘  │
-│                                          │                      │
-│  ┌──────────────────┐                    ▼                      │
-│  │ Community Signal  │     ┌──────────────────────────────────┐  │
-│  │ Agent (order-drop │────▶│ Claim Automation Agent           │  │
-│  │  detection)       │     │ (creates claims automatically)   │  │
-│  └──────────────────┘     └──────────────┬───────────────────┘  │
-│                                          │                      │
-│  ┌──────────────────┐                    ▼                      │
-│  │ Risk Prediction  │     ┌──────────────────────────────────┐  │
-│  │ Model (premiums) │     │ Fraud Detection Agent             │  │
-│  └──────────────────┘     │ (Isolation Forest)                │  │
-│                           └──────────────┬───────────────────┘  │
-│                                          │                      │
-│                                          ▼                      │
-│                           ┌──────────────────────────────────┐  │
-│                           │ Payout Agent                      │  │
-│                           │ (sends money via Stripe)          │  │
-│                           └──────────────────────────────────┘  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   INFRASTRUCTURE LAYER                           │
-│  ┌────────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────────┐  │
-│  │ PostgreSQL │ │  Redis   │ │  Kafka   │ │ Stripe (test)   │  │
-│  │ (primary   │ │ (cache,  │ │ (event   │ │ (simulated      │  │
-│  │  database) │ │  queues) │ │  stream) │ │  payments)      │  │
-│  └────────────┘ └──────────┘ └──────────┘ └─────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  EXTERNAL DATA SOURCES                           │
-│  ┌──────────────────┐ ┌──────────────────┐ ┌─────────────────┐  │
-│  │ OpenWeatherMap   │ │ Google Maps      │ │ Platform APIs   │  │
-│  │ (weather + AQI)  │ │ (traffic data)   │ │ (simulated)     │  │
-│  └──────────────────┘ └──────────────────┘ └─────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow (Step by Step)
-
-1. **External APIs** send real-time weather, traffic, and dark store status data every 5 minutes
-2. **Data Collector Agent** stores incoming data into the Kafka event stream
-3. **Disruption Detection Agent** reads from Kafka and evaluates parametric trigger rules per zone
-4. If triggers are satisfied, a **disruption event** is created in PostgreSQL
-5. **Claim Automation Agent** finds all riders with active policies operating in the affected zone
-6. Rider delivery activity is analyzed to **estimate income loss** per rider
-7. **Fraud Detection Model** validates each claim (GPS, activity, duplicates)
-8. **Payout Agent** sends compensation to rider wallet via Stripe (test mode)
-9. Rider receives a **push notification** through the mobile app with payout details
-
----
-
-## Tech Stack
-
-| Layer | Technology | Why We Chose It |
-|-------|-----------|-----------------|
-| **Rider Mobile App** | React Native + Expo | Cross-platform (iOS + Android) from one codebase. JS ecosystem = shares types with backend. Expo for fast prototyping. |
-| **Admin Dashboard** | Next.js + TypeScript + Tailwind CSS | Server-rendered React for fast data dashboards. Tailwind for rapid UI. TypeScript for type safety. |
-| **Backend API** | FastAPI (Python) | Async Python — ideal for ML/AI integration. Auto-generated API docs. Fast. |
-| **AI Agents** | LangGraph + LangChain | Stateful multi-step agent workflows. Built for exactly this kind of orchestration. |
-| **ML Models** | Scikit-learn + PyTorch | Scikit-learn for Isolation Forest (fraud). PyTorch for risk prediction if complexity grows. |
-| **Primary Database** | PostgreSQL | Rock-solid relational DB. Perfect for riders, policies, claims, payouts. |
-| **Cache / Queues** | Redis | Fast caching for real-time trigger state. Pub/sub for notifications. |
-| **Event Streaming** | Kafka | Decouples data ingestion from processing. Handles real-time weather/traffic data flow. |
-| **Payments** | Stripe (test mode) | Simulated payouts for prototype. Easy to switch to production later. |
-| **Weather Data** | OpenWeatherMap API | Free tier available. Covers rainfall, temperature, AQI. Global coverage including India. |
-| **Traffic Data** | Google Maps Traffic API | Real traffic congestion data. Can fall back to mocks if API quota is limited. |
-| **Platform Data** | Simulated / Mocked | Dark store status, rider activity — simulated for prototype. Real integration in production. |
-
----
-
-## Development Plan
-
-### Phase 1 — Foundation (Core Backend + Rider Onboarding)
-
-Build the backbone: riders can sign up, buy a policy, and the system starts collecting data.
-
-| What We Build | Details |
-|---------------|---------|
-| Rider Service | Registration, authentication, zone assignment |
-| Policy Service | Weekly premium purchase, coverage activation |
-| Weather API Integration | OpenWeatherMap polling every 5 minutes |
-| Database Schema | Riders, policies, zones, weather data tables |
-| Basic Mobile App Shell | Sign up, buy coverage, view policy status |
-
-**After Phase 1:** A rider can sign up and buy insurance. Weather data is flowing in.
-
----
-
-### Phase 2 — Automation (Disruption Detection + Automatic Claims)
-
-The core intelligence: detect disruptions and create claims without human intervention.
-
-| What We Build | Details |
-|---------------|---------|
-| Data Collector Agent | Polls all external APIs, pushes to Kafka |
-| Disruption Detection Agent | Evaluates parametric triggers, creates disruption events |
-| Claim Automation Agent | Identifies affected riders, calculates income loss, creates claims |
-| Payout Simulation | Stripe test mode wallet payouts |
-| Push Notifications | Rider gets notified on disruption + payout |
-| Community Signal Agent | Detects disruptions from rider order-drop patterns |
-
-**After Phase 2:** The system automatically detects disruptions, creates claims, and sends (simulated) money. The core product works end-to-end.
-
----
-
-### Phase 3 — Intelligence + Operations (Fraud, Risk, Admin)
-
-Make it smart and observable: AI-powered fraud detection, dynamic premiums, and an admin dashboard.
-
-| What We Build | Details |
-|---------------|---------|
-| Fraud Detection Model | Isolation Forest for anomaly detection on claims |
-| Risk Prediction Model | Zone risk scoring for dynamic premium calculation |
-| Admin Dashboard | Disruption heatmap, claims feed, payout analytics, fraud alerts |
-| Analytics APIs | Aggregated data for admin views |
-| Dynamic Premium Engine | Risk score → premium amount mapping |
-
-**After Phase 3:** Full system — intelligent fraud detection, fair pricing, and operational visibility.
-
----
-
-## Unique Features
-
-### 1. Community Signal Detection
-
-Most parametric insurance relies entirely on external data (weather stations, government reports). But what if there's a localized disruption that no API catches — a water main break, a local road closure, a neighborhood power outage?
-
-**Our solution:** If 70%+ of riders in a zone simultaneously experience order drops, the system detects a disruption *from the rider activity itself*. No external API needed. The community *is* the sensor.
-
-### 2. Predictive Risk Alerts
-
-The Risk Prediction Model doesn't just set premiums — it can **warn riders ahead of time**.
-
-Example: "⚠️ High disruption probability (78%) tomorrow in Gachibowli — monsoon intensification expected."
-
-Riders can plan accordingly (take the day off, work in a different zone) even before disruption hits.
-
-### 3. Zero-Claim Insurance
-
-Traditional insurance requires you to file a claim, provide evidence, and wait. RiderShield has **no claims process**. The data is the evidence. The trigger is the claim. The payout is automatic.
-
-### 4. Dynamic Coverage
-
-During high-risk periods (monsoon season, festival traffic), the system can offer temporary increased coverage — higher limits for slightly higher premiums — because the Risk Prediction Model knows that disruptions are more likely.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- Python 3.11+
-- PostgreSQL 15+
-- Redis 7+
-- Docker + Docker Compose (recommended)
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/your-username/ridershield.git
-cd ridershield
-
-# Start infrastructure (PostgreSQL, Redis, Kafka)
-docker-compose up -d
-
-# Set up the backend
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-
-# Set up the admin dashboard
-cd ../admin-dashboard
-npm install
-npm run dev
-
-# Set up the mobile app
-cd ../mobile-app
-npm install
-npx expo start
-```
-
-### Environment Variables
-
-Create `.env` files in each service directory:
-
-```env
-# Backend (.env)
-DATABASE_URL=postgresql://user:pass@localhost:5432/ridershield
-REDIS_URL=redis://localhost:6379
-STRIPE_TEST_KEY=sk_test_...
-OPENWEATHER_API_KEY=your_key_here
-GOOGLE_MAPS_API_KEY=your_key_here
-
-# Admin Dashboard (.env.local)
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Mobile App (.env)
-API_URL=http://localhost:8000
+POST  /api/claims/manual              # Rider submits manual claim + geo-tagged photo
+GET   /api/claims/manual/{claim_id}   # Rider checks their claim status
+GET   /api/admin/claims/manual        # Admin queue — pending manual claims, sorted by spam score
+POST  /api/admin/claims/{claim_id}/approve   # Admin approves → triggers payout
+POST  /api/admin/claims/{claim_id}/reject    # Admin rejects → rider notified with reason
 ```
 
 ---
 
-## License
+## 6. Platform Choice — Mobile-First PWA
 
-This project is a hackathon prototype. Built for demonstration purposes.
+**We chose a Mobile-First Progressive Web App (PWA)** for Phase 1.
+
+| Factor | Decision |
+|---|---|
+| **Rider behaviour** | Riders manage their entire livelihood via smartphone, between trips, at dark-store queues. Desktop is irrelevant. |
+| **Avoiding app overload** | Riders already run delivery apps, maps, and payment apps. A heavy native install adds friction. A PWA installs from browser and sits on the home screen. |
+| **Cross-platform coverage** | Same React Native / Next.js codebase works on Android and iOS without separate builds. |
+| **Iteration speed** | PWA enables push-to-prod without app store review cycles. |
+| **Backend-heavy product** | Most intelligence (triggers, ML, payouts) lives server-side. Native sensors are not critical for Phase 1. |
+
+**Future (Phase 3+):** A native app layer or a **Guidewire Jutro Digital Platform**
+integration for deeper sensor access, background telemetry, and enterprise-grade insurer UI.
 
 ---
 
-*Built with ❤️ for India's 10M+ gig workers who deserve financial protection.*
+## 7. AI/ML Integration
+
+Our AI strategy is **honest and phased** — practical models now, advanced architectures on
+a clear roadmap.
+
+### 7.1 v1 Models (Hackathon Deliverable)
+
+#### A. Spatio-Temporal Risk Model (Premium Calculation)
+
+**Goal:** Predict per-slot expected earnings and disruption probability per rider.
+
+**Inputs per micro-slot:**
+- Historical earnings for that rider × zone × day × time (rolling 4 weeks).
+- Zone-level weather, AQI, congestion forecast.
+- Events/regulatory calendar.
+- Platform signals: surge multiplier, store health, competitor rider density.
+- Rider profile: tenure, rating, slot consistency.
+
+**Model:** LightGBM / Gradient Boosting with time-of-week features.
+
+**Outputs:**
+- Expected earnings distribution for each slot.
+- Disruption probability (earnings drop below threshold).
+- Weekly premium suggestion per rider.
+
+**Explainability:** "Your premium is higher this week because Thursday 7–9 PM in Zone 13
+has a 65% flood probability based on monsoon forecast."
+
+---
+
+#### B. Parametric Trigger Calibration
+
+**Problem:** Hard-coded thresholds (e.g., "rain > 40mm") are arbitrary and wrong for all cities.
+
+**Solution:** Quantile regression / reliability curves trained on historical disruption data:
+- Learn which *combinations* of signals correlate with severe earnings drops.
+- Derive zone-specific, season-specific adaptive thresholds.
+- Update as new claims data arrives — thresholds improve continuously.
+
+---
+
+#### C. Fraud Detection (Multi-Layer)
+
+| Layer | Technique | What it catches |
+|---|---|---|
+| **Geo-consistency** | Cross-check GPS, network location, platform trip logs | Spoofing, impossible teleportation between zones |
+| **Behavioural anomaly** | Isolation Forest over online/offline patterns | Riders who only go "online" during known disruption windows |
+| **Peer comparison** | Counterfactual income estimator — compare to similar riders in same zone/slot | Outsized claims when peers earned normally |
+| **Graph / collusion** | Network graph linking riders, devices, payout accounts | Clusters that always claim together in the same micro-zone |
+| **Geo-tagged photo validation** *(manual claims only)* | Compare photo EXIF GPS + timestamp against rider telemetry; cross-check weather/traffic APIs for claimed location/time; composite spam score 0–100 | Location spoofing, backdated photos, false disruption descriptions in manual claims |
+
+Fraud engine runs **before** every payout. Suspicious claims are flagged for review; clear
+cases are rejected automatically with a logged reason.
+
+---
+
+### 7.2 Advanced Roadmap (Conceptual Differentiators)
+
+Explicitly marked as future phases — these are our north star, not our hackathon demo.
+
+| Model | Purpose | Why Advanced |
+|---|---|---|
+| **Offline Deep RL (Conservative Q-Learning)** | Weekly premium optimization as a sequential decision problem — balances rider affordability vs portfolio loss ratio | Requires extensive historical policy data; avoids live trial-and-error on vulnerable users |
+| **Physics-Informed Graph Neural Network (PI-GNN)** | Disruption Knowledge Graph (zones, roads, stores, events, payment rails as nodes; causal edges) — propagation model predicts second-order impacts | Requires graph DB, historical propagation data, significant training |
+| **Causal AI / Anomaly Transformer** | Mathematically proves causal link between external shock and wallet-level income drop using cohort telemetry | High data requirements; research-grade fraud detection |
+
+These models represent a credible, investor-grade roadmap even if not fully shipped in the hackathon.
+
+---
+
+### 7.3 AI Data Flow
+
+```mermaid
+flowchart TD
+    A[External APIs] --> B[Kafka]
+    B --> C[Feature Store: Redis + TimescaleDB]
+    C --> D[Risk Model: LightGBM]
+    D --> E[Premium per slot]
+    E --> F[Policy Service]
+    D --> G[Trigger Service]
+    G --> H[Disruption Event]
+    H --> I[Income Estimator]
+    I --> J[Claim Gap Calculation]
+    J --> K[Fraud Model: Isolation Forest + Rules]
+    K --> L[Approve / Flag / Reject]
+    L --> M[Payout Service]
+    M --> N[UPI Credit]
+    O[Rider: Manual Claim + Geo-Tagged Photo] --> P[Geo-Validation Service]
+    P --> Q[Weather & Traffic APIs: corroborate at location/time]
+    Q --> R[Spam Score Calculator: location mismatch + time anomaly + data cross-check]
+    R --> S{Spam Score ≥ 70?}
+    S -- Yes --> T[Auto-Reject: spam flagged]
+    S -- No --> U[Admin Review Queue]
+    U --> V{Admin Decision}
+    V -- Approve --> M
+    V -- Reject --> W[Rider notified with reason]
+```
+
+---
+
+## 8. System Architecture
+
+```mermaid
+graph TB
+    subgraph RiderApp["RIDER MOBILE APP (PWA)"]
+        App["Onboarding | Slot Selection | Policy | Dashboard | Alerts | Manual Claim + Photo"]
+    end
+
+    subgraph APIGateway["API GATEWAY (FastAPI)"]
+        Svc1["Rider Service | Policy Service | Claims Service | Manual Claims Service | Payout Svc"]
+        Svc2["Risk Service | Fraud Service | Trigger Service | Geo-Validation Service"]
+    end
+
+    subgraph DataML["Data & ML Layer"]
+        PG[(PostgreSQL - Core Data)]
+        Kafka["Kafka Events / Time-Series DB"]
+        ML["ML Service (FastAPI) - Risk Model | Fraud Model | Spam Score"]
+        FS[(File Storage - Geo-Tagged Photos)]
+    end
+
+    subgraph Collector["DATA COLLECTOR"]
+        Ext["Weather | Traffic | Platform | Payments | Events | Community Sig"]
+    end
+
+    RiderApp -->|HTTPS / REST| APIGateway
+    RiderApp -->|Photo Upload| FS
+    APIGateway --> PG
+    APIGateway --> Kafka
+    APIGateway --> ML
+    APIGateway --> FS
+    Kafka --> Collector
+```
+
+### Core Domain Entities
+
+- **Rider** — profile, zones, platform links, KYC status.
+- **MicroSlot** — 30-min window with risk score and expected earnings.
+- **Policy** — weekly coverage plan, active dates, premium paid.
+- **DisruptionEvent** — zone × slot, trigger type, severity.
+- **Claim** — rider × disruption, income gap, fraud status, payout amount.
+- **ManualClaim** — rider-initiated claim with disruption type, description, incident coordinates,
+  evaluated weather/traffic data, spam score, and review status.
+- **GeoTaggedPhoto** — evidence photo for a manual claim; stores the file reference, EXIF GPS
+  coordinates + timestamp, app-reported GPS coordinates, and the computed distance between them.
+- **Payout** — payment record, UPI reference, status.
+
+---
+
+## 9. Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| **Mobile App** | React Native + Expo | Cross-platform iOS/Android, PWA behaviour, fast prototyping |
+| **Admin Dashboard** | Next.js + TypeScript + Tailwind | SSR for data tables, rapid UI, type safety |
+| **API Layer** | FastAPI (Python) | Async, auto-docs, native ML model serving |
+| **ML/AI** | Python, Pandas, LightGBM, scikit-learn, PyTorch | v1 models + RL/GNN roadmap |
+| **Primary DB** | PostgreSQL 15 | Relational core: riders, policies, claims, payouts |
+| **Time-Series** | TimescaleDB / Redis | High-frequency external signal storage and caching |
+| **Event Streaming** | Apache Kafka | Decouples ingestion from trigger evaluation |
+| **Push Notifications** | Firebase Cloud Messaging | Real-time rider alerts on disruptions/payouts |
+| **Payments** | Razorpay test mode / UPI simulator | India-native; simulated instant payout |
+| **Weather** | OpenWeatherMap + IMD | Free tier, India coverage, rainfall/AQI/temp |
+| **Traffic** | Google Maps / TomTom Traffic API | Real congestion data; fallback to mocks |
+| **Platform Data** | Simulated / Mocked APIs | Dark store status, order volume — simulated for prototype |
+| **File Storage** | Local FS (dev) / AWS S3 (prod) | Geo-tagged photo evidence for manual claims; EXIF parsed via Pillow |
+| **Infra** | Docker + Docker Compose | One-command local deploy for demo and judges |
+
+**Guidewire Integration Path (Future):**
+- PolicyCenter (APD) for policy lifecycle management.
+- ClaimCenter for zero-touch claim initiation (automatic triggers) and manual claim adjudication via App Events / Webhooks.
+- Jutro Digital Platform for enterprise mobile UI.
+- Integration Gateway for external API orchestration.
+
+---
+
+## 10. Platform Data Simulation
+
+Real-time access to delivery platform APIs (Zepto, Blinkit, Swiggy Instamart) is not
+available for a prototype. This section documents exactly how the platform data layer is
+simulated, what it produces, how realistic the output is, and how it plugs into the live
+system workflow.
+
+---
+
+### 10.1 Why Simulation Is Necessary
+
+Delivery platforms do not expose public APIs for per-rider order data, store health, or
+earnings streams. Production integrations would require formal B2B partnerships, NDA-bound
+data-sharing agreements, and sandboxed API credentials — none of which are feasible for a
+hackathon prototype. The simulation layer provides a **functionally identical interface**:
+the rest of the system consumes simulated platform events through the same contract it would
+use with a real API, making the substitution transparent to every downstream service.
+
+---
+
+### 10.2 Simulated Parameters
+
+The simulation covers all platform signals that the Trigger Service and Claims Service
+require to operate end-to-end.
+
+#### Rider & Order Signals
+
+| Parameter | Description | Simulated Range / Values |
+|---|---|---|
+| `orders_per_hour` | Number of orders dispatched to the rider in the current slot | 0–18 orders/hr (zone- and time-dependent) |
+| `order_rate_drop_pct` | Percentage fall in order rate vs. the rider's rolling 4-week average | 0–100 % |
+| `rider_status` | Whether the delivery app reports the rider as online | `ONLINE` / `OFFLINE` |
+| `orders_dispatched` | Running count of orders the platform sent to the rider this shift | Integer ≥ 0 |
+| `orders_accepted` | Orders the rider accepted | Integer ≤ `orders_dispatched` |
+| `orders_declined` | Orders declined (used to detect algorithmic suppression) | Integer ≥ 0 |
+| `dispatch_latency_sec` | Time (seconds) between store ready and dispatch notification | 30–600 s (normal 60–90 s) |
+| `active_navigation_events` | Count of in-app navigation events (proxy for genuine trip activity) | Integer ≥ 0 |
+
+#### Earnings Signals
+
+| Parameter | Description | Simulated Range / Values |
+|---|---|---|
+| `earnings_current_slot` | Rupee earnings in the current 30-min micro-slot | ₹0–₹300 |
+| `earnings_rolling_baseline` | Rider's 4-week average earnings for the same slot type | ₹80–₹250 (seeded from persona profile) |
+| `earnings_per_order` | Per-order payout including distance incentive | ₹12–₹35 |
+| `surge_multiplier` | Platform surge factor active in the zone at this moment | 1.0–2.5× |
+| `weekly_earnings_to_date` | Cumulative earnings so far in the active policy week | ₹0–₹4,500 |
+
+#### Store & Inventory Signals
+
+| Parameter | Description | Simulated Values |
+|---|---|---|
+| `store_status` | Operational state of the rider's primary dark store | `OPEN` / `CLOSED` / `DEGRADED` |
+| `store_order_throughput` | Orders processed per hour at the store | 0–200 orders/hr |
+| `stock_level` | Aggregate inventory health of the store | `NORMAL` / `LOW` / `CRITICAL` |
+| `pickup_queue_depth` | Number of riders currently waiting at the store for their order | 0–25 riders |
+| `avg_pickup_wait_sec` | Average time (seconds) riders are waiting at the pickup counter | 30–900 s (SLA threshold: 300 s) |
+| `store_outage_reason` | Human-readable reason when `store_status = CLOSED` | `EQUIPMENT_FAILURE` / `POWER_CUT` / `MAINTENANCE` / `FLOOD` |
+
+#### Platform Health Signals
+
+| Parameter | Description | Simulated Values |
+|---|---|---|
+| `platform_status` | Whether the platform's own backend is reachable | `UP` / `DEGRADED` / `DOWN` |
+| `api_error_rate_pct` | Percentage of API calls returning errors in this zone | 0–100 % |
+| `shadowban_active` | Flag indicating the platform has suppressed the rider's visibility | `true` / `false` |
+| `shadowban_duration_min` | Minutes the rider has been in suppressed state | 0–240 min |
+| `allocation_anomaly` | Flag set when rider's allocation is ≥ 40 % below the zone median | `true` / `false` |
+
+---
+
+### 10.3 Simulation Approach
+
+#### Architecture
+
+The simulation is implemented as a **`PlatformSimulator` module** inside the
+`backend/integrations/platform_simulator.py` file. It exposes the same interface as the
+real platform integration adapter, so the Data Collector calls it identically whether
+talking to a live API or a simulator.
+
+```
+Data Collector (polls every 5 min)
+  └─► PlatformSimulator.get_rider_snapshot(rider_id, zone_id, slot_ts)
+        └─► Returns: PlatformSnapshot (all parameters above, as a typed Pydantic model)
+```
+
+#### Statistical Model
+
+Simulated values are not random noise — they are drawn from **parameterised statistical
+distributions anchored to published Q-commerce benchmarks**:
+
+| Aspect | Approach |
+|---|---|
+| **Baseline order rates** | Normal distribution μ = 10 orders/hr, σ = 2.5, clipped to [0, 18]. Mean adjusted per time-of-day profile (see table below). |
+| **Earnings per order** | Log-normal distribution with μ = ₹18, σ = ₹5 (matches reported Zepto/Blinkit incentive structures). |
+| **Store status transitions** | Markov chain: `OPEN → DEGRADED` (p = 0.02/hr), `DEGRADED → CLOSED` (p = 0.15/hr), `CLOSED → OPEN` (p = 0.30/hr). |
+| **Dispatch latency** | Gamma distribution (k = 2, θ = 45 s) with a heavy tail to simulate queue spikes. |
+| **Pickup queue depth** | Poisson(λ = 4) during normal hours; λ scales to 12 during inventory-stockout injection. |
+| **Surge multiplier** | Discrete: 1.0× (70 %), 1.25× (15 %), 1.5× (10 %), 2.0× (4 %), 2.5× (1 %). |
+
+#### Time-of-Day Demand Profile
+
+Order rates are modulated by a deterministic demand curve that reflects real Q-commerce
+traffic patterns in Indian metros:
+
+| Time Window | Demand Multiplier | Typical `orders_per_hour` |
+|---|---|---|
+| 06:00–08:30 | 0.5× | 4–6 |
+| 08:30–11:00 | 0.9× | 8–10 |
+| 11:00–14:00 | 1.1× | 9–12 |
+| 14:00–17:00 | 0.6× | 4–7 |
+| 17:00–20:00 | 1.4× | 12–16 |
+| 20:00–22:30 | 1.2× | 10–14 |
+| 22:30–06:00 | 0.3× | 0–4 |
+
+#### Disruption Injection
+
+The simulator accepts an optional **`DisruptionScenario`** object that overrides the
+baseline distributions to reproduce a named disruption type. This is how demo scenarios
+(Sections 2.1–2.4) are triggered deterministically:
+
+| Scenario Key | What Changes |
+|---|---|
+| `HEAVY_RAIN` | `orders_per_hour` drops to 20–35 % of baseline; `rider_status` may flip `OFFLINE` for 10 % of riders; `store_order_throughput` falls 40 %. |
+| `STORE_CLOSURE` | `store_status = CLOSED`; `orders_dispatched = 0`; `stock_level = CRITICAL` for adjacent stores. |
+| `PLATFORM_OUTAGE` | `platform_status = DOWN`; `api_error_rate_pct = 95–100 %`; all `orders_dispatched = 0`. |
+| `GPS_SHADOWBAN` | `shadowban_active = true`; `shadowban_duration_min` ramps from 0 to 120; rider's `orders_per_hour` → 0 while zone peers remain at baseline. |
+| `DARK_STORE_QUEUE` | `pickup_queue_depth` spikes to 15–25; `avg_pickup_wait_sec` exceeds 300 s SLA. |
+| `ALGORITHMIC_SHOCK` | `allocation_anomaly = true`; rider's `order_rate_drop_pct` = 50–70 % while zone median is unchanged. |
+
+#### Reproducibility & Seeding
+
+The simulator uses a **deterministic seed** derived from `(rider_id, zone_id, iso_week)`
+so that repeated test runs produce identical results. Integration tests fix the seed
+explicitly; the live demo uses a rotating daily seed to generate fresh-looking data each day.
+
+---
+
+### 10.4 Realism Assessment
+
+| Dimension | Realism Level | Notes |
+|---|---|---|
+| **Order rate magnitudes** | ✅ High | Derived from publicly reported Zepto/Blinkit rider earnings of ₹15,000–₹25,000/month back-calculated to hourly order rates. |
+| **Earnings per order** | ✅ High | Matches ₹12–₹35 range reported in rider forums and investigative journalism (2023–2025). |
+| **Time-of-day demand shape** | ✅ High | Demand curve modelled on publicly reported Q-commerce peak-hour patterns (dinner rush 6–9 PM, lunch 12–2 PM). |
+| **Store status transitions** | ✅ Moderate–High | Markov transition probabilities calibrated to anecdotal dark-store outage frequency (1–2 closures/week per store). |
+| **Surge multiplier distribution** | ✅ Moderate | Discrete distribution matches approximate Blinkit/Zepto surge structures; exact weights are estimates. |
+| **Dispatch latency distribution** | ✅ Moderate | Gamma shape captures right-skew (occasional long waits); exact parameters are estimated from rider reports. |
+| **GPS multipath / shadowban mechanics** | ⚠️ Approximated | Shadowban duration and allocation-drop magnitude are plausible estimates — no published ground truth for these events. |
+| **Cross-rider peer comparison signals** | ✅ High | Generated by running the simulator independently for each rider in the zone and comparing outputs — structurally identical to how real peer signals would work. |
+| **Platform API error patterns** | ⚠️ Approximated | Error rate during outages set to 95–100 %; real platform partial-failure patterns are more complex. |
+
+**Bottom line:** The simulation is calibrated to be accurate enough to validate the trigger
+logic, income estimation, and fraud detection algorithms. It is **not** a substitute for
+real platform data for actuary-grade pricing — that requires a production pilot with a
+platform partner.
+
+---
+
+### 10.5 Integration into the System Workflow
+
+The simulated platform layer is a **drop-in replacement** for the real platform API adapter.
+It participates in the full data pipeline without any special handling by downstream services:
+
+```mermaid
+flowchart TD
+    A[Data Collector — polls every 5 min] --> B{Platform API available?}
+    B -- Yes (production) --> C[Real Platform REST API\nZepto / Blinkit / Swiggy Instamart]
+    B -- No (prototype / test) --> D[PlatformSimulator\nbackend/integrations/platform_simulator.py]
+    C --> E[PlatformSnapshot: Pydantic model]
+    D --> E
+    E --> F[Kafka topic: platform.snapshots]
+    F --> G[Trigger Service\nevaluates store_status, platform_status,\nallocation_anomaly, shadowban_active]
+    F --> H[Feature Store: Redis + TimescaleDB\nstores earnings, order rates, surge multiplier]
+    G --> I{Trigger condition met?}
+    I -- Yes --> J[DisruptionEvent created]
+    J --> K[Claims Service\nidentifies insured online riders in zone]
+    K --> L[Income Estimator\nearnings_rolling_baseline vs earnings_current_slot]
+    L --> M[Fraud Service\nGPS · peer comparison · platform trip logs]
+    M --> N[Payout Service → UPI credit]
+    H --> L
+```
+
+**Key integration points:**
+
+| Service | How It Uses Platform Data |
+|---|---|
+| **Trigger Service** | Reads `store_status`, `platform_status`, `allocation_anomaly`, `shadowban_active`, and `api_error_rate_pct` from the Kafka topic to evaluate store-closure, outage, and algorithmic-shock triggers. |
+| **Income Estimator** | Reads `earnings_current_slot`, `earnings_rolling_baseline`, `earnings_per_order`, and `surge_multiplier` from the Feature Store to calculate the income gap for payout. |
+| **Community Signal Agent** | Aggregates `order_rate_drop_pct` across all zone riders to detect mass order collapses (> 70 % drop triggers community signal). |
+| **Fraud Service** | Cross-references `active_navigation_events` and `orders_dispatched` with GPS telemetry to confirm the rider was genuinely active — a spoofer's delivery app shows no trip events. |
+| **Dark Store Queue Trigger** | Reads `pickup_queue_depth` and `avg_pickup_wait_sec` to detect chronic unpaid wait-time disruptions (SLA breach when wait > 300 s across ≥ 3 riders at the same store). |
+
+**Switching to a real API in production** requires only replacing the `PlatformSimulator`
+with a real `PlatformAPIAdapter` that implements the same `get_rider_snapshot()` interface.
+Every service above continues to work unchanged — the data contract (the `PlatformSnapshot`
+Pydantic model) remains identical.
+
+---
+
+## 11. Development Plan
+
+### Phase 1 — Foundation 
+
+**Goal:** Working skeleton — riders onboard, buy policies, data flows in.
+
+| Deliverable | Details |
+|---|---|
+| Rider onboarding + KYC flow | Name, phone, platform, zone, slot preferences |
+| Policy service | Weekly plan selection, premium calculation (rule-based v0), UPI mock payment |
+| Weather data pipeline | OpenWeatherMap polling every 5 min into TimescaleDB |
+| Basic trigger rules | Rain > threshold, congestion > threshold — rule-based, no ML yet |
+| Database schema | Riders, zones, micro-slots, policies, disruption events, claims |
+| Mobile app shell | Onboarding, plan selection, policy status view |
+
+**Exit criterion:** Rider can sign up, buy cover, and the system ingests live weather data.
+
+---
+
+### Phase 2 — Automation & Protection [March 21 – April 4] (Weeks 3–4)
+
+> **Theme:** "Protect Your Worker"
+
+**Goal:** Full zero-touch flow — disruption detected → claim → payout — working end-to-end.
+
+#### Hackathon Deliverables
+
+- **A 2-minute demo video** uploaded to a publicly accessible link.
+- **Executable source code** showcasing:
+  - **Registration Process**
+  - **Insurance Policy Management**
+  - **Dynamic Premium Calculation**
+  - **Claims Management**
+
+#### Our Implementation Plan
+
+| Deliverable | Details |
+|---|---|
+| Registration process (polish) | End-to-end onboarding: name, phone, KYC, platform link, zone, slot preferences — fully functional and demo-ready |
+| Insurance policy management | Plan selection (Essential / Balanced / Max Protect), policy lifecycle (activate, view, renew, cancel), coverage status tracking |
+| Dynamic premium engine | LightGBM risk model on synthetic data, zone-level scoring, hyper-local risk factors, explainable premium per slot |
+| 5 automated triggers | Heavy rain, congestion, dark-store closure, platform outage, regulatory event — using OpenWeatherMap + mocked APIs |
+| Community Signal agent | Detects mass order collapse across zone riders (>70% affected) |
+| Claims automation | Trigger → income gap calc → basic fraud check → payout (zero-touch) |
+| **Manual claim submission** | Rider-facing "Request Manual Claim" flow with geo-tagged photo upload, disruption type selection, and description |
+| **Geo-validation service** | Extracts EXIF GPS from photo; compares to rider's live telemetry GPS; flags location mismatches > 500 m |
+| **Weather & traffic corroboration** | OpenWeatherMap + Google Maps queried for the photo's location/time to verify the claimed disruption type |
+| **Spam detection pipeline** | Composite spam score from location mismatch, time anomaly, weather/traffic cross-check; auto-rejects score ≥ 70 |
+| **Admin manual-claim review queue** | Ranked by spam score; one-click approve/reject with corroboration summary |
+| 2-minute demo video | Registration → policy management → dynamic premium → simulated disruption → auto-payout + manual-claim fallback, uploaded publicly |
+
+**Exit criterion:** A 2-minute demo shows the complete registration → policy management → dynamic premium → zero-touch claim payout flow.
+
+---
+
+### Phase 3 — Scale & Optimise [April 5 – 17] (Weeks 5–6)
+
+> **Theme:** "Perfect for Your Worker"
+
+**Goal:** Smart, observable, pitch-ready system with advanced fraud detection, instant payouts, and intelligent dashboards.
+
+#### Hackathon Deliverables
+
+- **Advanced Fraud Detection:** Catch delivery-specific fraud (e.g., GPS spoofing, fake weather claims using historical data).
+- **Instant Payout System (Simulated):** Integrate mock payment gateways (Razorpay test mode, Stripe sandbox, or UPI simulators) to demonstrate how the worker receives their lost wages instantly.
+- **Intelligent Dashboard:**
+  - **For Workers:** Earnings protected, active weekly coverage.
+  - **For Insurers (Admin):** Loss ratios, predictive analytics on next week's likely weather/disruption claims.
+
+#### Our Implementation Plan
+
+| Deliverable | Details |
+|---|---|
+| Advanced fraud detection | Geo-consistency, peer comparison, Isolation Forest, behavioural autoencoder, collusion graph (Neo4j), counterfactual estimator, geo-velocity impossibility checks |
+| Instant payouts (simulated) | Full Razorpay test mode / Stripe sandbox / UPI simulator with webhook reconciliation, push notification on payout via FCM |
+| Rider intelligent dashboard | Earnings protected, active weekly coverage, risk alerts, claim history, next-week risk forecast, manual claim status tracker |
+| Admin intelligent dashboard | Loss ratios, predictive analytics, live disruption heatmap (zone × time), fraud alert queue, payout analytics, manual claim review |
+| Knowledge Graph v0 | Neo4j graph of zones, roads, stores, events — propagation logic |
+| Model improvements | Temporal model upgrade (TCN/Transformer), self-calibrating thresholds |
+| Final submission package | Demo + pitch deck + full repo with Docker Compose |
+
+
+## 12. Adversarial Defense & Anti-Spoofing Strategy
+
+> **Context:** A coordinated syndicate of 500 delivery workers organized via Telegram used
+> GPS-spoofing apps to fake their presence inside a red-alert weather zone — triggering
+> mass false parametric payouts and draining a platform's liquidity pool in hours.
+
+**Core Principle:** GPS is a signal, not the source of truth. A rider is considered genuine
+only when location data is consistent with OS-level location APIs, device telemetry, platform
+trip logs, zone-level disruption evidence, behavioral history, and corroborating peer data.
+Spoofed GPS alone can imitate "being in a bad zone" — it cannot simultaneously imitate a
+realistic order history, IMU motion fingerprint, matching cell tower sequence, a real earnings
+drop from a prior baseline, and a zone-wide peer impact pattern.
+
+---
+
+### 12.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
+
+Every automatic payout requires multi-modal corroboration across the following signal stack.
+No single signal can approve or reject a claim on its own.
+
+| Signal | Genuine Stranded Rider | GPS Spoofer at Home |
+|---|---|---|
+| **OS Mock Location API** | `IS_FROM_MOCK_PROVIDER = FALSE` (Android); native CoreLocation source (iOS); no mock-location app running | Basic spoofing apps set this flag TRUE. Advanced tools (Magisk, virtualization containers) can mask it — treated as a heavy-weight corroborating signal, never a standalone reject ✗ |
+| **GPS telemetry quality** | Degraded HDOP (> 3.0), multipath scatter, altitude jitter — consistent with rain and urban canyons | Spoofing apps inject artificially *perfect* GPS fixes. A too-perfect lock during a declared red-zone storm is a hard red flag ✗ |
+| **Cell tower triangulation** | Serving cell tower IDs (CID + LAC) physically in the claimed zone; RSSI variance from movement | GPS spoofing moves the injected coordinate, not the physical tower. Home tower in a different zone = immediate flag ✗ |
+| **Accelerometer / IMU** | Erratic, high-frequency vibration consistent with riding a two-wheeler on wet roads | Stationary phone shows near-zero accelerometer variance. Lightweight on-device model classifies motion state at payout time ✗ |
+| **Platform trip logs** | Active order attempts, order declines, navigation events firing in the delivery app | Spoofer's delivery app is backgrounded or idle — no trip events, no order workflow activity ✗ |
+| **Earnings trajectory** | Genuine drop from prior-hour earning baseline — income *was* flowing, then disruption hit | Fraudster's account shows near-zero earnings history; there is no drop to measure because there was no work ✗ |
+| **Zone entry timing** | Rider was already in the zone *before* the trigger fired — shift history confirms prior presence | Ring members "teleport" into the disrupted zone at the exact moment a trigger activates. Zone-entry within < 2 minutes of trigger fire is flagged ✗ |
+| **Battery drain rate** | ~15–20%/hr field drain: continuous GPS + mobile data + screen-on under thermal load | Spoofing app runs a secondary background process, producing an anomalous drain pattern distinct from both field use and normal idle ✗ |
+| **IP geolocation** | Data connection routes through a cell tower ISP consistent with the claimed zone | Home WiFi or fixed residential ISP contradicts the claimed zone. A rider "in Gachibowli" connecting from a Koramangala home ISP is anomalous ✗ |
+| **App session behavior** | Organic, irregular API heartbeat cadence driven by real delivery events | Automated spoofing scripts produce unnaturally metronomic, periodic API call intervals — detectable via periodicity analysis on the call-interval time series ✗ |
+
+**Pre-Disruption Telemetry Buffer (network-drop protection):**
+The rider app continuously caches the last **15 minutes** of GPS + IMU + platform activity
+locally on the device. When a claim is evaluated, this buffer is uploaded alongside live data.
+A rider whose buffered data shows consistent zone presence and active platform activity in the
+15 minutes *before* network degraded receives full benefit-of-the-doubt — genuine presence is
+proven by evidence captured before connectivity failed, not just at the moment of claim.
+A spoofer has no such legitimate pre-disruption history to upload.
+
+**Geo-Velocity Impossibility Check:**
+Any rider whose GPS history shows them in Zone A at time T and Zone B (≥ 3 km away) at
+T + 90 seconds — physically impossible during a red-alert event with flooded roads and gridlock
+— is immediately auto-flagged. The distance and time thresholds (default: 3 km / 90 s) are
+**configurable parameters**, dynamically adjusted per disruption type, zone road density, and
+observed traffic conditions.
+
+---
+
+### 12.2 The Data — What Catches a Coordinated Fraud Ring
+
+Individual fraud detection fails at scale. A ring of 500 acting in concert leaves a
+**graph-level and behavioral signature** that is statistically unmistakable in aggregate.
+The fraud engine organizes evidence into four layers:
+
+#### Layer 1 — Device-Level Signals
+
+| Signal | What It Catches |
+|---|---|
+| **OS Mock Location flag** (`IS_FROM_MOCK_PROVIDER`) | Heavy-weight corroborating input to the fraud score — never a standalone reject trigger. Always requires corroboration from at least one other signal (e.g., stationary IMU, cell tower mismatch). |
+| **IMU / Accelerometer fingerprint** | A lightweight on-device ML model classifies "riding," "walking," "stationary," or "vehicle passenger" at claim time. Stationary classification contradicts an active-delivery claim. |
+| **Device fingerprint clustering** | Device hardware ID (IMEI/IDFA), WiFi MAC address, and shared IP are grouped in a Neo4j graph. 500 coordinating via Telegram will share a small number of device setups — detectable even if each account appears independent. |
+| **Spoofing APK fingerprint** | Multiple riders sharing the same APK hash or build fingerprint — installed on the same day a disruption is declared — is a collusion indicator. |
+| **Battery anomaly** | GPS spoofing runs a persistent background process. Unusual battery consumption correlated with "in-zone" status is cross-referenced against the device model's baseline. |
+
+#### Layer 2 — Behavioral Signals
+
+| Signal | What It Catches |
+|---|---|
+| **Online/offline timing pattern** | Riders who go "online" *exclusively* during known red-alert windows and never during normal conditions are flagged by Isolation Forest as a behavioral fingerprint. |
+| **Claim-to-earn ratio** | Rolling 4-week earn/claim ratio per rider. A fraudster's account with near-zero earnings history and a sudden high-value claim scores heavily in the fraud model. |
+| **Zone entry timing** | Genuine riders are already in a zone before disruption begins. Fraudsters "teleport" in at the exact moment a trigger fires (threshold: < 2 min; configurable). |
+| **Geo-velocity impossibility** | Rider in Zone A at T=0 and Zone B (≥ 3 km) at T+90 s during a declared red-alert event is physically impossible (thresholds configurable). |
+| **Claim timing burst** | Legitimate disruptions produce staggered, organic claim arrivals (Poisson distribution). A ring submitting after a Telegram broadcast creates a sharp impulse. Poisson-rate test: > 3σ deviation from the zone's historical mean triggers a zone-level fraud hold. |
+
+#### Layer 3 — Graph / Ring Detection
+
+RiderShield's Neo4j-based collusion graph ingests four edge types:
+
+- **Rider → Zone** (weighted by shift frequency — zone affinity)
+- **Rider → Device** (hardware fingerprint per login session)
+- **Rider → PayoutAccount** (UPI VPA / bank account number)
+- **Rider → ClaimEvent** (timestamped, with disruption event ID)
+
+Three graph queries execute on every disruption event:
+
+1. **Community detection (Louvain algorithm):** Clusters of riders who co-claim across
+   multiple unrelated disruption events. Honest riders do not form tight co-claim clusters;
+   a ring does. Cluster coefficient > 0.7 triggers a ring-review flag.
+
+2. **Hub payout account detection:** Any UPI VPA or bank account receiving credits from
+   ≥ 5 distinct riders in a 30-day window is flagged. Second-degree traversal also surfaces
+   indirect linkage via a common third party.
+
+3. **Simultaneous zone-entry detection:** If 50+ riders "enter" a disrupted zone within
+   the same 60-second window — physically impossible during a red-alert event — the entire
+   batch is held for ring-level review, not individual review.
+
+#### Layer 4 — Zone-Level Coherence
+
+| Signal | What It Catches |
+|---|---|
+| **Peer earnings cross-validation** | In a genuine disruption, *all* on-site riders (confirmed via cell towers and platform logs) show an earnings drop. Fraudsters who "appear" in the zone have no prior earning history there — no real drop to claim. |
+| **Weather-earnings model ceiling** | LightGBM has a trained expectation of maximum earnings impact per rainfall/congestion level per zone per time slot. Claims requesting payouts *larger than the model's ceiling* for observed weather severity are flagged as overclaiming. |
+| **Dark store activity cross-check** | If dark stores in the zone are still processing orders (`store_status = ACTIVE`, throughput > 0), disruption severity is lower than claimed — payouts are proportionally capped to observed store impact, not the claimed maximum. |
+| **Zone–rider affinity score** | Fraction of a rider's past 30 shifts in the claimed zone. A low-affinity rider (< 5% of prior shifts) claiming their first-ever disruption in a zone during its only significant payout event of the month is anomalous. 200 low-affinity riders simultaneously claiming from the same zone approaches zero coincidence probability. |
+| **Claim zone saturation rate** | Genuine disruptions produce 30–60% zone-claim rates, tapering as the event resolves. A coordinated ring produces 85–100% rates sustained uniformly throughout the disruption window — a signal of artificial maximization. |
+
+---
+
+### 12.3 The UX Balance — Tiered Response Without Punishing Honest Workers
+
+A real rider experiencing a genuine network drop in bad weather will look superficially
+similar to a spoofer: degraded GPS, weak cell signal, intermittent platform activity. The
+system must not punish them. RiderShield uses a **four-tier numeric fraud score system**,
+not a binary approve/reject — with time-bounded SLAs on every tier.
+
+> **Design principle:** The system fails safely. Hard on spoofers; forgiving to genuinely
+> stranded workers. Claims are never rejected on GPS evidence alone.
+
+#### Four-Tier Fraud Score Framework
+
+| Score Band | Tier | Action | Rider-Facing Message | SLA |
+|---|---|---|---|---|
+| **0 – 30** | 🟢 **Auto-Approve** | Instant payout released. No friction for the rider. | *"₹540 credited to your UPI wallet. Stay safe!"* | Seconds |
+| **31 – 60** | 🟡 **Soft Flag — Passive Hold** | Payout held up to 2 hours. System monitors passively: if signals resolve → auto-approve; if still ambiguous → route to human review queue, not auto-reject. | *"Your payout is being verified due to signal conditions. You'll hear back within 2 hours."* | ≤ 2 hours |
+| **61 – 85** | 🟠 **Hard Flag — Self-Attestation** | Payout held. Rider submits a **5-second live geo-stamped video** (live video is orders of magnitude harder to fake than a GPS coordinate). Simultaneously routed to admin fraud queue with full multi-signal evidence brief. Admin approves or rejects with one click. | *"Your claim needs a quick check. Tap to record a 5-second video from your current location. You'll have a decision within 4 hours."* | ≤ 4 hours |
+| **86 – 100** | 🔴 **Auto-Reject** | Requires convergent evidence across **at least two independent signals**: e.g., Mock Location flag TRUE *and* IMU confirms stationary, OR Mock Location flag TRUE *and* cell tower in a different zone, OR device in a confirmed payout/device graph cluster *and* zero platform trip activity. No single signal alone reaches this tier. | *"Your claim was declined. Specific reason: [e.g., 'Your phone's OS-reported location does not match GPS and your phone showed no movement during this window.']"* — never vague. Rider can appeal with human review. | Instant |
+
+#### The Pre-Disruption Telemetry Buffer (for Network Drop Edge Cases)
+
+Bad weather degrades GPS and cell signal simultaneously — the exact conditions that
+cause legitimate disruptions. The app handles this with a pre-disruption buffer:
+
+- Continuously caches the last **15 minutes** of GPS + IMU + platform activity **locally on
+  device**, independent of network connectivity.
+- On claim submission, the buffer is uploaded alongside live data.
+- A rider whose buffer shows consistent zone presence and active delivery app usage in the
+  15 minutes before network degradation gets automatic benefit-of-the-doubt.
+- A spoofer running a script at home has no legitimate 15-minute pre-disruption history —
+  their buffer shows a stationary, home-network, app-idle device.
+
+#### Trust Score — Track Record as Corroborating Evidence
+
+Every rider accumulates a `trust_score` (0–100) from clean claim history, platform tenure,
+consistent zone activity, and on-time premium payments. A rider with `trust_score ≥ 70`
+receives a score adjustment that can shift a borderline 31-score claim into the auto-approve
+band — their documented history provides evidence that signal ambiguity reflects genuine
+conditions, not fraud.
+
+*Trust score cannot override zone-level burst holds.* When a zone saturation event or
+> 3σ Poisson burst triggers a zone-level hold, even high-trust riders enter the Soft Flag
+tier and qualify for the micro-advance, but are not auto-approved until the zone investigation
+completes. This prevents a trusted account from being co-opted as ring cover.
+
+#### Additional Protections for Honest Workers
+
+**Emergency micro-advance:** Any rider in the Soft Flag or Hard Flag tier with a clean
+90-day claim history can instantly request an advance (default: ₹200; **configurable**) through
+the app. Disbursed immediately; debited from the final approved payout. If rejected, repayment
+is structured as small weekly deductions (default: ₹50/week over 4 weeks; **configurable**) —
+never a lump-sum demand. Balances outstanding after 90 days are written off
+(**write-off threshold is configurable**, informed by real portfolio data).
+
+**Signal decay forgiveness:** During declared "heavy rain," "flood," or "cyclone" events,
+degraded GPS quality (low satellite count, high HDOP) is re-classified as *corroborating
+evidence* of the claimed condition, not an anomaly flag.
+
+**Repeated false flags trigger recalibration:** If a rider's claims are repeatedly flagged but
+consistently approved on human review, the pattern is logged as a false-positive cluster and
+used to retrain the model — not to penalize the rider.
+
+**No punitive premium impact for a single flag:** Risk-score adjustments only activate after
+3 confirmed-fraudulent rejections within a 90-day window, with explicit written notice before
+each increment.
+
+**Transparent audit trail:** Every flagged claim shows the rider the specific signal that
+triggered it in plain language (e.g., *"The cell tower your phone connected to was in
+Koramangala, not the declared zone in Gachibowli"*) — enabling a specific, actionable
+rebuttal, not a blind appeal.
+
+#### Surgical Zone Interdiction — No Collateral Damage
+
+When a zone-level burst event triggers a hold, the system operates in three ranked passes:
+
+1. **Pass 1 — Immediate release (score 0–30, ≥ 8/10 signals consistent):** Approved and
+   paid instantly. These riders are clearly legitimate; they are never held as collateral.
+2. **Pass 2 — Soft hold (score 31–60):** Held pending zone investigation, micro-advance
+   available to all. Auto-resolve within 2 hours if signals clear.
+3. **Pass 3 — Investigation-gated (score > 60, or confirmed graph cluster member):** Held
+   until investigation concludes. Confirmed non-ring members are released and paid.
+   Confirmed ring members are rejected and reported.
+
+---
+
+### 12.4 Ring-Level Escalation Protocol
+
+When a coordinated ring is detected — a graph cluster of ≥ 10 accounts showing synchronized
+suspicious behavior — the following protocol activates automatically:
+
+1. **Batch hold:** All claims from the cluster are suspended simultaneously, not processed
+   individually. This prevents the ring from partially draining the pool before detection
+   completes.
+
+2. **Silent flag:** The cluster is not notified, preventing the ring from pivoting tactics or
+   destroying evidence before the investigation.
+
+3. **Retroactive 4-week audit:** The fraud engine reruns the last 4 weeks of payouts for all
+   cluster accounts, flagging amounts eligible for clawback. The liquidity team is alerted
+   with a full evidence brief.
+
+4. **Platform partner alert:** The delivery platform (Blinkit / Zepto / Swiggy) whose rider
+   IDs are implicated is notified via API webhook for account-level action. Cross-platform
+   corroboration closes the loop on whether the riders were genuinely active at all.
+
+5. **Per-zone payout velocity cap:** If total payouts from a single zone in a single hour
+   exceed **3× the actuarial expectation** for the observed trigger severity, all further
+   payouts queue for human review until the anomaly is resolved. The liquidity pool is
+   protected *before* the ring can drain it. This cap is the last-resort backstop that makes
+   the entire fraud architecture self-protecting even under novel attack vectors.
+
+---
+
+### 12.5 Policy Safeguards & Architecture Summary
+
+**Policy safeguards that protect honest riders:**
+- Claims are **never** rejected on a single GPS signal alone — auto-reject (score 86–100)
+  requires convergent evidence across at least two independent signals.
+- Every flagged claim receives a specific reason code in plain language — no vague rejections.
+- Every rejected claim has a manual appeal path with a 4-hour human review SLA.
+- Fraud score thresholds are calibrated **conservatively**; any threshold producing > 2%
+  false-positive rate in retrospective analysis triggers an automatic model review.
+- Fraud findings are fed back into model retraining continuously — the system improves with
+  every event.
+
+**Architecture summary:**
+RiderShield's anti-spoofing defense is a five-layer system: (1) a device-signal layer using
+the OS Mock Location API as a heavy-weight corroborating input (never standalone) alongside IMU
+fingerprinting, device clustering, and battery anomaly detection; (2) a multi-modal signal
+fusion layer across GPS quality, cell towers, platform logs, earnings trajectory, and app
+behavior requiring convergent evidence across independent physical channels; (3) a four-layer
+ring detection stack combining device fingerprints, behavioral anomaly detection, Neo4j graph
+analysis, and zone-level coherence checks; (4) a four-tier numeric scoring system with
+time-bounded SLAs, pre-disruption telemetry buffers, live video geo-stamps, and trust score
+adjustments ensuring honest workers are never punished for signals that bad weather itself
+creates; and (5) a ring-level escalation protocol with batch holds, silent flags, retroactive
+audits, platform partner alerts, and per-zone payout velocity caps that protects liquidity
+before a ring can drain it. No GPS spoofing app defeats all five layers simultaneously.
+
+---
+
+## Limitations & Future Work
+
+- Phase 1–2 ML models run on **synthetic data**; real-world calibration requires platform
+  partnerships and regulatory approval.
+- Advanced models (Offline RL, PI-GNN, Causal AI) are **roadmap items**, not hackathon
+  deliverables — we are transparent about this distinction.
+- Production deployment requires IRDAI sandbox/regulatory clearance for insurance products
+  in India.
+- Reinsurance arrangements for catastrophic zone events are a commercial layer not built
+  in the prototype.
+- **Manual claim photo storage** uses a local filesystem in the prototype; production requires
+  a secure, signed-URL object store (AWS S3 / GCS) with image integrity verification.
+- **EXIF GPS extraction** relies on camera-embedded metadata; photos shared via messaging apps
+  often have EXIF stripped — in those cases the system falls back to the device GPS recorded by
+  the rider app at upload time.
+- Manual claims are rate-limited to **1 per policy week per rider** in the prototype; the
+  production cap should be informed by real claim data and the portfolio loss ratio.
+
+---
+
+*Built with ❤️ for India's 10M+ gig workers — the invisible backbone of quick commerce.
+DEVTrails 2026 Hackathon Submission.*
