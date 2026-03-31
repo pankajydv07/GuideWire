@@ -25,6 +25,12 @@ from payout_service.router import router as payout_router
 from admin_service.router import router as admin_router
 from manual_claims.router import router as manual_claims_router
 
+# ─── Import ALL models to ensure SQLAlchemy Registry is initialized ───
+import rider_service.models
+import policy_service.models
+# other services might not have models yet, but these two definitely do
+
+
 # ─── Logging ─────────────────────────────────────────
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -102,10 +108,12 @@ async def health_check():
     redis_status = "disconnected"
 
     try:
+        from sqlalchemy import text
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
             pg_status = "connected"
-    except Exception:
+    except Exception as e:
+        logger.error(f"Postgres health check failed: {e}")
         pass
 
     try:
