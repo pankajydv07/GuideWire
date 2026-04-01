@@ -5,15 +5,15 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg15
     environment:
-      POSTGRES_USER: ridershield
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: ridershield
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ankush
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ridershield"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,8 +37,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://ridershield:password@postgres:5432/ridershield
-      - DATABASE_URL_SYNC=postgresql://ridershield:password@postgres:5432/ridershield
+      - DATABASE_URL=postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      - DATABASE_URL_SYNC=postgresql://postgres:ankush@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET_KEY=ridershield-dev-secret
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY:-}
@@ -59,8 +59,8 @@ services:
   scheduler:
     build: ./backend
     environment:
-      - DATABASE_URL=postgresql+asyncpg://ridershield:password@postgres:5432/ridershield
-      - DATABASE_URL_SYNC=postgresql://ridershield:password@postgres:5432/ridershield
+      - DATABASE_URL=postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      - DATABASE_URL_SYNC=postgresql://postgres:ankush@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
