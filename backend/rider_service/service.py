@@ -24,15 +24,19 @@ async def verify_otp(phone: str, otp: str) -> dict:
     redis_client = await get_redis()
     stored_otp = await redis_client.get(f"otp:{phone}")
     
-    if not stored_otp or stored_otp != otp:
-        return {"valid": False, "temp_token": None}
+    if stored_otp is None:
+        return {"valid": False, "temp_token": None, "error": "OTP_EXPIRED"}
+    
+    if stored_otp != otp:
+        return {"valid": False, "temp_token": None, "error": "INVALID_OTP"}
     
     # Delete OTP after successful verification
     await redis_client.delete(f"otp:{phone}")
     
     # Issue a short-lived token tied to this phone number
     temp_token = create_temp_token(phone)
-    return {"valid": True, "temp_token": temp_token}
+    return {"valid": True, "temp_token": temp_token, "error": None}
+
 
 
 async def register_rider(data: dict, db: AsyncSession) -> dict:

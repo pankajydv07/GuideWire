@@ -129,6 +129,11 @@ class PayoutBase(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TokenData(BaseModel):
+    rider_id: UUID
+    role: str  # "rider" | "admin" | "temp"
+
+
 # ─── Error Response ──────────────────────────────────
 
 class ErrorDetail(BaseModel):

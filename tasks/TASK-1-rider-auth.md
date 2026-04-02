@@ -318,13 +318,13 @@ from shared.database import get_db
 
 You are the **infrastructure lead**. On Day 1, you set up:
 
-- [ ] `docker-compose.yml` — PostgreSQL (TimescaleDB), Redis, Backend, ML Service, Scheduler
-- [ ] `.env.example` with all environment variables
-- [ ] Database migration script (`init.sql`) with ALL tables (coordinate with Dev 2–5)
-- [ ] Seed data script — 20 riders across 4 cities, zone data, baselines
-- [ ] FastAPI app skeleton (`main.py`) with CORS, router mounting, error handlers
-- [ ] `shared/` directory with `auth.py`, `database.py`, `schemas.py`
-- [ ] `requirements.txt` with all Python dependencies
+- [x] `docker-compose.yml` — PostgreSQL (TimescaleDB), Redis, Backend, ML Service, Scheduler
+- [x] `.env.example` with all environment variables
+- [x] Database migration script (`init.sql`) with ALL tables (coordinate with Dev 2–5)
+- [x] Seed data script — 20 riders across 4 cities, zone data, baselines
+- [x] FastAPI app skeleton (`main.py`) with CORS, router mounting, error handlers
+- [x] `shared/` directory with `auth.py`, `database.py`, `schemas.py`
+- [x] `requirements.txt` with all Python dependencies
 
 ---
 
@@ -395,16 +395,16 @@ backend/
 
 ## 11. Acceptance Criteria
 
-- [ ] OTP flow works: send → verify → get temp token
-- [ ] Registration creates rider record with correct zone linkage
-- [ ] JWT token returned on registration, verified on all protected endpoints
-- [ ] `/me` returns correct profile
-- [ ] `/me/risk-profile` returns zone risk + earnings data
-- [ ] `/zones` returns all seeded zones
-- [ ] `/health` checks Postgres + Redis connectivity
-- [ ] Auth middleware importable by Dev 2–5 via `from shared.auth import get_current_rider`
-- [ ] 20 riders seeded across 4 cities for demo
-- [ ] All error codes return proper JSON format
+- [x] OTP flow works: send → verify → get temp token
+- [x] Registration creates rider record with correct zone linkage
+- [x] JWT token returned on registration, verified on all protected endpoints
+- [x] `/me` returns correct profile
+- [x] `/me/risk-profile` returns zone risk + earnings data
+- [x] `/zones` returns all seeded zones
+- [x] `/health` checks Postgres + Redis connectivity
+- [x] Auth middleware importable by Dev 2–5 via `from shared.auth import get_current_rider`
+- [x] 20 riders seeded across 4 cities for demo
+- [x] All error codes return proper JSON format
 - [ ] Redis fallback works if connection drops (in-memory cache)
 
 ---

@@ -27,9 +27,11 @@ async def verify_otp(request: OTPVerifyRequest):
     """Verify OTP and return a temporary token for registration."""
     result = await service.verify_otp(request.phone, request.otp)
     if not result["valid"]:
+        error_code = result.get("error", "INVALID_OTP")
+        message = "OTP expired or not found" if error_code == "OTP_EXPIRED" else "Invalid OTP"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "INVALID_OTP", "message": "Invalid or expired OTP"}
+            detail={"code": error_code, "message": message}
         )
     return result
 
@@ -54,10 +56,23 @@ async def register(
     
     phone = payload.get("sub")
     
-    # 2. Check if already registered
-    # (Optional: service.py handles this implicitly with DB unique constraint, but iyi to be explicit)
+    # 2. Validate platform
+    valid_platforms = ["zepto", "blinkit", "swiggy"]
+    if request.platform.lower() not in valid_platforms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_PLATFORM", "message": f"Platform must be one of: {', '.join(valid_platforms)}"}
+        )
     
-    # 3. Call service
+    # 3. Validate zone exists
+    zone_result = await db.execute(select(Zone).where(Zone.id == request.zone_id))
+    if not zone_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_ZONE", "message": "Zone does not exist"}
+        )
+    
+    # 4. Call service
     data = request.model_dump()
     data["phone"] = phone
     
@@ -78,25 +93,71 @@ async def register(
 async def onboard(data: dict, rider=Depends(get_current_rider), db: AsyncSession = Depends(get_db)):
     """
     Generate earnings baseline and get premium quote.
-    Calls Dev 2's POST /api/risk/premium internally (MOCK for now).
+    Queries rider's zone risk, then delegates premium calculation to premium_service.
     """
-    # This is a bit of a placeholder until Dev 2 delivers
+    from rider_service.models import RiderZoneBaseline
+
+    # 1. Fetch zone risk data
+    zone_result = await db.execute(select(Zone).where(Zone.id == rider.zone_id))
+    zone = zone_result.scalar_one_or_none()
+
+    # 2. Fetch rider's risk profile
+    rp_result = await db.execute(
+        select(RiderRiskProfile).where(RiderRiskProfile.rider_id == rider.id)
+    )
+    risk_profile = rp_result.scalar_one_or_none()
+
+    # 3. Fetch baselines for slot breakdown
+    bl_result = await db.execute(
+        select(RiderZoneBaseline).where(RiderZoneBaseline.rider_id == rider.id)
+    )
+    baselines = bl_result.scalars().all()
+
+    # 4. Call premium service internally
+    from premium_service.router import calculate_premium
+    premium_input = {
+        "rider_id": str(rider.id),
+        "zone_risk_score": zone.composite_risk_score if zone else 0,
+        "income_volatility": float(risk_profile.income_volatility) if risk_profile else 0,
+        "plan_tier": data.get("plan_tier", "balanced"),
+    }
+    premium_response = await calculate_premium(premium_input, db)
+
+    # 5. Build volatility label
+    vol = float(risk_profile.income_volatility) if risk_profile else 0
+    vol_label = "low" if vol < 0.3 else ("medium" if vol < 0.5 else "high")
+
+    # 6. Build slot breakdown from real baselines (fallback to defaults)
+    slot_breakdown = []
+    if baselines:
+        seen_slots = set()
+        for b in baselines:
+            if b.slot_time not in seen_slots:
+                seen_slots.add(b.slot_time)
+                slot_breakdown.append({
+                    "slot": b.slot_time,
+                    "expected_earnings": b.avg_earnings,
+                    "risk_score": zone.composite_risk_score if zone else 0,
+                })
+    if not slot_breakdown:
+        slot_breakdown = [
+            {"slot": "18:00-21:00", "expected_earnings": 360, "risk_score": 75},
+            {"slot": "21:00-23:00", "expected_earnings": 240, "risk_score": 68},
+        ]
+
     return {
         "risk_profile": {
-            "zone_risk_score": 72,
-            "income_volatility": "high",
-            "disruption_probability": 0.65,
-            "explanation": "Monsoon season + high-traffic zone"
+            "zone_risk_score": zone.composite_risk_score if zone else 0,
+            "income_volatility": vol_label,
+            "disruption_probability": float(risk_profile.disruption_probability) if risk_profile else 0,
+            "explanation": f"Zone '{zone.name}' — flood risk {zone.flood_risk_score}, traffic risk {zone.traffic_risk_score}" if zone else "Zone data unavailable",
         },
         "premium_quote": {
-            "essential": {"weekly": 120, "coverage": "70%"},
-            "balanced": {"weekly": 180, "coverage": "80%"},
-            "max_protect": {"weekly": 250, "coverage": "90%"}
+            "essential": {"weekly": premium_response.get("premium", {}).get("essential", 120), "coverage": "70%"},
+            "balanced": {"weekly": premium_response.get("premium", {}).get("balanced", 180), "coverage": "80%"},
+            "max_protect": {"weekly": premium_response.get("premium", {}).get("max_protect", 250), "coverage": "90%"},
         },
-        "slot_breakdown": [
-            {"slot": "18:00-21:00", "expected_earnings": 360, "risk_score": 75},
-            {"slot": "21:00-23:00", "expected_earnings": 240, "risk_score": 68}
-        ]
+        "slot_breakdown": slot_breakdown,
     }
 
 
