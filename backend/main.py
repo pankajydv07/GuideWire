@@ -30,6 +30,7 @@ import rider_service.models
 import policy_service.models
 # other services might not have models yet, but these two definitely do
 
+from trigger_service.scheduler import start_scheduler, stop_scheduler
 
 # ─── Logging ─────────────────────────────────────────
 logging.basicConfig(
@@ -46,7 +47,15 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting RiderShield API...")
     await init_db()
     logger.info("✅ Database initialized")
+    
+    # Dev 3: Start trigger scheduler
+    start_scheduler()
+    
     yield
+    
+    # Dev 3: Stop trigger scheduler
+    stop_scheduler()
+    
     logger.info("🛑 Shutting down RiderShield API...")
     await close_db()
     await close_redis()
@@ -124,11 +133,13 @@ async def health_check():
         pass
 
     from datetime import datetime, timezone
+    from trigger_service.scheduler import get_cycle_count
 
     return {
         "status": "healthy" if pg_status == "connected" and redis_status == "connected" else "degraded",
         "postgres": pg_status,
         "redis": redis_status,
+        "trigger_scheduler_cycles": get_cycle_count(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
