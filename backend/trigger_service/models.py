@@ -5,7 +5,7 @@ Dev 3: Trigger Service ORM Models
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, DECIMAL
+from sqlalchemy import String, Integer, DateTime, ForeignKey, DECIMAL, JSON
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,7 +22,7 @@ class DisruptionEvent(Base):
     slot_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     slot_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)   # low / medium / high / critical
-    data_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    data_json: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     affected_riders: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

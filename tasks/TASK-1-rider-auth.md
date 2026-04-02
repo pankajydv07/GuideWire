@@ -405,7 +405,7 @@ backend/
 - [x] Auth middleware importable by Dev 2–5 via `from shared.auth import get_current_rider`
 - [x] 20 riders seeded across 4 cities for demo
 - [x] All error codes return proper JSON format
-- [ ] Redis fallback works if connection drops (in-memory cache)
+- [x] Redis fallback works if connection drops (in-memory cache)
 
 ---
 

@@ -1,70 +1,126 @@
-"""
-Dev 5: Admin Service Router — STUB
-
-Endpoints:
-    GET  /api/admin/claims         — list all auto claims
-    GET  /api/admin/claims/manual  — list manual claims (review queue)
-    POST /api/admin/claims/{claim_id}/approve
-    POST /api/admin/claims/{claim_id}/reject
-"""
-
+import uuid
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
+from typing import List
 
 from shared.database import get_db
-from shared.auth import require_admin
+from shared.auth import require_admin, create_access_token
+from manual_claims.models import ManualClaim
+from claims_service.models import Claim
+from claims_service.service import (
+    approve_manual_claim,
+    reject_manual_claim
+)
 
 router = APIRouter()
 
-
-@router.get("/claims")
-async def list_all_claims(admin=Depends(require_admin), db: AsyncSession = Depends(get_db)):
+# ─── 1. Admin Login (Demo Hardcoded) ──────────────────────────
+@router.post("/login", summary="Admin login (demo)")
+async def admin_login(
+    username: str = Body(..., embed=True),
+    password: str = Body(..., embed=True)
+):
     """
-    TODO (Dev 5):
-    - Query all auto claims (admin view)
-    - Return list with claim details + fraud_score
+    Demo credentials: **admin** / **admin123**
     """
-    return {"claims": []}
+    if username == "admin" and password == "admin123":
+        token = create_access_token(data={"sub": str(uuid.uuid4()), "role": "admin"})
+        return {"access_token": token, "token_type": "bearer"}
+    
+    raise HTTPException(status_code=401, detail="Invalid admin credentials")
 
 
-@router.get("/claims/manual")
+# ─── 2. Review Queue ──────────────────────────────────────────
+@router.get("/claims/manual", summary="Manual claims review queue")
 async def list_manual_claims(
     sort: str = Query(default="spam_score"),
     order: str = Query(default="asc"),
     admin=Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    TODO (Dev 5):
-    - Query manual_claims with status = pending or under_review
-    - Sort by spam_score ascending (low-risk first)
-    - Include geo_validation and corroboration data
+    Returns list of pending manual claims.
     """
-    return {"claims": []}
+    stmt = select(ManualClaim).where(ManualClaim.review_status == "pending")
+    
+    if sort == "spam_score":
+        if order == "desc":
+            stmt = stmt.order_by(desc(ManualClaim.spam_score))
+        else:
+            stmt = stmt.order_by(ManualClaim.spam_score)
+    else:
+        stmt = stmt.order_by(desc(ManualClaim.created_at))
+
+    result = await db.execute(stmt)
+    return {"claims": result.scalars().all()}
 
 
-@router.post("/claims/{claim_id}/approve")
-async def approve_claim(claim_id: UUID, admin=Depends(require_admin), db: AsyncSession = Depends(get_db)):
+@router.get("/claims/auto", summary="Full claim log (auto-claims)")
+async def list_all_auto_claims(
+    admin=Depends(require_admin), 
+    db: AsyncSession = Depends(get_db)
+):
     """
-    TODO (Dev 5):
-    - Call Dev 4's approve_manual_claim(claim_id)
-    - Return claim status + payout_id
+    Admin view of all automated claims with fraud scores.
     """
-    from claims_service.service import approve_manual_claim
+    stmt = select(Claim).where(Claim.type == "auto").order_by(desc(Claim.fraud_score))
+    result = await db.execute(stmt)
+    return {"claims": result.scalars().all()}
+
+
+# ─── 3. Review Action ─────────────────────────────────────────
+@router.post("/claims/{claim_id}/approve", summary="Manually approve a claim")
+async def approve_claim(
+    claim_id: UUID, 
+    admin=Depends(require_admin), 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Approves a claim and triggers payout.
+    """
+    # 1. Update Manual Claim Status if it exists
+    manual_stmt = select(ManualClaim).where(ManualClaim.claim_id == claim_id)
+    manual_result = await db.execute(manual_stmt)
+    manual_claim = manual_result.scalar_one_or_none()
+
+    # 2. Call Dev 4 Engine
     result = await approve_manual_claim(claim_id, db=db)
+    
+    if manual_claim:
+        manual_claim.review_status = "approved"
+        manual_claim.reviewed_at = datetime.utcnow()
+    
+    await db.commit()
     return result
 
 
-@router.post("/claims/{claim_id}/reject")
-async def reject_claim(claim_id: UUID, data: dict, admin=Depends(require_admin), db: AsyncSession = Depends(get_db)):
+@router.post("/claims/{claim_id}/reject", summary="Manually reject a claim")
+async def reject_claim(
+    claim_id: UUID, 
+    data: dict = Body(...),
+    admin=Depends(require_admin), 
+    db: AsyncSession = Depends(get_db)
+):
     """
-    TODO (Dev 5):
-    - Extract rejection reason from data
-    - Call Dev 4's reject_manual_claim(claim_id, reason)
-    - Return rejection status + reason
+    Rejects a claim with a reason.
     """
-    from claims_service.service import reject_manual_claim
-    reason = data.get("reason", "No reason provided")
+    reason = data.get("reason", "Fraud detected or insufficient evidence.")
+    
+    # 1. Update Manual Claim Status if it exists
+    manual_stmt = select(ManualClaim).where(ManualClaim.claim_id == claim_id)
+    manual_result = await db.execute(manual_stmt)
+    manual_claim = manual_result.scalar_one_or_none()
+
+    # 2. Call Dev 4 Engine
     result = await reject_manual_claim(claim_id, reason, db=db)
+    
+    if manual_claim:
+        manual_claim.review_status = "rejected"
+        manual_claim.reviewer_notes = reason
+        manual_claim.reviewed_at = datetime.utcnow()
+    
+    await db.commit()
     return result

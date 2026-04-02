@@ -1,8 +1,5 @@
 """
-Dev 4: Payout Service Router — STUB
-
-Endpoint:
-    GET /api/payouts — list rider's payouts
+Dev 4: Payout Service Router
 """
 
 from fastapi import APIRouter, Depends
@@ -10,15 +7,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.database import get_db
 from shared.auth import get_current_rider
+from payout_service.service import get_rider_payouts
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=dict)
 async def list_payouts(rider=Depends(get_current_rider), db: AsyncSession = Depends(get_db)):
     """
-    TODO (Dev 4):
-    - Query payouts for this rider
-    - Return list with payout_id, claim_id, amount, method, upi_id, status
+    List payouts for the authenticated rider.
     """
-    return {"payouts": []}
+    payouts = await get_rider_payouts(rider.id, db)
+    return {
+        "payouts": [{
+            "payout_id": str(p.id),
+            "claim_id": str(p.claim_id),
+            "amount": p.amount,
+            "method": p.method,
+            "upi_id": p.upi_id,
+            "status": p.status,
+            "reference_id": p.reference_id,
+            "created_at": p.created_at
+        } for p in payouts]
+    }

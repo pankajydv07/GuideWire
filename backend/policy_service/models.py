@@ -5,7 +5,7 @@ Dev 2: Policy ORM Models
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, UniqueConstraint, ARRAY
+from sqlalchemy import String, Integer, DateTime, ForeignKey, UniqueConstraint, ARRAY, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
@@ -24,7 +24,7 @@ class Policy(Base):
     coverage_pct: Mapped[int] = mapped_column(Integer, nullable=False)
     coverage_used: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="active")
-    slots_covered: Mapped[list | None] = mapped_column(ARRAY(String), nullable=True)
+    slots_covered: Mapped[list | None] = mapped_column(JSON().with_variant(ARRAY(String), "postgresql"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

@@ -67,10 +67,12 @@ CREATE TABLE IF NOT EXISTS policies (
     week VARCHAR(10) NOT NULL,          -- "2026-W13"
     status VARCHAR(20) DEFAULT 'active',
     premium_paid INTEGER,
+    coverage_limit INTEGER DEFAULT 5000,
+    coverage_used INTEGER DEFAULT 0,
     coverage_percent INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     activated_at TIMESTAMP,
-    expired_at TIMESTAMP
+    expires_at TIMESTAMP
 );
 
 -- ─── DISRUPTION EVENTS (owned by Dev 3) ─────────────────────
@@ -90,12 +92,16 @@ CREATE TABLE IF NOT EXISTS disruption_events (
 CREATE TABLE IF NOT EXISTS claims (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     rider_id UUID NOT NULL REFERENCES riders(id),
-    policy_id UUID REFERENCES policies(id),
-    claim_type VARCHAR(50) NOT NULL,    -- auto | manual
-    status VARCHAR(20) DEFAULT 'pending',
-    amount_requested INTEGER,
-    amount_approved INTEGER,
+    policy_id UUID NOT NULL REFERENCES policies(id),
     disruption_event_id UUID REFERENCES disruption_events(id),
+    type VARCHAR(20) NOT NULL,    -- auto | manual
+    disruption_type VARCHAR(50),
+    income_loss INTEGER NOT NULL,
+    expected_earnings INTEGER NOT NULL,
+    actual_earnings INTEGER NOT NULL,
+    payout_amount INTEGER NOT NULL,
+    fraud_score INTEGER DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW(),
     processed_at TIMESTAMP
 );
@@ -106,11 +112,37 @@ CREATE TABLE IF NOT EXISTS payouts (
     claim_id UUID NOT NULL REFERENCES claims(id),
     rider_id UUID NOT NULL REFERENCES riders(id),
     amount INTEGER NOT NULL,
+    method VARCHAR(20) DEFAULT 'upi',
     upi_id VARCHAR(100),
     status VARCHAR(20) DEFAULT 'pending',   -- pending | processing | success | failed
-    initiated_at TIMESTAMP DEFAULT NOW(),
-    completed_at TIMESTAMP,
-    transaction_ref VARCHAR(100)
+    reference_id VARCHAR(100),
+    created_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
+
+-- ─── MANUAL CLAIMS (owned by Dev 5) ─────────────────────────
+CREATE TABLE IF NOT EXISTS manual_claims (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    rider_id UUID NOT NULL REFERENCES riders(id),
+    policy_id UUID NOT NULL REFERENCES policies(id),
+    claim_id UUID REFERENCES claims(id), -- Null until processed
+    disruption_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    incident_time TIMESTAMP NOT NULL,
+    photo_path VARCHAR(500),
+    photo_exif_lat DECIMAL(10, 8),
+    photo_exif_lon DECIMAL(11, 8),
+    telemetry_lat DECIMAL(10, 8),
+    telemetry_lon DECIMAL(11, 8),
+    gps_distance_m INTEGER,
+    spam_score INTEGER DEFAULT 0,
+    geo_valid BOOLEAN DEFAULT FALSE,
+    weather_match BOOLEAN,
+    traffic_match BOOLEAN,
+    review_status VARCHAR(20) DEFAULT 'pending', -- pending, approved, rejected
+    reviewer_notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    reviewed_at TIMESTAMP
 );
 
 -- ─── INDEXES ─────────────────────────────────────────────────

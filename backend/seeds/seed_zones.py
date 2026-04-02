@@ -50,7 +50,7 @@ async def seed():
                     ON CONFLICT DO NOTHING
                 """),
                 {
-                    "id": str(uuid.uuid4()),
+                    "id": uuid.uuid4().hex,
                     "name": z["name"],
                     "city": z["city"],
                     "flood": z["flood_risk"],

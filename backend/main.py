@@ -28,7 +28,10 @@ from manual_claims.router import router as manual_claims_router
 # ─── Import ALL models to ensure SQLAlchemy Registry is initialized ───
 import rider_service.models
 import policy_service.models
-# other services might not have models yet, but these two definitely do
+import trigger_service.models
+import claims_service.models
+import manual_claims.models
+
 
 from trigger_service.scheduler import start_scheduler, stop_scheduler
 

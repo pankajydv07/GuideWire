@@ -15,12 +15,20 @@ from sqlalchemy.orm import DeclarativeBase
 from shared.config import settings
 
 # ─── Async Engine (for FastAPI endpoints) ───────────
+engine_kwargs = {
+    "echo": settings.DEBUG,
+}
+
+if not settings.DATABASE_URL.startswith("sqlite"):
+    engine_kwargs.update({
+        "pool_size": 20,
+        "max_overflow": 10,
+        "pool_pre_ping": True,
+    })
+
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
+    **engine_kwargs
 )
 
 AsyncSessionLocal = async_sessionmaker(
