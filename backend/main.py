@@ -6,10 +6,12 @@ Run with: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from shared.config import settings
 from shared.database import init_db, close_db
@@ -77,6 +79,10 @@ app = FastAPI(
     description="Parametric Income Protection for Delivery Riders",
     lifespan=lifespan,
 )
+
+uploads_dir = os.path.abspath(settings.UPLOAD_DIR)
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # ─── CORS ────────────────────────────────────────────
 app.add_middleware(

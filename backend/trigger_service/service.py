@@ -350,6 +350,16 @@ async def _create_event(
     )
     db.add(event)
     await db.commit()
+    await db.refresh(event)
+
+    claims_created = 0
+    if affected_riders > 0:
+        try:
+            from claims_service.service import process_auto_claims
+
+            claims_created = await process_auto_claims(event_id, db)
+        except Exception as exc:
+            print(f"[TriggerService] Auto-claims failed for event {event_id}: {exc}")
     print(f"[TriggerService] ✅ DisruptionEvent created: {result['trigger_type']} @ {zone_name} "
           f"({affected_riders} riders affected)")
     return event_id

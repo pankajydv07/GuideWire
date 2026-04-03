@@ -3,7 +3,7 @@ Dev 2: Policy ORM Models
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import String, Integer, DateTime, ForeignKey, UniqueConstraint, ARRAY, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,3 +49,14 @@ class MicroSlot(Base):
     weather_risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     traffic_risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     store_risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+def get_current_iso_week() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-W%V")
+
+
+def get_week_expiry() -> datetime:
+    now = datetime.now(timezone.utc)
+    days_until_sunday = (6 - now.weekday()) % 7
+    expiry = now + timedelta(days=days_until_sunday)
+    return expiry.replace(hour=23, minute=59, second=59, microsecond=0, tzinfo=None)
