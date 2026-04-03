@@ -1,0 +1,35 @@
+{
+  "features": [
+    "zone_flood_risk",
+    "zone_traffic_risk",
+    "zone_store_risk",
+    "day_of_week",
+    "hour",
+    "is_weekend",
+    "is_monsoon",
+    "rider_tenure_days",
+    "rider_avg_earnings",
+    "rider_order_consistency",
+    "forecast_rainfall",
+    "forecast_aqi"
+  ],
+  "feature_importance": {
+    "zone_flood_risk": 1008,
+    "zone_traffic_risk": 1062,
+    "zone_store_risk": 1533,
+    "day_of_week": 614,
+    "hour": 1211,
+    "is_weekend": 86,
+    "is_monsoon": 158,
+    "rider_tenure_days": 491,
+    "rider_avg_earnings": 508,
+    "rider_order_consistency": 559,
+    "forecast_rainfall": 1308,
+    "forecast_aqi": 1320
+  },
+  "model_version": "1.0.0",
+  "trained_at": "2026-04-01T20:07:58.863795+00:00",
+  "training_records": 50000,
+  "rmse": 0.04067586189618039,
+  "r2": 0.9106400412209409
+}

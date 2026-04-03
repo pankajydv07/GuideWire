@@ -1,0 +1,101 @@
+import json
+import pickle
+from pathlib import Path
+
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+
+MODEL_PATH = Path(__file__).resolve().parent / "model_artifacts" / "risk_model.pkl"
+METADATA_PATH = Path(__file__).resolve().parent / "model_artifacts" / "feature_names.json"
+
+
+class PredictRequest(BaseModel):
+    zone_flood_risk: int
+    zone_traffic_risk: int
+    zone_store_risk: int
+    day_of_week: int
+    hour: int
+    is_weekend: bool
+    is_monsoon: bool
+    rider_tenure_days: int
+    rider_avg_earnings: float
+    rider_order_consistency: float
+    forecast_rainfall: float
+    forecast_aqi: int
+
+
+app = FastAPI(title="RiderShield ML Service", version="1.0.0")
+
+model = None
+metadata = {}
+feature_names = []
+
+
+def load_artifacts() -> None:
+    global model, metadata, feature_names
+
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"Model artifact not found: {MODEL_PATH}")
+    if not METADATA_PATH.exists():
+        raise FileNotFoundError(f"Metadata artifact not found: {METADATA_PATH}")
+
+    with MODEL_PATH.open("rb") as f:
+        model = pickle.load(f)
+
+    with METADATA_PATH.open("r", encoding="utf-8") as f:
+        metadata = json.load(f)
+
+    feature_names = metadata.get("features", [])
+
+
+def probability_to_band(probability: float) -> str:
+    if probability < 0.30:
+        return "low"
+    if probability < 0.55:
+        return "medium"
+    if probability < 0.75:
+        return "high"
+    return "critical"
+
+
+@app.on_event("startup")
+async def startup_event():
+    load_artifacts()
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "model_version": metadata.get("model_version", "unknown"),
+        "trained_at": metadata.get("trained_at"),
+        "training_records": metadata.get("training_records"),
+    }
+
+
+@app.get("/features")
+async def features():
+    return {
+        "features": feature_names,
+        "count": len(feature_names),
+    }
+
+
+@app.post("/predict")
+async def predict(request: PredictRequest):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    payload = request.model_dump()
+    frame = pd.DataFrame([[payload[name] for name in feature_names]], columns=feature_names)
+    prediction = float(model.predict(frame)[0])
+    prediction = max(0.01, min(0.99, prediction))
+
+    return {
+        "disruption_probability": round(prediction, 4),
+        "risk_band": probability_to_band(prediction),
+        "expected_earnings_multiplier": round(1.0 - prediction * 0.6, 4),
+    }
