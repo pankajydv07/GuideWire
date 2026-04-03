@@ -144,6 +144,7 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
 
         # Trigger Payout
         await process_upi_payout(claim.id, rider_id, payout_amount, db)
+        policy.coverage_used += payout_amount
         claims_created += 1
 
     await db.commit()
@@ -218,6 +219,16 @@ async def approve_manual_claim(claim_id: UUID, db: AsyncSession) -> dict:
     claim.status = "paid"
     claim.processed_at = datetime.utcnow()
     
+    # Update coverage used
+    try:
+        from policy_service.models import Policy
+    except ImportError:
+        pass
+    policy_result = await db.execute(select(Policy).where(Policy.id == claim.policy_id))
+    policy = policy_result.scalar_one_or_none()
+    if policy:
+        policy.coverage_used += claim.payout_amount
+
     # Process Payout
     payout = await process_upi_payout(claim.id, claim.rider_id, claim.payout_amount, db)
     

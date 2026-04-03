@@ -396,5 +396,34 @@ def get_last_evaluation() -> Optional[datetime]:
     return _last_evaluation
 
 async def check_historical_conditions(zone_id: str, incident_time: datetime, db: AsyncSession) -> dict:
-    """Mock implementation to allow manual claims to pass Dev 3 corroboration"""
-    return {"weather": True, "traffic": False}
+    """Historical corroboration for manual claims."""
+    # Convert zone_id string to UUID if needed
+    import uuid
+    from datetime import timedelta
+    z_id = uuid.UUID(zone_id) if isinstance(zone_id, str) else zone_id
+    
+    # Check weather data within +/- 30 minutes
+    start_time = incident_time - timedelta(minutes=30)
+    end_time = incident_time + timedelta(minutes=30)
+    
+    # Weather
+    weather_stmt = select(WeatherData).where(
+        WeatherData.zone_id == z_id,
+        WeatherData.time >= start_time,
+        WeatherData.time <= end_time,
+        WeatherData.rainfall_mm > RAIN_THRESHOLD_MM
+    ).limit(1)
+    weather_res = await db.execute(weather_stmt)
+    has_weather = bool(weather_res.scalar_one_or_none())
+    
+    # Traffic (Platform Snapshots)
+    traffic_stmt = select(PlatformSnapshot).where(
+        PlatformSnapshot.zone_id == z_id,
+        PlatformSnapshot.time >= start_time,
+        PlatformSnapshot.time <= end_time,
+        PlatformSnapshot.congestion_index > CONGESTION_THRESHOLD
+    ).limit(1)
+    traffic_res = await db.execute(traffic_stmt)
+    has_traffic = bool(traffic_res.scalar_one_or_none())
+    
+    return {"weather": has_weather, "traffic": has_traffic}
