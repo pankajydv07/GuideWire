@@ -51,6 +51,11 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("✅ Database initialized")
     
+    # Load zones from DB into memory for trigger service
+    from shared.zones import load_zones
+    await load_zones()
+    logger.info("✅ Zones loaded from DB")
+    
     # Dev 3: Start trigger scheduler
     start_scheduler()
     

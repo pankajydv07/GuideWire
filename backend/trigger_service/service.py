@@ -331,6 +331,12 @@ async def _create_event(
     # Convert zone_id string to UUID if needed
     z_id = uuid.UUID(zone_id) if isinstance(zone_id, str) else zone_id
     
+    # Strip tzinfo for postgres without timezone
+    if slot_start and slot_start.tzinfo:
+        slot_start = slot_start.replace(tzinfo=None)
+    if slot_end and slot_end.tzinfo:
+        slot_end = slot_end.replace(tzinfo=None)
+        
     event = DisruptionEvent(
         id            = event_id,
         trigger_type  = result["trigger_type"],

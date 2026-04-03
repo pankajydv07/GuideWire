@@ -28,7 +28,7 @@ _cycle_count = 0
 async def _run_cycle():
     global _cycle_count
     _cycle_count += 1
-    print(f"\n[Scheduler] ⏰ Cycle #{_cycle_count} — {datetime.now(timezone.utc).isoformat()}Z")
+    print(f"\n[Scheduler] Cycle #{_cycle_count} - {datetime.now(timezone.utc).isoformat()}Z")
 
     async with AsyncSessionLocal() as db:
         weather_map:  dict = {}

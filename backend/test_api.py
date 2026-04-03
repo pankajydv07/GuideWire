@@ -186,6 +186,10 @@ if jwt_ok:
         log("POST /api/policies", "pass", f"policy_id={state['policy_id'][:14]}... status={b.get('status')}")
     elif r and r.status_code == 400 and "already" in (r.text or "").lower():
         log("POST /api/policies", "skip", "Policy already exists this week")
+        # Try to find policy active id
+        r_act = req("GET", "/api/policies/active", headers=AUTH)
+        if r_act and r_act.status_code == 200:
+            state["policy_id"] = r_act.json().get("policy_id") or r_act.json().get("id")
     else:
         log("POST /api/policies", "fail", f"status={r.status_code if r else 'N/A'} {r.text[:150] if r else ''}")
 else:
@@ -242,7 +246,7 @@ admin_ok = bool(state.get("admin_token"))
 if admin_ok:
     r = req("POST", "/api/triggers/inject", headers=ADMIN_AUTH, json={
         "trigger_type": "heavy_rain",
-        "zone": state.get("zone_name", "koramangala"),
+        "zone": state.get("zone_name", "electronic_city"),
         "rainfall_mm": 55,
         "duration_seconds": 1800
     })
@@ -318,7 +322,7 @@ section("7. TASK-5 -- MANUAL CLAIMS & ADMIN")
 # POST /api/claims/manual
 if jwt_ok:
     fake_jpeg = (b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00'
-                 b'\xff\xdb\x00C\x00\x08\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c'
+                 b'\xff\db\x00C\x00\x08\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c'
                  b'\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a'
                  b'\x1c\x1c $.\' ",#\x1c\x1c(7),01444\xc0\x00\x0b\x08\x00\x01\x00\x01'
                  b'\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xfb\xd2\x8a\xff\xd9')
@@ -335,6 +339,8 @@ if jwt_ok:
             f"id={state['manual_claim_id'][:14]}... spam={b.get('spam_score')} status={b.get('status')}")
     elif r and r.status_code == 400 and "one manual" in (r.text or "").lower():
         log("POST /api/claims/manual", "skip", "Rate limit: 1/policy -- correct behaviour")
+    elif r and r.status_code == 400 and "active policy" in (r.text or "").lower():
+        log("POST /api/claims/manual", "fail", f"status=400 No active policy (did policy endpoint fail?) {r.text[:100]}")
     else:
         log("POST /api/claims/manual", "fail", f"status={r.status_code if r else 'N/A'} {r.text[:200] if r else ''}")
 else:
