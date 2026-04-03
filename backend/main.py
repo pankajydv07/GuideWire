@@ -25,6 +25,16 @@ from payout_service.router import router as payout_router
 from admin_service.router import router as admin_router
 from manual_claims.router import router as manual_claims_router
 
+# ─── Import ALL models to ensure SQLAlchemy Registry is initialized ───
+import rider_service.models
+import policy_service.models
+import trigger_service.models
+import claims_service.models
+import manual_claims.models
+
+
+from trigger_service.scheduler import start_scheduler, stop_scheduler
+
 # ─── Logging ─────────────────────────────────────────
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -40,7 +50,15 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting RiderShield API...")
     await init_db()
     logger.info("✅ Database initialized")
+    
+    # Dev 3: Start trigger scheduler
+    start_scheduler()
+    
     yield
+    
+    # Dev 3: Stop trigger scheduler
+    stop_scheduler()
+    
     logger.info("🛑 Shutting down RiderShield API...")
     await close_db()
     await close_redis()
@@ -102,10 +120,12 @@ async def health_check():
     redis_status = "disconnected"
 
     try:
+        from sqlalchemy import text
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
             pg_status = "connected"
-    except Exception:
+    except Exception as e:
+        logger.error(f"Postgres health check failed: {e}")
         pass
 
     try:
@@ -116,11 +136,13 @@ async def health_check():
         pass
 
     from datetime import datetime, timezone
+    from trigger_service.scheduler import get_cycle_count
 
     return {
         "status": "healthy" if pg_status == "connected" and redis_status == "connected" else "degraded",
         "postgres": pg_status,
         "redis": redis_status,
+        "trigger_scheduler_cycles": get_cycle_count(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 

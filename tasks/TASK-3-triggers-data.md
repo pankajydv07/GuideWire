@@ -195,15 +195,15 @@ backend/
 
 ## 10. Acceptance Criteria
 
-- [ ] Weather polling stores data every 5 min
-- [ ] All 5 triggers evaluate correctly
-- [ ] Three-factor gate prevents false positives
-- [ ] DisruptionEvent created with correct metadata
-- [ ] Duplicates suppressed (same zone+slot+trigger)
-- [ ] Community signal fires at >70% affected
-- [ ] `POST /api/triggers/inject` creates instant disruption
-- [ ] Platform Simulator generates realistic data
-- [ ] Scheduler recovers from API failures (cached fallback)
+- [x] Weather polling stores data every 5 min
+- [x] All 5 triggers evaluate correctly
+- [x] Three-factor gate prevents false positives
+- [x] DisruptionEvent created with correct metadata
+- [x] Duplicates suppressed (same zone+slot+trigger)
+- [x] Community signal fires at >70% affected
+- [x] `POST /api/triggers/inject` creates instant disruption
+- [x] Platform Simulator generates realistic data
+- [x] Scheduler recovers from API failures (cached fallback)
 
 ## 11. User Stories: US-11, US-12
 

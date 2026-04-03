@@ -260,17 +260,17 @@ backend/
 
 ## 10. Acceptance Criteria
 
-- [ ] Manual claim submits with photo upload
-- [ ] EXIF GPS extracted from photo
-- [ ] Haversine distance calculated (>500m flagged)
-- [ ] Weather + traffic corroboration queried
-- [ ] Spam score calculated correctly
-- [ ] Auto-reject at spam ≥ 70
-- [ ] Admin queue sorted by spam score (ascending)
-- [ ] Admin approve triggers payout via Dev 4
-- [ ] Admin reject stores reason + notifies rider
-- [ ] Rate limit: 1 manual claim per policy week
-- [ ] Photo stored to local FS with path in DB
+- [x] Manual claim submits with photo upload
+- [x] EXIF GPS extracted from photo
+- [x] Haversine distance calculated (>500m flagged)
+- [x] Weather + traffic corroboration queried
+- [x] Spam score calculated correctly
+- [x] Auto-reject at spam ≥ 70
+- [x] Admin queue sorted by spam score (ascending)
+- [x] Admin approve triggers payout via Dev 4
+- [x] Admin reject stores reason + notifies rider
+- [x] Rate limit: 1 manual claim per policy week
+- [x] Photo stored to local FS with path in DB
 
 ## 11. User Stories: US-13, US-14, US-15, US-16
 

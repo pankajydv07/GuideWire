@@ -255,15 +255,15 @@ backend/
 
 ## 11. Acceptance Criteria
 
-- [ ] Auto-claim created from DisruptionEvent with correct income gap
-- [ ] Payout = `min(income_loss, coverage_remaining)`
-- [ ] Fraud check runs on all auto-claims
-- [ ] Duplicate claims rejected
-- [ ] Coverage used tracked on policy
-- [ ] Manual claim processing function works for Dev 5
-- [ ] Mock UPI payout always succeeds with reference ID
-- [ ] Claims list shows all rider claims with status
-- [ ] Payout list shows all rider payouts
+- [x] Auto-claim created from DisruptionEvent with correct income gap
+- [x] Payout = `min(income_loss, coverage_remaining)`
+- [x] Fraud check runs on all auto-claims
+- [x] Duplicate claims rejected
+- [x] Coverage used tracked on policy
+- [x] Manual claim processing function works for Dev 5
+- [x] Mock UPI payout always succeeds with reference ID
+- [x] Claims list shows all rider claims with status
+- [x] Payout list shows all rider payouts
 
 ## 12. User Stories: US-12, US-13, US-14
 

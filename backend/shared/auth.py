@@ -98,10 +98,18 @@ async def get_current_rider(
             detail={"code": "TOKEN_INVALID", "message": "Invalid token payload"},
         )
 
+    try:
+        rider_uuid = UUID(rider_id) if isinstance(rider_id, str) else rider_id
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "TOKEN_INVALID", "message": "Invalid rider ID format"},
+        )
+
     # Lazy import to avoid circular dependency
     from rider_service.models import Rider
 
-    result = await db.execute(select(Rider).where(Rider.id == rider_id))
+    result = await db.execute(select(Rider).where(Rider.id == rider_uuid))
     rider = result.scalar_one_or_none()
 
     if not rider:
