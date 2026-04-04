@@ -26,13 +26,13 @@ export default function OtpScreen() {
       if (result.valid) {
         api.setToken(result.temp_token);
         router.push({ pathname: '/(auth)/register', params: { phone } });
+      } else {
+        setErrorMsg('Invalid OTP. Please try again.');
       }
     } catch (err: any) {
       setErrorMsg('Invalid OTP. Please try again.');
     } finally {
-      if (errorMsg === '') {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 

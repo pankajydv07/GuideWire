@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -34,15 +35,21 @@ export default function SlotSelectScreen() {
       const payload = {
          name: params.name as string,
          platform: params.platform as string,
-         city: params.zoneId ? "bengaluru" : "bengaluru", // Fallback if city missing from params explicitly, but should be fine server-side based on Zone ID
-         zone: params.zone as string,
+         city: (params.city as string) || 'bengaluru',
+         zone_id: params.zoneId as string,
          slots: selectedSlots,
          upi_id: params.upiId as string
       };
 
       const regResult = await api.riders.register(payload);
       
-      // 2. Perform contextual login returning real tokens resolving app
+      // 2. Persist slots and upi_id for later use in policy flows
+      await AsyncStorage.setItem('rider_slots', JSON.stringify(selectedSlots));
+      if (params.upiId) {
+        await AsyncStorage.setItem('rider_upi_id', params.upiId as string);
+      }
+
+      // 3. Perform contextual login returning real tokens resolving app
       const token = regResult.jwt_token || regResult.token; 
       if (token) {
         await login(token);
@@ -50,7 +57,7 @@ export default function SlotSelectScreen() {
         throw new Error("No token returned by API!");
       }
 
-      // 3. Push to final policy flow wrapper
+      // 4. Push to final policy flow wrapper
       router.replace('/policy/select');
     } catch (err: any) {
       Alert.alert('Registration Failed', err.message || 'An error occurred during onboarding.');

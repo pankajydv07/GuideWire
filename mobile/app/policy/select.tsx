@@ -1,25 +1,50 @@
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 
 export default function PolicySelectScreen() {
   const { rider } = useAuth();
-  const [tiers, setTiers] = useState<any>(null);
+  const [tiers, setTiers] = useState<Record<string, any> | null>(null);
   const [selectedTier, setSelectedTier] = useState<string>('balanced');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Use rider's slots and city to get real pricing
-    const r = rider as any;
-    const slots = r?.slots?.join(',') || '18:00-21:00,21:00-23:00';
-    const city = rider?.city || 'bengaluru';
-    
-    api.policies.getQuote(slots, city)
-      .then(data => setTiers(data))
-      .catch((err) => console.error("Error fetching quotes:", err))
-      .finally(() => setLoading(false));
+    const fetchQuote = async () => {
+      // Read persisted slots from AsyncStorage; fall back to a sensible default
+      let slots = '18:00-21:00,21:00-23:00';
+      try {
+        const stored = await AsyncStorage.getItem('rider_slots');
+        if (stored) {
+          const parsed: string[] = JSON.parse(stored);
+          if (parsed.length > 0) slots = parsed.join(',');
+        }
+      } catch (_e) {}
+
+      const city = rider?.city || 'bengaluru';
+
+      try {
+        const data = await api.policies.getQuote(slots, city);
+        // Transform quotes array → map keyed by tier name
+        const tierMap: Record<string, any> = {};
+        (data.quotes || []).forEach((q: any) => {
+          tierMap[q.tier] = {
+            weekly: q.weekly_premium,
+            coverage_pct: q.coverage_pct,
+            max_payout: q.coverage_limit,
+          };
+        });
+        setTiers(tierMap);
+      } catch (err) {
+        console.error('Error fetching quotes:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuote();
   }, [rider]);
 
   const handleContinue = () => {
@@ -51,7 +76,7 @@ export default function PolicySelectScreen() {
         <Text style={styles.title}>Choose Your Plan</Text>
         <Text style={styles.subtitle}>Coverage for your working slots this week</Text>
 
-        {tiers && tiers.zone_risk_score && (
+        {tiers && tiers.zone_risk_score != null && (
           <View style={styles.riskNote}>
             <Text style={styles.riskNoteText}>
               Your zone ({rider?.zone || 'Selected Zone'}) has a risk score of {tiers.zone_risk_score}/100. Premiums are personalized based on zone risk.

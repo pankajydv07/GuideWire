@@ -35,7 +35,12 @@ export default function ZoneSelectScreen() {
   const handleNext = () => {
     router.push({
       pathname: '/(auth)/slot-select',
-      params: { ...params, zone: selectedZone?.name, zoneId: selectedZone?.zone_id }
+      params: {
+        ...params,
+        city: selectedZone?.city ?? selectedCity,
+        zone: selectedZone?.name,
+        zoneId: selectedZone?.id
+      }
     });
   };
 
@@ -76,11 +81,11 @@ export default function ZoneSelectScreen() {
       <ScrollView contentContainerStyle={styles.list}>
          {filteredZones.map((zone) => {
            const risk = getRiskColor(zone.risk_score || 0);
-           const isSelected = selectedZone?.zone_id === zone.zone_id;
+           const isSelected = selectedZone?.id === zone.id;
            
            return (
              <TouchableOpacity 
-               key={zone.zone_id} 
+               key={zone.id} 
                style={[styles.card, isSelected && styles.cardActive]}
                onPress={() => setSelectedZone(zone)}
              >

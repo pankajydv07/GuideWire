@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 
@@ -10,6 +11,13 @@ export default function PaymentScreen() {
   
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [displayUpi, setDisplayUpi] = useState('demo');
+
+  useEffect(() => {
+    AsyncStorage.getItem('rider_upi_id').then(val => {
+      if (val) setDisplayUpi(val);
+    }).catch(_e => {});
+  }, []);
 
   const planName = tier ? tier.charAt(0).toUpperCase() + tier.slice(1).replace('_', ' ') : 'Balanced';
   const displayPrice = price || '180';
@@ -18,11 +26,27 @@ export default function PaymentScreen() {
   const handlePay = async () => {
     setProcessing(true);
     try {
-      const r = rider as any;
+      // Read persisted slots and upi_id from AsyncStorage
+      let slots: string[] = ['18:00-21:00'];
+      try {
+        const stored = await AsyncStorage.getItem('rider_slots');
+        if (stored) {
+          const parsed: string[] = JSON.parse(stored);
+          if (parsed.length > 0) slots = parsed;
+        }
+      } catch (_e) {}
+
+      let upiId = 'demo@oksbi';
+      try {
+        const stored = await AsyncStorage.getItem('rider_upi_id');
+        if (stored) upiId = stored;
+      } catch (_e) {}
+
       await api.policies.create({
         plan_tier: tier || 'balanced',
         payment_method: 'upi',
-        upi_id: r?.upi_id || 'demo@oksbi',
+        upi_id: upiId,
+        slots,
       });
       
       setSuccess(true);
@@ -31,10 +55,7 @@ export default function PaymentScreen() {
       }, 1500);
     } catch (err: any) {
       alert('Payment failed: ' + err.message);
-    } finally {
-      if (!success) {
-        setProcessing(false);
-      }
+      setProcessing(false);
     }
   };
 
@@ -70,7 +91,7 @@ export default function PaymentScreen() {
         {processing ? (
            <ActivityIndicator color="#fff" />
         ) : (
-           <Text style={styles.payText}>💳 Pay via UPI ({ (rider as any)?.upi_id || 'demo' })</Text>
+           <Text style={styles.payText}>💳 Pay via UPI ({displayUpi})</Text>
         )}
       </TouchableOpacity>
     </SafeAreaView>

@@ -76,7 +76,7 @@ export default function DashboardScreen() {
             </View>
             <View style={styles.row}>
               <View style={styles.stat}>
-                <Text style={styles.statValue}>₹{policy.max_coverage || policy.coverage_amount || '0'}</Text>
+                <Text style={styles.statValue}>₹{policy.coverage_limit || '0'}</Text>
                 <Text style={styles.statLabel}>Coverage</Text>
               </View>
               <View style={styles.stat}>
@@ -88,7 +88,7 @@ export default function DashboardScreen() {
                 <Text style={styles.statLabel}>Used</Text>
               </View>
             </View>
-            <Text style={styles.cardFooter}>Expires: {policy.expiry_date || 'End of Week'}</Text>
+            <Text style={styles.cardFooter}>Expires: {policy.expires_at || 'End of Week'}</Text>
           </View>
         ) : (
           <View style={styles.card}>
@@ -121,16 +121,16 @@ export default function DashboardScreen() {
           <Text style={styles.cardTitle}>💰 Recent Payouts</Text>
           {payouts.length > 0 ? (
             payouts.slice(0, 5).map((payout: any) => (
-              <View key={payout.id} style={styles.payoutRow}>
+              <View key={payout.payout_id} style={styles.payoutRow}>
                 <View>
                   <Text style={styles.payoutLabel}>
-                     {payout.trigger_type === 'weather' ? '🌧️' : '🚨'} {payout.trigger_type}
+                     {payout.type === 'weather' ? '🌧️' : '🚨'} {payout.type || 'Payout'}
                   </Text>
                   <Text style={styles.payoutDate}>{new Date(payout.created_at).toLocaleDateString()}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.payoutAmount}>₹{payout.amount}</Text>
-                  {payout.upi_reference && <Text style={styles.payoutUpi}>Ref: {payout.upi_reference}</Text>}
+                  {payout.reference_id && <Text style={styles.payoutUpi}>Ref: {payout.reference_id}</Text>}
                 </View>
               </View>
             ))
