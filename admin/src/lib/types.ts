@@ -125,14 +125,14 @@ export const TRIGGER_EMOJI: Record<string, string> = {
   regulatory_curfew: "🚫",
   gps_shadowban: "📍",
   dark_store_queue: "🛒",
-  algorithmic_shock: "📈",
+  algorithmic_shock: "⚡",
   community_signal: "📣",
 };
 
 export const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-950/70 text-amber-300 ring-1 ring-amber-800/80",
-  under_review: "bg-violet-950/70 text-violet-300 ring-1 ring-violet-800/80",
-  approved: "bg-sky-950/70 text-sky-300 ring-1 ring-sky-800/80",
-  paid: "bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-800/80",
-  rejected: "bg-red-950/70 text-red-300 ring-1 ring-red-800/80",
+  pending: "bg-amber-500/10 text-amber-400 border border-amber-500/20 backdrop-blur-sm",
+  under_review: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 backdrop-blur-sm",
+  approved: "bg-sky-500/10 text-sky-400 border border-sky-500/20 backdrop-blur-sm",
+  paid: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 backdrop-blur-sm",
+  rejected: "bg-rose-500/10 text-rose-400 border border-rose-500/20 backdrop-blur-sm",
 };

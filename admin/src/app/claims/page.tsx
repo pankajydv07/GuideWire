@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  FileText, 
+  DollarSign, 
+  ShieldAlert, 
+  Filter,
+  ArrowUpRight,
+  User,
+  Activity
+} from "lucide-react";
 
 import { adminApi } from "@/lib/api";
 import { formatCurrency, formatTriggerWithEmoji, shortId } from "@/lib/format";
@@ -28,7 +38,7 @@ export default function ClaimsPage() {
         setError(null);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : "Failed to load claims.");
+        setError(err instanceof Error ? err.message : "Failed to synchronize claim data.");
       } finally {
         if (active) setLoading(false);
       }
@@ -72,137 +82,197 @@ export default function ClaimsPage() {
   }, [filteredClaims]);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Auto Claims</h1>
-        <p className="mt-2 text-sm text-slate-400">Automatic payouts generated from disruption events across active zones.</p>
-      </div>
+    <div className="space-y-10">
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Automated Payouts</h1>
+        <p className="text-slate-400 font-medium">Verified claims sequence triggered by real-time network anomalies.</p>
+      </motion.div>
 
       {error ? (
-        <div className="rounded-2xl border border-red-900/70 bg-red-950/40 p-4 text-sm text-red-200">{error}</div>
+        <div className="rounded-3xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
+           {error}
+        </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-          <div className="text-sm text-slate-400">Total Claims</div>
-          <div className="mt-3 text-3xl font-semibold text-sky-300">{summary.totalClaims}</div>
-        </div>
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-          <div className="text-sm text-slate-400">Total Payouts</div>
-          <div className="mt-3 text-3xl font-semibold text-emerald-300">{formatCurrency(summary.totalPayouts)}</div>
-        </div>
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-          <div className="text-sm text-slate-400">Average Fraud Score</div>
-          <div className="mt-3 text-3xl font-semibold text-amber-300">{Math.round(summary.averageFraud)}</div>
-        </div>
+      <div className="grid gap-6 md:grid-cols-3">
+        {[
+          { label: "Pipeline Count", value: summary.totalClaims, icon: FileText, color: "text-sky-400" },
+          { label: "Aggregate Payout", value: formatCurrency(summary.totalPayouts), icon: DollarSign, color: "text-emerald-400" },
+          { label: "Trust Index (Avg)", value: `${Math.round(summary.averageFraud)}%`, icon: ShieldAlert, color: "text-amber-400" },
+        ].map((stat, idx) => (
+          <motion.div 
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="glass-card rounded-[2rem] p-8"
+          >
+            <div className="flex items-center gap-3 mb-4">
+               <stat.icon className={`w-5 h-5 ${stat.color}`} />
+               <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
+            </div>
+            <div className={`text-3xl font-bold tracking-tight ${stat.color}`}>{stat.value}</div>
+          </motion.div>
+        ))}
       </div>
 
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-        <div className="flex flex-col gap-5">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        className="glass-card rounded-[2.5rem] p-8"
+      >
+        <div className="flex flex-col gap-8">
           <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Status</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {STATUS_FILTERS.map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setStatusFilter(filter)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium capitalize transition ${
-                    statusFilter === filter
-                      ? "bg-sky-500 text-slate-950"
-                      : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                  }`}
-                >
-                  {filter === "all" ? "All" : filter.replace(/_/g, " ")}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 mb-4">
+               <Filter className="w-4 h-4 text-indigo-400" />
+               <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Intelligence Filters</div>
             </div>
-          </div>
+            
+            <div className="space-y-6">
+              <div>
+                <div className="text-xs font-semibold text-slate-600 mb-3">CLAIM STATE</div>
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_FILTERS.map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setStatusFilter(filter)}
+                      className={`rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                        statusFilter === filter
+                          ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                          : "bg-slate-800/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Trigger Type</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {triggerOptions.map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setTriggerFilter(filter)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    triggerFilter === filter
-                      ? "bg-emerald-400 text-slate-950"
-                      : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                  }`}
-                >
-                  {filter === "all" ? "All" : formatTriggerWithEmoji(filter)}
-                </button>
-              ))}
+              <div>
+                <div className="text-xs font-semibold text-slate-600 mb-3">TRIGGER SOURCE</div>
+                <div className="flex flex-wrap gap-2">
+                  {triggerOptions.map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setTriggerFilter(filter)}
+                      className={`rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                        triggerFilter === filter
+                          ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                          : "bg-slate-800/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                      }`}
+                    >
+                      {filter === "all" ? "All" : formatTriggerWithEmoji(filter)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70">
-        <div className="overflow-x-auto">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="overflow-hidden rounded-[2.5rem] border border-slate-800/50 bg-slate-900/20 glass"
+      >
+        <div className="overflow-x-auto overflow-y-hidden">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/50 text-left text-slate-400">
-                <th className="px-4 py-4 font-medium">Claim ID</th>
-                <th className="px-4 py-4 font-medium">Rider</th>
-                <th className="px-4 py-4 font-medium">Trigger</th>
-                <th className="px-4 py-4 text-right font-medium">Income Loss</th>
-                <th className="px-4 py-4 text-right font-medium">Payout</th>
-                <th className="px-4 py-4 text-center font-medium">Fraud</th>
-                <th className="px-4 py-4 text-center font-medium">Status</th>
+              <tr className="border-b border-slate-800/50 bg-slate-950/30 text-left">
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Sequence</th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Identity</th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Anomaly</th>
+                <th className="px-6 py-5 text-right text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Valuation</th>
+                <th className="px-6 py-5 text-right text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Payout</th>
+                <th className="px-6 py-5 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Trust</th>
+                <th className="px-6 py-5 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">State</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-800/30">
               {loading ? (
                 Array.from({ length: 5 }).map((_, index) => (
-                  <tr key={index} className="animate-pulse border-b border-slate-800/60">
+                  <tr key={index} className="animate-pulse">
                     {Array.from({ length: 7 }).map((__, cell) => (
-                      <td key={cell} className="px-4 py-4">
-                        <div className="h-4 rounded bg-slate-800" />
+                      <td key={cell} className="px-6 py-5">
+                        <div className="h-3 rounded bg-white/5" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : filteredClaims.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                    No claims found.
+                  <td colSpan={7} className="px-6 py-20 text-center text-slate-600 font-bold uppercase tracking-widest text-xs">
+                    No matching sequences found.
                   </td>
                 </tr>
               ) : (
-                filteredClaims.map((claim) => (
-                  <tr key={claim.id} className="border-b border-slate-800/60 hover:bg-slate-800/20">
-                    <td className="px-4 py-4 font-mono text-slate-300">{shortId(claim.id)}</td>
-                    <td className="px-4 py-4 text-slate-200">{claim.rider_name || shortId(claim.rider_id)}</td>
-                    <td className="px-4 py-4 text-slate-300">{formatTriggerWithEmoji(claim.disruption_type)}</td>
-                    <td className="px-4 py-4 text-right text-red-300">{formatCurrency(claim.income_loss)}</td>
-                    <td className="px-4 py-4 text-right text-emerald-300">{formatCurrency(claim.payout_amount)}</td>
-                    <td
-                      className={`px-4 py-4 text-center font-medium ${
-                        claim.fraud_score < 30
-                          ? "text-emerald-300"
-                          : claim.fraud_score < 70
-                            ? "text-amber-300"
-                            : "text-red-300"
-                      }`}
+                <AnimatePresence>
+                  {filteredClaims.map((claim, idx) => (
+                    <motion.tr 
+                      key={claim.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: idx * 0.02 }}
+                      className="group border-b border-white/5 hover:bg-white/[0.02] transition-colors"
                     >
-                      {claim.fraud_score}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${STATUS_STYLES[claim.status] || STATUS_STYLES.pending}`}>
-                        {claim.status.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                      <td className="px-6 py-5 font-mono text-[11px] text-slate-400">
+                         {shortId(claim.id).toUpperCase()}
+                      </td>
+                      <td className="px-6 py-5">
+                         <div className="flex items-center gap-2">
+                            <User className="w-3 h-3 text-slate-600" />
+                            <span className="font-bold text-slate-200">{claim.rider_name || shortId(claim.rider_id)}</span>
+                         </div>
+                      </td>
+                      <td className="px-6 py-5">
+                         <div className="flex items-center gap-2">
+                            <Activity className="w-3 h-3 text-slate-600" />
+                            <span className="text-slate-300">{formatTriggerWithEmoji(claim.disruption_type)}</span>
+                         </div>
+                      </td>
+                      <td className="px-6 py-5 text-right font-bold text-rose-400">
+                         {formatCurrency(claim.income_loss)}
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                         <div className="flex items-center justify-end gap-2 text-emerald-400 font-bold">
+                            {formatCurrency(claim.payout_amount)}
+                            <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                         </div>
+                      </td>
+                      <td className="px-6 py-5 text-center">
+                        <span
+                          className={`inline-block w-8 py-1 rounded-md text-[10px] font-bold ${
+                            claim.fraud_score < 30
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : claim.fraud_score < 70
+                                ? "bg-amber-500/10 text-amber-400"
+                                : "bg-rose-500/10 text-rose-400"
+                          }`}
+                        >
+                          {claim.fraud_score}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5 text-center">
+                        <span className={`inline-block px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${STATUS_STYLES[claim.status] || STATUS_STYLES.pending}`}>
+                          {claim.status.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

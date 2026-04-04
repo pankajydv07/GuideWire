@@ -48,6 +48,8 @@ export function formatDateTime(input: string) {
   }).format(date);
 }
 
+export const formatApiDate = formatDateTime;
+
 export function formatTriggerLabel(type?: string | null) {
   if (!type) return "Unknown Trigger";
   return TRIGGER_LABELS[type] || type.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());

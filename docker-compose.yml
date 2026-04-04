@@ -36,16 +36,8 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      - DATABASE_URL_SYNC=postgresql://postgres:ankush@postgres:5432/postgres
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET_KEY=ridershield-dev-secret
-      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY:-}
-      - DEBUG=true
-      - LOG_LEVEL=INFO
-      - UPLOAD_DIR=/app/uploads
-      - ML_SERVICE_URL=http://ml:8001
+    env_file:
+      - ./backend/.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,11 +53,8 @@ services:
   # ─── Trigger Scheduler ─────────────────────────────
   scheduler:
     build: ./backend
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      - DATABASE_URL_SYNC=postgresql://postgres:ankush@postgres:5432/postgres
-      - REDIS_URL=redis://redis:6379/0
-      - ML_SERVICE_URL=http://ml:8001
+    env_file:
+      - ./backend/.env
     depends_on:
       postgres:
         condition: service_healthy

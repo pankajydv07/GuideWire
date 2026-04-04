@@ -13,6 +13,7 @@ interface AuthContextType {
   rider: RiderProfile | null;
   token: string | null;
   isAuthenticated: boolean;
+  isRestoring: boolean;
   login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(true);
 
   const login = useCallback(async (jwt: string) => {
     setToken(jwt);
@@ -56,15 +58,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const restoreSession = async () => {
-      const jwt = await AsyncStorage.getItem('jwt_token');
-      if (!jwt) return;
-      setToken(jwt);
-      api.setToken(jwt);
       try {
-        const profile = await api.riders.getMe();
-        setRider(profile);
+        const jwt = await AsyncStorage.getItem('jwt_token');
+        if (jwt) {
+          setToken(jwt);
+          api.setToken(jwt);
+          const profile = await api.riders.getMe();
+          setRider(profile);
+        }
       } catch (err) {
-        console.error('Failed to restore profile:', err);
+        console.error('Failed to restore session:', err);
+      } finally {
+        setIsRestoring(false);
       }
     };
 
@@ -72,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ rider, token, isAuthenticated: !!token, login, logout, refreshProfile }}>
+    <AuthContext.Provider value={{ rider, token, isAuthenticated: !!token, isRestoring, login, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

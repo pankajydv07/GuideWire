@@ -1,53 +1,74 @@
-/**
- * Tab layout — main app after authentication.
- * 
- * 4 tabs:
- *   1. Dashboard (Dev 2 + Dev 3) — active policy + disruption alerts
- *   2. Claims (Dev 4) — claim history + payout history
- *   3. Manual Claim (Dev 5) — submit manual claim
- *   4. Profile (Dev 1) — rider profile + risk data
- */
+import React from 'react';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Link, Tabs } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Colors from '../../constants/Colors';
+import { useColorScheme } from '../../components/useColorScheme';
+import { useClientOnlyValue } from '../../components/useClientOnlyValue';
+
+// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
+function TabBarIcon(props: {
+  name: React.ComponentProps<typeof FontAwesome>['name'];
+  color: string;
+}) {
+  return <FontAwesome size={22} style={{ marginBottom: -3 }} {...props} />;
+}
 
 export default function TabLayout() {
+  const colorScheme = useColorScheme();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#38bdf8',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b', paddingBottom: 4 },
-        headerStyle: { backgroundColor: '#0f172a' },
-        headerTintColor: '#f8fafc',
-      }}
-    >
+        tabBarActiveTintColor: Colors.dark.tint,
+        tabBarInactiveTintColor: '#475569',
+        headerShown: useClientOnlyValue(false, true),
+        headerStyle: { backgroundColor: Colors.dark.background },
+        headerTitleStyle: { fontWeight: '900', color: Colors.dark.text, fontSize: 24, letterSpacing: -0.5 },
+        headerShadowVisible: false,
+        tabBarStyle: {
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          elevation: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          borderRadius: 24,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
+          borderTopWidth: 0,
+          borderWidth: 1,
+          borderColor: 'rgba(56, 189, 248, 0.1)',
+        },
+        tabBarBackground: () => (
+          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+        ),
+      }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark" size={size} color={color} />,
+          title: 'Guardian',
+          tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
+          headerTitle: 'RIDER🛡️SHIELD',
         }}
       />
       <Tabs.Screen
         name="claims"
         options={{
-          title: 'Claims',
-          tabBarIcon: ({ color, size }) => <Ionicons name="document-text" size={size} color={color} />,
+          title: 'History',
+          tabBarIcon: ({ color }) => <TabBarIcon name="history" color={color} />,
+          headerTitle: 'Claim Archive',
         }}
       />
       <Tabs.Screen
-        name="manual-claim"
+        name="two"
         options={{
-          title: 'Report',
-          tabBarIcon: ({ color, size }) => <Ionicons name="camera" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          title: 'Node',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+          headerTitle: 'Identity Node',
         }}
       />
     </Tabs>

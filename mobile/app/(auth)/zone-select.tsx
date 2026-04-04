@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import Animated, { FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
+
 import { api, type Zone } from '../../services/api';
+import Colors from '../../constants/Colors';
 
 export default function ZoneSelectScreen() {
   const params = useLocalSearchParams();
@@ -21,8 +24,7 @@ export default function ZoneSelectScreen() {
          }
       })
       .catch(err => {
-        console.error("Failed to load zones", err);
-        setError(err instanceof Error ? err.message : 'Failed to load zones');
+        setError('Synchronizing regional data failed.');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -48,109 +50,108 @@ export default function ZoneSelectScreen() {
     });
   };
 
-  const getRiskColor = (score: number) => {
-    if (score < 40) return { color: '#22c55e', label: '🟢 Low Risk', bg: '#14532d' };
-    if (score <= 70) return { color: '#eab308', label: '🟡 Medium Risk', bg: '#713f12' };
-    return { color: '#ef4444', label: '🔴 High Risk', bg: '#7f1d1d' };
+  const getRiskStatus = (score: number) => {
+    if (score < 40) return { color: '#10b981', label: 'OPTIMAL', bg: 'rgba(16, 185, 129, 0.1)' };
+    if (score <= 70) return { color: '#f59e0b', label: 'MODERATE', bg: 'rgba(245, 158, 11, 0.1)' };
+    return { color: '#f43f5e', label: 'CRITICAL', bg: 'rgba(244, 63, 94, 0.1)' };
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#38bdf8" />
-        <Text style={{color: '#94a3b8', marginTop: 12}}>Loading delivery zones...</Text>
-      </SafeAreaView>
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.dark.tint} />
+        <Text style={styles.loadingText}>Calibrating perimeters...</Text>
+      </View>
     );
   }
 
-  const hasZones = zones.length > 0;
-
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Select Your Zone</Text>
+    <View style={styles.container}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <Animated.View entering={FadeInUp.delay(200).springify()} style={styles.header}>
+           <Text style={styles.title}>Selection Zone</Text>
+           <Text style={styles.subtitle}>Define your operational radius to initiate protection protocols.</Text>
+        </Animated.View>
 
-      {hasZones ? (
-        <>
-          <View style={styles.tabContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {cities.map(city => (
+        <View style={styles.tabContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+            {cities.map(city => (
+              <TouchableOpacity
+                key={city}
+                style={[styles.cityTab, selectedCity === city && styles.cityTabActive]}
+                onPress={() => { setSelectedCity(city); setSelectedZone(null); }}
+              >
+                <Text style={[styles.cityTabText, selectedCity === city && styles.cityTabTextActive]}>{city.toUpperCase()}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {filteredZones.map((zone, index) => {
+            const risk = getRiskStatus(zone.risk_score || 0);
+            const isSelected = selectedZone?.id === zone.id;
+
+            return (
+              <Animated.View 
+                key={zone.id} 
+                entering={FadeInDown.delay(400 + index * 50).springify()}
+                layout={Layout.springify()}
+              >
                 <TouchableOpacity
-                  key={city}
-                  style={[styles.cityTab, selectedCity === city && styles.cityTabActive]}
-                  onPress={() => { setSelectedCity(city); setSelectedZone(null); }}
-                >
-                  <Text style={[styles.cityTabText, selectedCity === city && styles.cityTabTextActive]}>{city}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.list}>
-            {filteredZones.map((zone) => {
-              const risk = getRiskColor(zone.risk_score || 0);
-              const isSelected = selectedZone?.id === zone.id;
-
-              return (
-                <TouchableOpacity
-                  key={zone.id}
                   style={[styles.card, isSelected && styles.cardActive]}
                   onPress={() => setSelectedZone(zone)}
+                  activeOpacity={0.8}
                 >
-                  <View>
-                    <Text style={[styles.zoneName, isSelected && { color: '#38bdf8' }]}>{zone.name}</Text>
-                    <Text style={styles.zoneCity}>{zone.city}</Text>
+                  <View style={styles.zoneInfo}>
+                    <Text style={[styles.zoneName, isSelected && { color: Colors.dark.tint }]}>{zone.name}</Text>
+                    <Text style={styles.zoneCity}>{zone.city.toUpperCase()}</Text>
                   </View>
                   <View style={[styles.riskBadge, { backgroundColor: risk.bg }]}>
-                    <Text style={[styles.riskText, { color: risk.color }]}>{risk.label} ({zone.risk_score})</Text>
+                    <Text style={[styles.riskText, { color: risk.color }]}>{risk.label}</Text>
                   </View>
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </>
-      ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No delivery zones available</Text>
-          <Text style={styles.emptyText}>
-            {error || 'The backend did not return any zones yet. Seed the demo zones and reload this screen.'}
-          </Text>
-        </View>
-      )}
+              </Animated.View>
+            );
+          })}
+        </ScrollView>
 
-      <View style={styles.footer}>
-         <TouchableOpacity 
-          style={[styles.button, !selectedZone && styles.buttonDisabled]} 
-           onPress={handleNext}
-           disabled={!selectedZone}
-         >
-           <Text style={styles.buttonText}>Continue →</Text>
-         </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+        <View style={styles.footer}>
+           <TouchableOpacity 
+            style={[styles.button, !selectedZone && styles.buttonDisabled]} 
+             onPress={handleNext}
+             disabled={!selectedZone}
+           >
+             <Text style={styles.buttonText}>ESTABLISH NODE →</Text>
+           </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#020617' },
   center: { justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc', margin: 20, marginBottom: 12 },
-  tabContainer: { paddingHorizontal: 20, marginBottom: 16 },
-  cityTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' },
-  cityTabActive: { backgroundColor: '#1e3a8a', borderColor: '#3b82f6' },
-  cityTabText: { color: '#94a3b8', fontWeight: '600' },
-  cityTabTextActive: { color: '#fff' },
-  list: { paddingHorizontal: 20, gap: 12, paddingBottom: 100 },
-  card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#334155' },
-  cardActive: { borderColor: '#38bdf8', backgroundColor: '#0f172a' },
-  zoneName: { fontSize: 16, fontWeight: 'bold', color: '#f8fafc', marginBottom: 4 },
-  zoneCity: { fontSize: 13, color: '#94a3b8' },
-  riskBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  riskText: { fontSize: 11, fontWeight: 'bold' },
-  emptyState: { margin: 20, padding: 20, borderRadius: 14, backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155', gap: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#f8fafc' },
-  emptyText: { fontSize: 14, lineHeight: 20, color: '#94a3b8' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: '#0f172a', borderTopWidth: 1, borderTopColor: '#1e293b' },
-  button: { backgroundColor: '#2563eb', padding: 16, borderRadius: 12, alignItems: 'center' },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' }
+  header: { padding: 32, paddingBottom: 16 },
+  title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
+  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600', marginTop: 8 },
+  loadingText: { color: '#475569', fontSize: 12, fontWeight: '800', marginTop: 16, letterSpacing: 1 },
+  tabContainer: { paddingHorizontal: 32, marginBottom: 24 },
+  cityTab: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  cityTabActive: { backgroundColor: 'rgba(56, 189, 248, 0.1)', borderColor: 'rgba(56, 189, 248, 0.3)' },
+  cityTabText: { color: '#475569', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
+  cityTabTextActive: { color: '#f8fafc' },
+  list: { paddingHorizontal: 32, gap: 12, paddingBottom: 120 },
+  card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  cardActive: { borderColor: Colors.dark.tint, backgroundColor: 'rgba(56, 189, 248, 0.05)' },
+  zoneInfo: { flex: 1 },
+  zoneName: { fontSize: 18, fontWeight: '900', color: '#f8fafc', marginBottom: 4 },
+  zoneCity: { fontSize: 10, color: '#475569', fontWeight: '800', letterSpacing: 1 },
+  riskBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  riskText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 32, paddingBottom: 40, backgroundColor: 'rgba(2, 6, 23, 0.9)' },
+  button: { backgroundColor: Colors.dark.tint, paddingVertical: 22, borderRadius: 24, alignItems: 'center', shadowColor: Colors.dark.tint, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  buttonDisabled: { opacity: 0.2, shadowOpacity: 0 },
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 }
 });
