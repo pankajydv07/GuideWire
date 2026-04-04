@@ -26,8 +26,7 @@ async def get_policy_quote(
         from premium_service.service import calculate_premium, get_zone_risk_scores
 
     rider = await get_rider(rider_id, db)
-    zone_value = getattr(rider, "zone", city) or city
-    zone_name = getattr(zone_value, "name", zone_value) or city
+    zone_name = await get_rider_zone_name(rider, db, city)
 
     tenure_days = 90
     if hasattr(rider, "created_at") and rider.created_at:
@@ -38,17 +37,20 @@ async def get_policy_quote(
             created_at = created_at.replace(tzinfo=timezone.utc)
         tenure_days = max((datetime.now(timezone.utc) - created_at).days, 0)
 
-    zone_data = await get_zone_risk_scores(zone_name, db)
     weekly_baseline = await get_rider_weekly_baseline(rider_id, db)
+    expected_per_slot = round(weekly_baseline / max(len(slots), 1))
 
     quotes = []
+    quote_explanation = None
+    slot_breakdown = []
     for tier in ["essential", "balanced", "max_protect"]:
         result = await calculate_premium(
             zone=zone_name,
             slots=slots,
             plan_tier=tier,
             rider_tenure_days=tenure_days,
-            db=db
+            db=db,
+            rider_avg_earnings=expected_per_slot,
         )
 
         coverage_pct = {"essential": 70, "balanced": 80, "max_protect": 90}[tier]
@@ -66,11 +68,31 @@ async def get_policy_quote(
             )
         })
 
+        if quote_explanation is None:
+            quote_explanation = result.get("explanation")
+            slot_breakdown = [
+                {
+                    "slot": row["slot"],
+                    "expected_earnings": expected_per_slot,
+                    "risk_score": row["risk"],
+                    "premium": row["premium"],
+                }
+                for row in result.get("breakdown", [])
+            ]
+            zone_risk_score = result.get("zone_risk_score", result.get("risk_score", 0))
+
     from datetime import datetime, timezone
 
     valid_until = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59)
 
-    return {"quotes": quotes, "valid_until": valid_until}
+    return {
+        "quotes": quotes,
+        "valid_until": valid_until,
+        "zone_name": zone_name,
+        "zone_risk_score": zone_risk_score,
+        "slot_breakdown": slot_breakdown,
+        "explanation": quote_explanation,
+    }
 
 
 async def get_rider(rider_id: str, db: AsyncSession):
@@ -85,6 +107,17 @@ async def get_rider(rider_id: str, db: AsyncSession):
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
     return rider
+
+
+async def get_rider_zone_name(rider, db: AsyncSession, fallback: str = "bengaluru") -> str:
+    try:
+        from backend.rider_service.models import Zone
+    except ImportError:
+        from rider_service.models import Zone
+
+    result = await db.execute(select(Zone).where(Zone.id == rider.zone_id))
+    zone = result.scalar_one_or_none()
+    return zone.name if zone else (rider.city or fallback)
 
 
 async def get_rider_weekly_baseline(rider_id: str, db: AsyncSession) -> int:
@@ -115,7 +148,9 @@ async def create_policy(
     rider_id: str,
     plan_tier: str,
     slots: List[str],
-    db: AsyncSession
+    db: AsyncSession,
+    payment_method: str = "upi",
+    upi_id: Optional[str] = None,
 ) -> Policy:
     """
     Create a new active policy for the current calendar week.
@@ -150,8 +185,7 @@ async def create_policy(
         )
 
     rider = await get_rider(rider_id, db)
-    zone_value = getattr(rider, "zone", "bengaluru") or "bengaluru"
-    zone_name = getattr(zone_value, "name", zone_value) or "bengaluru"
+    zone_name = await get_rider_zone_name(rider, db, "bengaluru")
     tenure_days = 90
     if hasattr(rider, "created_at") and rider.created_at:
         from datetime import datetime, timezone
@@ -166,12 +200,31 @@ async def create_policy(
         slots=slots,
         plan_tier=plan_tier,
         rider_tenure_days=tenure_days,
-        db=db
+        db=db,
+        rider_avg_earnings=max(await get_rider_weekly_baseline(rider_id, db) / max(len(slots), 1), 1),
     )
 
     weekly_baseline = await get_rider_weekly_baseline(rider_id, db)
     coverage_pct = {"essential": 70, "balanced": 80, "max_protect": 90}[plan_tier]
     coverage_limit = int(weekly_baseline * coverage_pct / 100)
+
+    if payment_method != "upi":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_PAYMENT_METHOD",
+                "message": "Only demo UPI payments are supported",
+            },
+        )
+
+    if not upi_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "UPI_REQUIRED",
+                "message": "UPI ID is required for demo payment",
+            },
+        )
 
     policy = Policy(
         rider_id=rider_id,
@@ -200,7 +253,7 @@ async def get_active_policy(rider_id: str, db: AsyncSession) -> Optional[Policy]
 
     from datetime import datetime, timezone
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     result = await db.execute(
         select(Policy).where(
@@ -310,8 +363,7 @@ async def renew_policy(
     tier = new_tier or current_policy.plan_tier
 
     rider = await get_rider(rider_id, db)
-    zone_value = getattr(rider, "zone", "bengaluru") or "bengaluru"
-    zone_name = getattr(zone_value, "name", zone_value) or "bengaluru"
+    zone_name = await get_rider_zone_name(rider, db, "bengaluru")
     tenure_days = 90
     if hasattr(rider, "created_at") and rider.created_at:
         created_at = rider.created_at
@@ -324,7 +376,8 @@ async def renew_policy(
         slots=current_policy.slots_covered or [],
         plan_tier=tier,
         rider_tenure_days=tenure_days,
-        db=db
+        db=db,
+        rider_avg_earnings=max(await get_rider_weekly_baseline(rider_id, db) / max(len(current_policy.slots_covered or []), 1), 1),
     )
 
     weekly_baseline = await get_rider_weekly_baseline(rider_id, db)

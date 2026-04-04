@@ -10,6 +10,7 @@ Run with: python -m ml.training.generate_synthetic_data
 import pandas as pd
 import numpy as np
 import random
+from pathlib import Path
 
 
 def generate_synthetic_data(n_records: int = 50000) -> pd.DataFrame:
@@ -65,6 +66,7 @@ def generate_synthetic_data(n_records: int = 50000) -> pd.DataFrame:
 
 if __name__ == "__main__":
     df = generate_synthetic_data()
-    df.to_csv("ml/training/synthetic_data.csv", index=False)
-    print(f"Generated {len(df)} records → ml/training/synthetic_data.csv")
+    output_path = Path(__file__).resolve().parent / "synthetic_data.csv"
+    df.to_csv(output_path, index=False)
+    print(f"Generated {len(df)} records -> {output_path}")
     print(f"Disruption rate: {df['disrupted'].mean():.2%}")

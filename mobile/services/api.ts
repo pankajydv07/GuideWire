@@ -1,14 +1,141 @@
-/**
- * RiderShield API Client — shared across all mobile screens.
- * 
- * Every dev imports from here:
- *   import { api } from '@/services/api';
- *   const data = await api.riders.getMe();
- */
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+const expoHost =
+  Constants.expoConfig?.hostUri?.split(':')[0] ||
+  Constants.manifest2?.extra?.expoClient?.hostUri?.split(':')[0] ||
+  '';
+
+const fallbackHost =
+  expoHost ||
+  (Platform.OS === 'android' ? '10.0.2.2' : 'localhost');
+
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || `http://${fallbackHost}:8000`;
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+export interface RiderProfile {
+  rider_id: string;
+  name: string;
+  phone: string;
+  platform: string;
+  city: string;
+  zone_id: string;
+  zone?: string | null;
+  upi_id?: string | null;
+  kyc_status: string;
+  trust_score: number;
+  jwt_token?: string | null;
+}
+
+export interface RiskProfile {
+  zone_flood_risk: number;
+  zone_traffic_risk: number;
+  income_volatility: number;
+  composite_risk_score: number;
+  four_week_earnings?: Record<string, number> | null;
+  avg_per_slot: Record<string, number>;
+}
+
+export interface Zone {
+  id: string;
+  name: string;
+  city: string;
+  risk_score: number;
+}
+
+export interface PolicyQuoteTier {
+  tier: 'essential' | 'balanced' | 'max_protect';
+  weekly_premium: number;
+  coverage_pct: number;
+  coverage_limit: number;
+  slots_covered: number;
+  risk_breakdown: {
+    weather: number;
+    traffic: number;
+    store: number;
+  };
+}
+
+export interface PolicySlotBreakdown {
+  slot: string;
+  expected_earnings: number;
+  risk_score: number;
+  premium?: number;
+}
+
+export interface PolicyQuoteResponse {
+  quotes: PolicyQuoteTier[];
+  zone_name: string;
+  zone_risk_score: number;
+  slot_breakdown: PolicySlotBreakdown[];
+  valid_until: string;
+  explanation?: string;
+}
+
+export interface PolicyResponse {
+  policy_id: string;
+  rider_id: string;
+  plan_tier: string;
+  coverage_week: string;
+  premium: number;
+  premium_paid: number;
+  coverage_limit: number;
+  coverage_pct: number;
+  coverage_used?: number;
+  status: string;
+  slots_covered: string[];
+  hours_remaining?: number;
+  payment_method?: string;
+  upi_id?: string | null;
+  created_at?: string | null;
+  expires_at?: string | null;
+}
+
+export interface TriggerStatus {
+  active_triggers: Array<{
+    trigger_id: string;
+    type: string;
+    zone: string;
+    zone_id: string;
+    threshold: string;
+    active_since: string;
+    affected_riders: number;
+    severity: string;
+  }>;
+  community_signals: Array<{
+    zone: string;
+    zone_id: string;
+    affected_pct: number;
+    threshold_pct: number;
+    affected_riders: number;
+    total_riders: number;
+    detected_at: string;
+  }>;
+  last_evaluation: string;
+}
+
+export interface ClaimListItem {
+  claim_id: string;
+  type: string;
+  disruption_type: string;
+  income_loss: number;
+  payout_amount: number;
+  fraud_score: number;
+  status: string;
+  created_at: string;
+}
+
+export interface PayoutListItem {
+  payout_id: string;
+  claim_id: string;
+  amount: number;
+  method: string;
+  upi_id: string | null;
+  status: string;
+  reference_id: string;
+  created_at: string;
+}
 
 class ApiClient {
   private token: string | null = null;
@@ -24,37 +151,43 @@ class ApiClient {
   private async request<T>(
     method: HttpMethod,
     path: string,
-    body?: any,
+    body?: unknown,
     isFormData = false
   ): Promise<T> {
     const headers: Record<string, string> = {};
-    
+
     if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+      headers.Authorization = `Bearer ${this.token}`;
     }
-    
+
     if (!isFormData) {
       headers['Content-Type'] = 'application/json';
     }
 
-    const config: RequestInit = {
-      method,
-      headers,
-      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
-    };
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        method,
+        headers,
+        body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new Error(`Unable to reach backend at ${API_BASE}`);
+    }
 
-    const res = await fetch(`${API_BASE}${path}`, config);
-    
     if (!res.ok) {
-      const error = await res.json().catch(() => ({ error: { message: res.statusText } }));
-      throw new Error(error?.error?.message || `API Error: ${res.status}`);
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      const detail = error?.detail;
+      if (typeof detail === 'string') {
+        throw new Error(detail);
+      }
+      throw new Error(detail?.message || detail?.error?.message || `API Error: ${res.status}`);
     }
 
     if (res.status === 204) return {} as T;
-    return res.json();
+    return res.json() as Promise<T>;
   }
 
-  // ─── Dev 1: Rider Endpoints ─────────────────────
   riders = {
     sendOtp: (phone: string) =>
       this.request<{ message: string; expires_in: number }>('POST', '/api/riders/send-otp', { phone }),
@@ -63,91 +196,95 @@ class ApiClient {
       this.request<{ valid: boolean; temp_token: string }>('POST', '/api/riders/verify-otp', { phone, otp }),
 
     register: (data: { name: string; platform: string; city: string; zone_id: string; slots: string[]; upi_id: string }) =>
-      this.request<any>('POST', '/api/riders/register', data),
+      this.request<RiderProfile>('POST', '/api/riders/register', data),
 
     onboard: (data: { typical_slots: string[]; plan_tier: string }) =>
-      this.request<any>('POST', '/api/riders/onboard', data),
+      this.request<unknown>('POST', '/api/riders/onboard', data),
 
     getMe: () =>
-      this.request<any>('GET', '/api/riders/me'),
+      this.request<RiderProfile>('GET', '/api/riders/me'),
 
     getRiskProfile: () =>
-      this.request<any>('GET', '/api/riders/me/risk-profile'),
+      this.request<RiskProfile>('GET', '/api/riders/me/risk-profile'),
   };
 
-  // ─── Dev 1: Zones ───────────────────────────────
   zones = {
     list: () =>
-      this.request<{ zones: any[] }>('GET', '/api/zones'),
+      this.request<{ zones: Zone[] }>('GET', '/api/zones'),
   };
 
-  // ─── Dev 2: Policy Endpoints ────────────────────
   policies = {
     getQuote: (slots: string, city: string) =>
-      this.request<any>('GET', `/api/policies/quote?slots=${encodeURIComponent(slots)}&city=${encodeURIComponent(city)}`),
+      this.request<PolicyQuoteResponse>('GET', `/api/policies/quote?slots=${encodeURIComponent(slots)}&city=${encodeURIComponent(city)}`),
 
     create: (data: { plan_tier: string; payment_method: string; upi_id: string; slots?: string[] }) =>
-      this.request<any>('POST', '/api/policies', data),
+      this.request<PolicyResponse>('POST', '/api/policies', data),
 
     getActive: () =>
-      this.request<any>('GET', '/api/policies/active'),
+      this.request<PolicyResponse>('GET', '/api/policies/active'),
 
     getById: (policyId: string) =>
-      this.request<any>('GET', `/api/policies/${policyId}`),
+      this.request<PolicyResponse>('GET', `/api/policies/${policyId}`),
 
-    renew: (policyId: string) =>
-      this.request<any>('PUT', `/api/policies/${policyId}/renew`),
+    renew: (policyId: string, plan_tier?: string) =>
+      this.request<unknown>('PUT', `/api/policies/${policyId}/renew`, plan_tier ? { plan_tier } : {}),
 
     cancel: (policyId: string) =>
       this.request<void>('DELETE', `/api/policies/${policyId}`),
   };
 
-  // ─── Dev 2: Premium ─────────────────────────────
   risk = {
-    getPremium: (data: { zone: string; slots: string[]; plan_tier: string; rider_tenure_days: number }) =>
-      this.request<any>('POST', '/api/risk/premium', data),
+    getPremium: (data: { zone?: string; slots: string[]; plan_tier: string; rider_tenure_days?: number }) =>
+      this.request<{
+        risk_score: number;
+        zone_risk_score: number;
+        disruption_probability: number;
+        premium: Record<string, number>;
+        explanation: string;
+        tenure_discount: number;
+        breakdown: Array<{ slot: string; risk: number; premium: number }>;
+        slot_breakdown: PolicySlotBreakdown[];
+        zone_name: string;
+      }>('POST', '/api/risk/premium', data),
   };
 
-  // ─── Dev 3: Triggers ────────────────────────────
   triggers = {
     getStatus: () =>
-      this.request<any>('GET', '/api/triggers/status'),
+      this.request<TriggerStatus>('GET', '/api/triggers/status'),
 
     getDisruptionEvents: (zone?: string, from?: string) => {
       const params = new URLSearchParams();
       if (zone) params.set('zone', zone);
       if (from) params.set('from', from);
-      return this.request<any>('GET', `/api/triggers/disruption-events?${params}`);
+      const query = params.toString();
+      return this.request<unknown>('GET', `/api/triggers/disruption-events${query ? `?${query}` : ''}`);
     },
   };
 
-  // ─── Dev 4: Claims ──────────────────────────────
   claims = {
     list: () =>
-      this.request<{ claims: any[] }>('GET', '/api/claims'),
+      this.request<{ claims: ClaimListItem[] }>('GET', '/api/claims'),
 
     getById: (claimId: string) =>
-      this.request<any>('GET', `/api/claims/${claimId}`),
+      this.request<unknown>('GET', `/api/claims/${claimId}`),
   };
 
-  // ─── Dev 4: Payouts ─────────────────────────────
   payouts = {
     list: () =>
-      this.request<{ payouts: any[] }>('GET', '/api/payouts'),
+      this.request<{ payouts: PayoutListItem[] }>('GET', '/api/payouts'),
   };
 
-  // ─── Dev 5: Manual Claims ──────────────────────
   manualClaims = {
     submit: (formData: FormData) =>
-      this.request<any>('POST', '/api/claims/manual', formData, true),
+      this.request<unknown>('POST', '/api/claims/manual', formData, true),
 
     getStatus: (claimId: string) =>
-      this.request<any>('GET', `/api/claims/manual/${claimId}`),
+      this.request<unknown>('GET', `/api/claims/manual/${claimId}`),
   };
 
-  // ─── Health ─────────────────────────────────────
   health = () =>
-    this.request<any>('GET', '/health');
+    this.request<{ status: string }>('GET', '/health');
 }
 
 export const api = new ApiClient();
+export { API_BASE };

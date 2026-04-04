@@ -50,7 +50,7 @@ export default function SlotSelectScreen() {
       }
 
       // 3. Perform contextual login returning real tokens resolving app
-      const token = regResult.jwt_token || regResult.token; 
+      const token = regResult.jwt_token; 
       if (token) {
         await login(token);
       } else {

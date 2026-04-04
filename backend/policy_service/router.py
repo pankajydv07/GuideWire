@@ -52,21 +52,36 @@ async def create_policy_endpoint(
     """Create a new policy for the current week."""
     plan_tier = data.get("plan_tier", "balanced")
     slots = data.get("slots", ["18:00-21:00"])
+    payment_method = data.get("payment_method", "upi")
+    upi_id = data.get("upi_id") or rider.upi_id
 
     if plan_tier not in ("essential", "balanced", "max_protect"):
         raise HTTPException(status_code=400, detail=f"Invalid plan_tier: {plan_tier}")
+    if not isinstance(slots, list) or not slots:
+        raise HTTPException(status_code=400, detail="At least one slot is required")
 
-    policy = await create_policy(str(rider.id), plan_tier, slots, db)
+    policy = await create_policy(
+        str(rider.id),
+        plan_tier,
+        slots,
+        db,
+        payment_method=payment_method,
+        upi_id=upi_id,
+    )
     return {
         "policy_id": str(policy.id),
         "rider_id": str(policy.rider_id),
         "plan_tier": policy.plan_tier,
-        "week": policy.week,
+        "coverage_week": policy.week,
         "premium": policy.premium,
+        "premium_paid": policy.premium,
         "coverage_limit": policy.coverage_limit,
         "coverage_pct": policy.coverage_pct,
         "status": policy.status,
         "slots_covered": policy.slots_covered,
+        "payment_method": payment_method,
+        "upi_id": upi_id,
+        "created_at": str(policy.created_at) if policy.created_at else None,
         "expires_at": str(policy.expires_at) if policy.expires_at else None,
     }
 
@@ -85,8 +100,9 @@ async def get_active_policy_endpoint(
         "policy_id": str(policy.id),
         "rider_id": str(policy.rider_id),
         "plan_tier": policy.plan_tier,
-        "week": policy.week,
+        "coverage_week": policy.week,
         "premium": policy.premium,
+        "premium_paid": policy.premium,
         "coverage_limit": policy.coverage_limit,
         "coverage_pct": policy.coverage_pct,
         "coverage_used": policy.coverage_used,
@@ -109,8 +125,9 @@ async def get_policy(
         "policy_id": str(policy.id),
         "rider_id": str(policy.rider_id),
         "plan_tier": policy.plan_tier,
-        "week": policy.week,
+        "coverage_week": policy.week,
         "premium": policy.premium,
+        "premium_paid": policy.premium,
         "coverage_limit": policy.coverage_limit,
         "coverage_pct": policy.coverage_pct,
         "coverage_used": policy.coverage_used,

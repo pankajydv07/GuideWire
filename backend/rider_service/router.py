@@ -10,6 +10,7 @@ from rider_service.schemas import (
     RiderRegisterRequest, RiderProfileResponse, RiskProfileResponse
 )
 from rider_service.models import RiderRiskProfile, Zone
+from premium_service.service import calculate_premium as calculate_risk_premium
 
 router = APIRouter()
 
@@ -113,15 +114,14 @@ async def onboard(data: dict, rider=Depends(get_current_rider), db: AsyncSession
     )
     baselines = bl_result.scalars().all()
 
-    # 4. Call premium service internally
-    from premium_service.router import calculate_premium
-    premium_input = {
-        "rider_id": str(rider.id),
-        "zone_risk_score": zone.composite_risk_score if zone else 0,
-        "income_volatility": float(risk_profile.income_volatility) if risk_profile else 0,
-        "plan_tier": data.get("plan_tier", "balanced"),
-    }
-    premium_response = await calculate_premium(premium_input, db)
+    # 4. Call the real premium engine directly
+    premium_response = await calculate_risk_premium(
+        zone=zone.name if zone else rider.city,
+        slots=data.get("typical_slots", ["18:00-21:00"]),
+        plan_tier=data.get("plan_tier", "balanced"),
+        rider_tenure_days=90,
+        db=db,
+    )
 
     # 5. Build volatility label
     vol = float(risk_profile.income_volatility) if risk_profile else 0
@@ -163,8 +163,10 @@ async def onboard(data: dict, rider=Depends(get_current_rider), db: AsyncSession
 
 # ─── GET /me ─────────────────────────────────────────
 @router.get("/me", response_model=RiderProfileResponse)
-async def get_me(rider=Depends(get_current_rider)):
+async def get_me(rider=Depends(get_current_rider), db: AsyncSession = Depends(get_db)):
     """Return authenticated rider's full profile."""
+    zone_result = await db.execute(select(Zone).where(Zone.id == rider.zone_id))
+    zone = zone_result.scalar_one_or_none()
     return {
         "rider_id": rider.id,
         "name": rider.name,
@@ -172,6 +174,8 @@ async def get_me(rider=Depends(get_current_rider)):
         "platform": rider.platform,
         "city": rider.city,
         "zone_id": rider.zone_id,
+        "zone": zone.name if zone else None,
+        "upi_id": rider.upi_id,
         "kyc_status": rider.kyc_status,
         "trust_score": rider.trust_score
     }

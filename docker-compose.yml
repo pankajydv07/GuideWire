@@ -45,11 +45,14 @@ services:
       - DEBUG=true
       - LOG_LEVEL=INFO
       - UPLOAD_DIR=/app/uploads
+      - ML_SERVICE_URL=http://ml:8001
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ml:
+        condition: service_started
     volumes:
       - ./backend:/app
       - upload_data:/app/uploads
@@ -62,12 +65,25 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
       - DATABASE_URL_SYNC=postgresql://postgres:ankush@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
+      - ML_SERVICE_URL=http://ml:8001
     depends_on:
       postgres:
         condition: service_healthy
+      ml:
+        condition: service_started
     volumes:
       - ./backend:/app
     command: python -m trigger_service.scheduler
+
+  ml:
+    build:
+      context: ./backend
+      dockerfile: ./ml/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app
+    command: uvicorn ml.serve:app --host 0.0.0.0 --port 8001 --reload
 
 volumes:
   postgres_data:

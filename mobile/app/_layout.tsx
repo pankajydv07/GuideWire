@@ -38,10 +38,6 @@ export default function RootLayout() {
           <Stack.Screen name="policy/select" options={{ title: 'Choose Plan' }} />
           <Stack.Screen name="policy/payment" options={{ title: 'Payment' }} />
 
-          {/* Dev 5: Manual Claim */}
-          <Stack.Screen name="claim/manual" options={{ title: 'Submit Claim' }} />
-          <Stack.Screen name="claim/camera" options={{ title: 'Take Photo' }} />
-
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
           <Stack.Screen name="+not-found" />
         </Stack>

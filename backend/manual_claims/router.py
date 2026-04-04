@@ -91,7 +91,7 @@ async def submit_manual_claim(
 
     # 6. Create Records
     review_status = "pending"
-    if spam_score >= 80:
+    if spam_score >= 70:
         review_status = "rejected" # Auto-reject extremely high spam scores
 
     # Call Dev 4 logic to create the financial claim anchor
@@ -132,6 +132,7 @@ async def submit_manual_claim(
     await db.commit()
     
     return {
+        "claim_id": dev4_claim_id,
         "manual_claim_id": str(new_manual.id),
         "status": review_status,
         "spam_score": spam_score,

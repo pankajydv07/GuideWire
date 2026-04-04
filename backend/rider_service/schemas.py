@@ -38,6 +38,8 @@ class RiderProfileResponse(BaseModel):
     platform: str
     city: str
     zone_id: UUID
+    zone: Optional[str] = None
+    upi_id: Optional[str] = None
     kyc_status: str
     trust_score: int
     jwt_token: Optional[str] = None

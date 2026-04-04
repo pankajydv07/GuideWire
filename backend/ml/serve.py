@@ -47,7 +47,11 @@ def load_artifacts() -> None:
     with METADATA_PATH.open("r", encoding="utf-8") as f:
         metadata = json.load(f)
 
-    feature_names = metadata.get("features", [])
+    if isinstance(metadata, list):
+        feature_names = metadata
+        metadata = {"features": metadata, "model_version": "legacy"}
+    else:
+        feature_names = metadata.get("features", [])
 
 
 def probability_to_band(probability: float) -> str:

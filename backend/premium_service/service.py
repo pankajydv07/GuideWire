@@ -176,7 +176,8 @@ async def calculate_premium(
     slots: List[str],
     plan_tier: str,
     rider_tenure_days: int,
-    db: AsyncSession
+    db: AsyncSession,
+    rider_avg_earnings: float = 600.0,
 ) -> Dict:
     """
     Main premium calculation function.
@@ -190,7 +191,7 @@ async def calculate_premium(
     total_risk_score = 0
 
     for slot in slots:
-        ml_result = await call_ml_model(zone_data, slot, rider_tenure_days)
+        ml_result = await call_ml_model(zone_data, slot, rider_tenure_days, rider_avg_earnings)
 
         prob = ml_result["disruption_probability"]
         band = ml_result["risk_band"]
@@ -233,6 +234,11 @@ async def calculate_premium(
 
     return {
         "risk_score": avg_risk,
+        "zone_risk_score": int((
+            zone_data["flood_risk_score"] +
+            zone_data["traffic_risk_score"] +
+            zone_data["store_risk_score"]
+        ) / 3),
         "disruption_probability": round(avg_prob, 4),
         "premium": final_premiums,
         "explanation": explanation,
