@@ -62,7 +62,7 @@ class ApiClient {
     verifyOtp: (phone: string, otp: string) =>
       this.request<{ valid: boolean; temp_token: string }>('POST', '/api/riders/verify-otp', { phone, otp }),
 
-    register: (data: { name: string; platform: string; city: string; zone: string; slots: string[]; upi_id: string }) =>
+    register: (data: { name: string; platform: string; city: string; zone_id: string; slots: string[]; upi_id: string }) =>
       this.request<any>('POST', '/api/riders/register', data),
 
     onboard: (data: { typical_slots: string[]; plan_tier: string }) =>
@@ -86,7 +86,7 @@ class ApiClient {
     getQuote: (slots: string, city: string) =>
       this.request<any>('GET', `/api/policies/quote?slots=${encodeURIComponent(slots)}&city=${encodeURIComponent(city)}`),
 
-    create: (data: { plan_tier: string; payment_method: string; upi_id: string }) =>
+    create: (data: { plan_tier: string; payment_method: string; upi_id: string; slots?: string[] }) =>
       this.request<any>('POST', '/api/policies', data),
 
     getActive: () =>

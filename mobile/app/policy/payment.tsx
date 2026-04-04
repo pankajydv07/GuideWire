@@ -1,48 +1,106 @@
-/**
- * Dev 2: Payment Screen — STUB
- * 
- * TODO (Dev 2):
- * - Show premium summary
- * - Mock UPI payment flow
- * - Call api.policies.create()
- * - On success → navigate to dashboard with active policy
- */
-
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../services/api';
 
 export default function PaymentScreen() {
-  const handlePay = () => {
-    // TODO (Dev 2): api.policies.create({ plan_tier: 'balanced', payment_method: 'upi', upi_id: '...' })
-    alert('✅ Payment successful! Policy activated.');
-    router.replace('/(tabs)');
+  const { tier, price, coverage_pct } = useLocalSearchParams<{ tier: string; price: string; coverage_pct: string }>();
+  const { rider } = useAuth();
+  
+  const [processing, setProcessing] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [displayUpi, setDisplayUpi] = useState('demo');
+
+  useEffect(() => {
+    AsyncStorage.getItem('rider_upi_id').then(val => {
+      if (val) setDisplayUpi(val);
+    }).catch(_e => {});
+  }, []);
+
+  const planName = tier ? tier.charAt(0).toUpperCase() + tier.slice(1).replace('_', ' ') : 'Balanced';
+  const displayPrice = price || '180';
+  const displayCoverage = coverage_pct || '80';
+
+  const handlePay = async () => {
+    setProcessing(true);
+    try {
+      // Read persisted slots and upi_id from AsyncStorage
+      let slots: string[] = ['18:00-21:00'];
+      try {
+        const stored = await AsyncStorage.getItem('rider_slots');
+        if (stored) {
+          const parsed: string[] = JSON.parse(stored);
+          if (parsed.length > 0) slots = parsed;
+        }
+      } catch (_e) {}
+
+      let upiId = 'demo@oksbi';
+      try {
+        const stored = await AsyncStorage.getItem('rider_upi_id');
+        if (stored) upiId = stored;
+      } catch (_e) {}
+
+      await api.policies.create({
+        plan_tier: tier || 'balanced',
+        payment_method: 'upi',
+        upi_id: upiId,
+        slots,
+      });
+      
+      setSuccess(true);
+      setTimeout(() => {
+        router.replace('/(tabs)');
+      }, 1500);
+    } catch (err: any) {
+      alert('Payment failed: ' + err.message);
+      setProcessing(false);
+    }
   };
+
+  if (success) {
+    return (
+      <SafeAreaView style={[styles.container, styles.center]}>
+        <Text style={styles.successEmoji}>✅</Text>
+        <Text style={styles.successText}>Payment Successful!</Text>
+        <Text style={styles.successSubtext}>Policy Activated</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Confirm Payment</Text>
 
       <View style={styles.card}>
-        <Text style={styles.row}>Plan: <Text style={styles.bold}>Balanced</Text></Text>
-        <Text style={styles.row}>Week: <Text style={styles.bold}>2026-W13</Text></Text>
-        <Text style={styles.row}>Coverage: <Text style={styles.bold}>80% of baseline</Text></Text>
-        <Text style={styles.row}>Slots: <Text style={styles.bold}>2 slots covered</Text></Text>
+        <Text style={styles.row}>Plan: <Text style={styles.bold}>{planName}</Text></Text>
+        <Text style={styles.row}>Week: <Text style={styles.bold}>Current Week</Text></Text>
+        <Text style={styles.row}>Coverage: <Text style={styles.bold}>{displayCoverage}% of baseline</Text></Text>
+        <Text style={styles.row}>Slots: <Text style={styles.bold}>All Working Slots</Text></Text>
         <View style={styles.divider} />
-        <Text style={styles.total}>₹180</Text>
+        <Text style={styles.total}>₹{displayPrice}</Text>
         <Text style={styles.totalLabel}>Weekly Premium</Text>
       </View>
 
-      <TouchableOpacity style={styles.payButton} onPress={handlePay}>
-        <Text style={styles.payText}>💳 Pay via UPI</Text>
+      <TouchableOpacity 
+        style={[styles.payButton, processing && styles.payButtonDisabled]} 
+        onPress={handlePay}
+        disabled={processing}
+      >
+        {processing ? (
+           <ActivityIndicator color="#fff" />
+        ) : (
+           <Text style={styles.payText}>💳 Pay via UPI ({displayUpi})</Text>
+        )}
       </TouchableOpacity>
-
-      <Text style={styles.placeholder}>TODO (Dev 2): Real premium from ML model</Text>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a', padding: 20 },
+  center: { justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc', marginBottom: 20 },
   card: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, gap: 8, borderWidth: 1, borderColor: '#334155' },
   row: { color: '#94a3b8', fontSize: 15 },
@@ -50,7 +108,10 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#334155', marginVertical: 8 },
   total: { fontSize: 36, fontWeight: 'bold', color: '#38bdf8', textAlign: 'center' },
   totalLabel: { fontSize: 13, color: '#64748b', textAlign: 'center' },
-  payButton: { backgroundColor: '#22c55e', borderRadius: 14, padding: 18, alignItems: 'center', marginTop: 24 },
+  payButton: { backgroundColor: '#22c55e', borderRadius: 14, padding: 18, alignItems: 'center', marginTop: 24, flexDirection: 'row', justifyContent: 'center' },
+  payButtonDisabled: { opacity: 0.7 },
   payText: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  placeholder: { color: '#f59e0b', fontSize: 12, fontStyle: 'italic', textAlign: 'center', marginTop: 16 },
+  successEmoji: { fontSize: 64, marginBottom: 16 },
+  successText: { fontSize: 24, fontWeight: 'bold', color: '#22c55e', marginBottom: 8 },
+  successSubtext: { fontSize: 16, color: '#f8fafc' }
 });
