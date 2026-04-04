@@ -9,7 +9,7 @@
 
 ## 1. Ownership Summary
 
-You own the **policy lifecycle and pricing engine** of RiderShield. Your module determines what riders pay and what they're covered for. The ML model you build is the "brain" behind dynamic, zone-aware pricing — a key differentiator for hackathon judges.
+You own the **policy lifecycle and pricing engine** of Zylo. Your module determines what riders pay and what they're covered for. The ML model you build is the "brain" behind dynamic, zone-aware pricing — a key differentiator for hackathon judges.
 
 **You are responsible for:**
 - Policy quote generation (3 tiers: Essential, Balanced, Max Protect)

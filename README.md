@@ -1,8 +1,8 @@
-# RiderShield — Parametric Income Protection for Q-Commerce Riders
+# Zylo — Parametric Income Protection for Q-Commerce Riders
 
 > **Automatic income protection for delivery riders.**  
 > When rain, gridlock, GPS glitches, or platform failures kill your earnings —  
-> RiderShield detects it and pays you. No claims. No paperwork. No waiting.  
+> Zylo detects it and pays you. No claims. No paperwork. No waiting.  
 > And when a disruption slips through undetected, riders can submit a geo-tagged manual claim —
 > evaluated against real weather, traffic, and location data in minutes, not weeks.
 
@@ -94,7 +94,7 @@ Rohit gets a push notification with a full breakdown. He did nothing except stay
 **Context:** Ankush is delivering in DLF Cyber Hub, Gurugram — a dense urban canyon of
 high-rises that causes GPS multipath interference. His location drifts on the Zepto map;
 the platform algorithm interprets this as route deviation and shadowbans him for 2 hours.
-He loses ₹400 in that shift. Traditional insurance: useless. RiderShield:
+He loses ₹400 in that shift. Traditional insurance: useless. Zylo:
 
 | Step | Action |
 |---|---|
@@ -1072,7 +1072,7 @@ The fraud engine organizes evidence into four layers:
 
 #### Layer 3 — Graph / Ring Detection
 
-RiderShield's Neo4j-based collusion graph ingests four edge types:
+Zylo's Neo4j-based collusion graph ingests four edge types:
 
 - **Rider → Zone** (weighted by shift frequency — zone affinity)
 - **Rider → Device** (hardware fingerprint per login session)
@@ -1109,7 +1109,7 @@ Three graph queries execute on every disruption event:
 
 A real rider experiencing a genuine network drop in bad weather will look superficially
 similar to a spoofer: degraded GPS, weak cell signal, intermittent platform activity. The
-system must not punish them. RiderShield uses a **four-tier numeric fraud score system**,
+system must not punish them. Zylo uses a **four-tier numeric fraud score system**,
 not a binary approve/reject — with time-bounded SLAs on every tier.
 
 > **Design principle:** The system fails safely. Hard on spoofers; forgiving to genuinely
@@ -1231,7 +1231,7 @@ suspicious behavior — the following protocol activates automatically:
   every event.
 
 **Architecture summary:**
-RiderShield's anti-spoofing defense is a five-layer system: (1) a device-signal layer using
+Zylo's anti-spoofing defense is a five-layer system: (1) a device-signal layer using
 the OS Mock Location API as a heavy-weight corroborating input (never standalone) alongside IMU
 fingerprinting, device clustering, and battery anomaly detection; (2) a multi-modal signal
 fusion layer across GPS quality, cell towers, platform logs, earnings trajectory, and app

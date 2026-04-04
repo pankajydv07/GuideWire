@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "RiderShield Admin",
+  title: "Zylo Admin",
   description: "Claims review & trigger management dashboard",
 };
 

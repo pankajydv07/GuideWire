@@ -98,7 +98,7 @@ You handle the **core dashboard architecture** and the **most demo-critical page
 
 - [ ] **Polish sidebar layout** (`src/app/layout.tsx`):
   - Add active nav state highlighting (use `usePathname()`)
-  - Add "RiderShield" logo/branding
+  - Add "Zylo" logo/branding
   - Add system status indicator (green/red dot from `/health`)
   - Make sidebar responsive
 

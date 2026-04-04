@@ -41,7 +41,7 @@ You own the **onboarding flow** — the FIRST thing judges see in the demo. Regi
 ### 3.1 Welcome Screen (`app/index.tsx`) — Polish
 
 - [ ] Make it look stunning — this is the app's first impression
-- [ ] Show app name "RiderShield" with shield emoji/icon
+- [ ] Show app name "Zylo" with shield emoji/icon
 - [ ] Tagline: "Income Protection for Delivery Riders"
 - [ ] Phone number input field with country code (+91)
 - [ ] "Get OTP" button → calls `api.riders.sendOtp(phone)` → navigates to OTP screen

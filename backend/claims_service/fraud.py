@@ -12,7 +12,7 @@ from claims_service.models import Claim
 from trigger_service.models import PlatformSnapshot
 from rider_service.models import RiderZoneBaseline
 
-logger = logging.getLogger("ridershield.claims.fraud")
+logger = logging.getLogger("zylo.claims.fraud")
 
 
 async def check_duplicate_claim(rider_id: UUID, disruption_event_id: UUID, db: AsyncSession) -> bool:
