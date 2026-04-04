@@ -1,25 +1,30 @@
-import { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
-import { Platform } from 'react-native';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image, Dimensions, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInUp, useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 
 import { api, type ManualClaimSubmitResponse } from '../../services/api';
 
-const DISRUPTION_TYPES = [
-  { id: 'heavy_rain', label: 'Weather', emoji: 'Rain', desc: 'Rain, flooding, storms' },
-  { id: 'traffic', label: 'Traffic', emoji: 'Traffic', desc: 'Congestion, road blocks' },
-  { id: 'store_closure', label: 'Store Closed', emoji: 'Store', desc: 'Dark store shut down' },
-  { id: 'platform_outage', label: 'Platform Down', emoji: 'App', desc: 'App not working' },
-  { id: 'other', label: 'Other', emoji: 'Other', desc: 'Other disruption' },
-];
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const TYPE_UI_META: Record<string, { icon: any, color: string, desc: string }> = {
+  heavy_rain: { icon: 'rainy', color: '#10b981', desc: 'Flood detection in urban zones' },
+  traffic_congestion: { icon: 'car', color: '#ef4444', desc: 'Major arterial route blockage' },
+  store_closed: { icon: 'storefront', color: '#6366f1', desc: 'Dark store closure detected' },
+  platform_outage: { icon: 'phone-portrait', color: '#a855f7', desc: 'Digital infrastructure failure' },
+  regulatory: { icon: 'ban', color: '#f43f5e', desc: 'Emergency movement restrictions' },
+  community_signal: { icon: 'megaphone', color: '#f59e0b', desc: 'Community anomaly threshold breached' },
+  default: { icon: 'ellipsis-horizontal-circle', color: '#94a3b8', desc: 'Context-specific telemetry' },
+};
 
 type FormErrors = {
   disruptionType?: string;
   photo?: string;
   description?: string;
-  location?: string;
 };
 
 export default function ManualClaimScreen() {
@@ -29,60 +34,43 @@ export default function ManualClaimScreen() {
   const [location, setLocation] = useState<Location.LocationObjectCoords | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [availableTypes, setAvailableTypes] = useState<any[]>([]);
   const [result, setResult] = useState<ManualClaimSubmitResponse | null>(null);
 
+  useEffect(() => {
+    api.config.get()
+      .then(cfg => setAvailableTypes(cfg.trigger_types))
+      .catch(e => console.error("Config fetch failed:", e))
+      .finally(() => setLoadingConfig(false));
+
+    Location.requestForegroundPermissionsAsync().then(p => {
+       if (p.status === 'granted') {
+         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(l => setLocation(l.coords));
+       }
+    });
+  }, []);
+
   const canSubmit = useMemo(
-    () => Boolean(disruptionType && photo && description.trim().length >= 10 && location),
-    [description, disruptionType, location, photo]
+    () => Boolean(disruptionType && photo && description.trim().length >= 10),
+    [description, disruptionType, photo]
   );
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      setErrors((prev) => ({ ...prev, photo: 'Camera permission is required.' }));
-      return;
-    }
-
-    const locationPermission = await Location.requestForegroundPermissionsAsync();
-    if (locationPermission.status !== 'granted') {
-      setErrors((prev) => ({ ...prev, location: 'Location permission is required.' }));
-      return;
-    }
-
-    const currentLocation = await Location.getCurrentPositionAsync({});
-    setLocation(currentLocation.coords);
-
-    const capture = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-      allowsEditing: false,
-      exif: true,
-    });
-
+    if (status !== 'granted') return setErrors((p) => ({ ...p, photo: 'Camera access denied' }));
+    const capture = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
     if (!capture.canceled) {
       setPhoto(capture.assets[0]);
-      setErrors((prev) => ({ ...prev, photo: undefined, location: undefined }));
+      setErrors((prev) => ({ ...prev, photo: undefined }));
     }
   };
 
   const choosePhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      setErrors((prev) => ({ ...prev, photo: 'Photo library permission is required.' }));
-      return;
-    }
-
-    const selected = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.7,
-      allowsEditing: false,
-      exif: true,
-    });
-
+    if (status !== 'granted') return setErrors((p) => ({ ...p, photo: 'Library access denied' }));
+    const selected = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
     if (!selected.canceled) {
-      const locationPermission = await Location.requestForegroundPermissionsAsync();
-      if (locationPermission.status === 'granted') {
-        const currentLocation = await Location.getCurrentPositionAsync({});
-        setLocation(currentLocation.coords);
-      }
       setPhoto(selected.assets[0]);
       setErrors((prev) => ({ ...prev, photo: undefined }));
     }
@@ -90,215 +78,250 @@ export default function ManualClaimScreen() {
 
   const validate = (): boolean => {
     const nextErrors: FormErrors = {};
-    if (!disruptionType) nextErrors.disruptionType = 'Choose a disruption type.';
-    if (!photo) nextErrors.photo = 'Take or select a photo.';
-    if (!location) nextErrors.location = 'Location is required for verification.';
-    if (description.trim().length < 10) nextErrors.description = 'Description must be at least 10 characters.';
+    if (!disruptionType) nextErrors.disruptionType = 'Protocol required';
+    if (!photo) nextErrors.photo = 'Telemetry image missing';
+    if (description.trim().length < 10) nextErrors.description = 'Log requires more data';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const handleSubmit = async () => {
-    if (!validate() || !photo || !location) return;
-
+    if (!validate() || !photo) return;
     setSubmitting(true);
     try {
       const formData = new FormData();
-      const filename = photo.uri.split('/').pop() || 'photo.jpg';
-      const disruptionValue = disruptionType === 'other' ? 'platform_outage' : disruptionType;
-
-      formData.append('disruption_type', disruptionValue);
+      formData.append('disruption_type', disruptionType);
       formData.append('description', description.trim());
       formData.append('incident_time', new Date().toISOString());
-      formData.append('latitude', String(location.latitude));
-      formData.append('longitude', String(location.longitude));
-
-      if (Platform.OS === 'web') {
-        const webFile = (photo as ImagePicker.ImagePickerAsset & { file?: File }).file;
-        if (webFile) {
-          formData.append('photo', webFile, webFile.name || filename);
-        } else {
-          const blob = await fetch(photo.uri).then((res) => res.blob());
-          const file = new File([blob], filename, { type: photo.mimeType || blob.type || 'image/jpeg' });
-          formData.append('photo', file);
-        }
-      } else {
-        formData.append('photo', {
-          uri: photo.uri,
-          name: filename,
-          type: photo.mimeType || 'image/jpeg',
-        } as never);
+      if (location) {
+        formData.append('latitude', String(location.latitude));
+        formData.append('longitude', String(location.longitude));
       }
-
+      if (Platform.OS === 'web') {
+        const blob = await fetch(photo.uri).then((res) => res.blob());
+        formData.append('photo', blob, 'telemetry.jpg');
+      } else {
+        formData.append('photo', { uri: photo.uri, name: 'telemetry.jpg', type: photo.mimeType || 'image/jpeg' } as any);
+      }
       const response = await api.manualClaims.submit(formData);
       setResult(response);
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        description: error instanceof Error ? error.message : 'Submission failed.',
-      }));
+      setErrors((prev) => ({ ...prev, description: 'Sync failure' }));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setDisruptionType('');
-    setDescription('');
-    setPhoto(null);
-    setLocation(null);
-    setErrors({});
-    setResult(null);
-  };
-
   if (result) {
     const isRejected = result.status === 'rejected';
-
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.successCard}>
-          <Text style={styles.successEmoji}>{isRejected ? 'Rejected' : 'Submitted'}</Text>
-          <Text style={styles.successTitle}>
-            {isRejected ? 'Claim Auto-Rejected' : 'Claim Submitted Successfully'}
-          </Text>
-          <Text style={styles.successText}>Claim ID: {result.claim_id || result.manual_claim_id}</Text>
-          <Text style={styles.successText}>Status: {result.status.replace('_', ' ')}</Text>
-          <Text style={styles.successHint}>{result.message}</Text>
-          {result.rejection_reasons.length > 0 ? (
-            <View style={styles.reasonList}>
-              {result.rejection_reasons.map((reason) => (
-                <Text key={reason} style={styles.reasonText}>- {reason}</Text>
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.successHint}>Track your claim in the Claims tab.</Text>
-          )}
-          <TouchableOpacity style={styles.submitButton} onPress={resetForm}>
-            <Text style={styles.submitText}>Submit Another</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <LinearGradient colors={['#0f172a', '#020617']} style={StyleSheet.absoluteFill} />
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
+          <Animated.View entering={FadeInUp.springify()} style={styles.successCard}>
+            <Ionicons name={isRejected ? 'alert-circle' : 'checkmark-circle'} size={64} color={isRejected ? '#f43f5e' : '#10b981'} />
+            <Text style={styles.successTitle}>{isRejected ? 'Declined' : 'Synchronized'}</Text>
+            <View style={styles.badgeContainer}><Text style={styles.statusBadge}>{result.status.toUpperCase()}</Text></View>
+            <Text style={styles.successHint}>{result.message}</Text>
+            <TouchableOpacity style={styles.resetButton} onPress={() => setResult(null)}><Text style={styles.resetButtonText}>NEW REPORT</Text></TouchableOpacity>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Report Disruption</Text>
-        <Text style={styles.subtitle}>Submit a manual claim with photo evidence and live location.</Text>
+    <View style={styles.container}>
+      <LinearGradient colors={['#020617', '#0f172a', '#020617']} style={StyleSheet.absoluteFill} />
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+        {/* Main Content Scrollable Area */}
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scroll} 
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>Incident Report</Text>
+            <Text style={styles.subtitle}>Relay ground-truth telemetry for parametric verification.</Text>
+          </View>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>1. Disruption type</Text>
-          <View style={styles.chips}>
-            {DISRUPTION_TYPES.map((item) => {
-              const selected = disruptionType === item.id;
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.typeChip, selected && styles.typeChipSelected]}
-                  onPress={() => {
-                    setDisruptionType(item.id);
-                    setErrors((prev) => ({ ...prev, disruptionType: undefined }));
-                  }}
-                >
-                  <Text style={styles.typeEmoji}>{item.emoji}</Text>
-                  <View style={styles.typeCopy}>
-                    <Text style={[styles.typeTitle, selected && styles.typeTitleSelected]}>{item.label}</Text>
-                    <Text style={styles.typeDesc}>{item.desc}</Text>
+          <View style={styles.layers}>
+            {/* 01 PROTOCOL SELECTION */}
+            <View style={styles.layer}>
+              <View style={styles.layerLabelRow}>
+                <Text style={styles.layerLabel}>01 PROTOCOL SELECTION</Text>
+                {errors.disruptionType && <Text style={styles.errorLabel}>{errors.disruptionType}</Text>}
+              </View>
+              <View style={styles.disruptionList}>
+                {loadingConfig ? <ActivityIndicator color="#38bdf8" /> : (
+                  availableTypes.map((type) => (
+                    <DisruptionRow
+                      key={type.type}
+                      type={{ ...type, ...TYPE_UI_META[type.type] || TYPE_UI_META.default }}
+                      selected={disruptionType === type.type}
+                      onPress={() => setDisruptionType(type.type)}
+                    />
+                  ))
+                )}
+              </View>
+            </View>
+
+            {/* 02 VISUAL TELEMETRY */}
+            <View style={styles.layer}>
+              <View style={styles.layerLabelRow}>
+                <Text style={styles.layerLabel}>02 VISUAL TELEMETRY</Text>
+                {errors.photo && <Text style={styles.errorLabel}>{errors.photo}</Text>}
+              </View>
+              <View style={styles.photoUploadRow}>
+                {photo ? (
+                  <View style={styles.photoPreviewWrapper}>
+                    <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+                    <TouchableOpacity style={styles.photoReset} onPress={() => setPhoto(null)}>
+                      <Ionicons name="close-circle" size={32} color="#f43f5e" />
+                    </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
-              );
-            })}
+                ) : (
+                  <>
+                    <TouchableOpacity style={styles.uploadBtn} onPress={takePhoto}>
+                      <Ionicons name="camera" size={28} color="#38bdf8" />
+                      <Text style={styles.uploadBtnText}>CAMERA</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.uploadBtn, styles.uploadBtnSecondary]} onPress={choosePhoto}>
+                      <Ionicons name="images" size={28} color="#94a3b8" />
+                      <Text style={styles.uploadBtnText}>GALLERY</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* 03 INCIDENT LOG */}
+            <View style={styles.layer}>
+              <View style={styles.layerLabelRow}>
+                <Text style={styles.layerLabel}>03 INCIDENT LOG</Text>
+                {errors.description && <Text style={styles.errorLabel}>{errors.description}</Text>}
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Describe hazard in detail..."
+                placeholderTextColor="#475569"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+              />
+            </View>
+
+            {/* SPACER FOR THE STICKY BUTTON OVERLAY */}
+            <View style={{ height: 120 }} />
           </View>
-          {errors.disruptionType ? <Text style={styles.errorText}>{errors.disruptionType}</Text> : null}
-        </View>
+        </ScrollView>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>2. Photo evidence</Text>
-          {photo ? (
-            <>
-              <Image source={{ uri: photo.uri }} style={styles.preview} />
-              <Text style={styles.photoStatus}>Photo captured</Text>
-            </>
-          ) : (
-            <Text style={styles.hint}>Capture what is happening on the ground.</Text>
-          )}
-          <View style={styles.photoActions}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={takePhoto}>
-              <Text style={styles.secondaryButtonText}>{photo ? 'Retake Photo' : 'Take Photo'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={choosePhoto}>
-              <Text style={styles.secondaryButtonText}>Choose from Gallery</Text>
-            </TouchableOpacity>
-          </View>
-          {errors.photo ? <Text style={styles.errorText}>{errors.photo}</Text> : null}
-          <Text style={styles.locationText}>
-            Location:{' '}
-            {location
-              ? `${location.latitude.toFixed(4)} N, ${location.longitude.toFixed(4)} E`
-              : 'Not captured yet'}
-          </Text>
-          {errors.location ? <Text style={styles.errorText}>{errors.location}</Text> : null}
+        {/* STICKY SUBMIT BUTTON - Guaranteed to be visible above tab bar */}
+        <View style={styles.stickyActionContainer}>
+          <TouchableOpacity 
+            style={[styles.submitButton, !canSubmit && styles.submitDisabled]} 
+            onPress={handleSubmit} 
+            disabled={!canSubmit || submitting}
+            activeOpacity={0.8}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={styles.submitRow}>
+                <Text style={styles.submitText}>SUBMIT TELEMETRY REPORT</Text>
+                <Ionicons name="shield-checkmark" size={20} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+          {/* EXTRA SPACE FOR THE TAB BAR WHICH IS AT BOTTOM 20 + HEIGHT 70 */}
+          <View style={{ height: 100 }} />
         </View>
+      </SafeAreaView>
+    </View>
+  );
+}
 
-        <View style={styles.card}>
-          <Text style={styles.label}>3. Description</Text>
-          <TextInput
-            style={styles.textArea}
-            placeholder="Describe what happened..."
-            placeholderTextColor="#64748b"
-            value={description}
-            onChangeText={(value) => {
-              setDescription(value);
-              setErrors((prev) => ({ ...prev, description: undefined }));
-            }}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-          {errors.description ? <Text style={styles.errorText}>{errors.description}</Text> : null}
+function DisruptionRow({ type, selected, onPress }: any) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(scale.value) }],
+    borderColor: selected ? type.color : 'rgba(255,255,255,0.05)',
+    backgroundColor: selected ? `${type.color}15` : 'rgba(15, 23, 42, 0.4)',
+  }));
+
+  return (
+    <Animated.View style={[styles.rowCard, animatedStyle]}>
+      <Pressable onPress={onPress} style={styles.rowPressable} onPressIn={() => scale.value = 0.98} onPressOut={() => scale.value = 1}>
+        <View style={[styles.rowIconWrapper, { backgroundColor: `${type.color}20` }]}>
+          <Ionicons name={type.icon} size={28} color={type.color} />
         </View>
-
-        <TouchableOpacity style={[styles.submitButton, !canSubmit && styles.submitDisabled]} onPress={handleSubmit} disabled={!canSubmit || submitting}>
-          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Claim</Text>}
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+        <View style={styles.rowContent}>
+          <Text style={[styles.rowTitle, selected && { color: type.color }]}>{type.label}</Text>
+          <Text style={styles.rowDesc}>{type.desc}</Text>
+        </View>
+        <View style={[styles.rowStatus, { borderColor: selected ? type.color : 'rgba(71, 85, 105, 0.3)' }]}>
+          {selected ? <View style={[styles.rowStatusDot, { backgroundColor: type.color }]} /> : <Ionicons name="play-circle" size={18} color="#475569" />}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { padding: 20, gap: 14 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc' },
-  subtitle: { fontSize: 14, color: '#94a3b8' },
-  card: { backgroundColor: '#1e293b', borderRadius: 14, padding: 16, gap: 10, borderWidth: 1, borderColor: '#334155' },
-  label: { color: '#f8fafc', fontWeight: '600', fontSize: 15 },
-  hint: { color: '#64748b', fontSize: 13 },
-  chips: { gap: 10 },
-  typeChip: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' },
-  typeChipSelected: { borderColor: '#38bdf8', backgroundColor: '#11203a' },
-  typeEmoji: { width: 52, color: '#e2e8f0', fontWeight: '700' },
-  typeCopy: { flex: 1 },
-  typeTitle: { color: '#f8fafc', fontWeight: '700' },
-  typeTitleSelected: { color: '#38bdf8' },
-  typeDesc: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
-  preview: { width: '100%', height: 200, borderRadius: 12 },
-  photoStatus: { color: '#22c55e', fontWeight: '600' },
-  photoActions: { gap: 10 },
-  secondaryButton: { backgroundColor: '#334155', borderRadius: 12, padding: 14, alignItems: 'center' },
-  secondaryButtonText: { color: '#e2e8f0', fontWeight: '600' },
-  locationText: { color: '#cbd5e1', fontSize: 12 },
-  textArea: { minHeight: 120, borderRadius: 12, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155', padding: 14, color: '#f8fafc' },
-  submitButton: { backgroundColor: '#dc2626', borderRadius: 14, padding: 18, alignItems: 'center' },
-  submitDisabled: { opacity: 0.4 },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  errorText: { color: '#fca5a5', fontSize: 12 },
-  successCard: { margin: 20, marginTop: 80, backgroundColor: '#1e293b', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#334155', alignItems: 'center', gap: 10 },
-  successEmoji: { fontSize: 32, fontWeight: '700', color: '#f8fafc' },
-  successTitle: { color: '#f8fafc', fontSize: 22, fontWeight: '700' },
-  successText: { color: '#cbd5e1', fontSize: 14 },
-  successHint: { color: '#94a3b8', fontSize: 13, textAlign: 'center' },
-  reasonList: { alignSelf: 'stretch', gap: 8, marginTop: 6, padding: 14, borderRadius: 12, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' },
-  reasonText: { color: '#fca5a5', fontSize: 13, lineHeight: 18 },
+  container: { flex: 1, backgroundColor: '#020617' },
+  scroll: { padding: 24, paddingBottom: 40 },
+  header: { marginBottom: 32 },
+  title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
+  subtitle: { fontSize: 13, color: '#64748b', fontWeight: '600', marginTop: 8 },
+  layers: { gap: 32 },
+  layer: { gap: 16 },
+  layerLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  layerLabel: { fontSize: 10, fontWeight: '900', color: '#38bdf8', letterSpacing: 2 },
+  errorLabel: { fontSize: 10, color: '#f43f5e', fontWeight: '800' },
+  disruptionList: { gap: 12 },
+  rowCard: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
+  rowPressable: { padding: 18, flexDirection: 'row', alignItems: 'center', gap: 16 },
+  rowIconWrapper: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  rowContent: { flex: 1, gap: 4 },
+  rowTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9' },
+  rowDesc: { fontSize: 11, color: '#64748b', fontWeight: '500' },
+  rowStatus: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  rowStatusDot: { width: 12, height: 12, borderRadius: 6 },
+  photoUploadRow: { flexDirection: 'row', gap: 12 },
+  uploadBtn: { flex: 1, height: 100, backgroundColor: 'rgba(56, 189, 248, 0.05)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.1)', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  uploadBtnSecondary: { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)' },
+  uploadBtnText: { fontSize: 10, fontWeight: '900', color: '#f8fafc', letterSpacing: 1 },
+  photoPreviewWrapper: { flex: 1, borderRadius: 28, overflow: 'hidden', height: 220, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  photoPreview: { width: '100%', height: '100%' },
+  photoReset: { position: 'absolute', top: 12, right: 12 },
+  input: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', padding: 20, color: '#f8fafc', fontSize: 15, fontWeight: '600', minHeight: 120 },
+  stickyActionContainer: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    padding: 24, 
+    backgroundColor: 'transparent',
+    zIndex: 999 
+  },
+  submitButton: { 
+    backgroundColor: '#38bdf8', 
+    borderRadius: 28, 
+    paddingVertical: 22, 
+    alignItems: 'center', 
+    shadowColor: '#38bdf8', 
+    shadowOpacity: 0.4, 
+    shadowRadius: 25,
+    elevation: 20
+  },
+  submitRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  submitText: { color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 1.5 },
+  submitDisabled: { opacity: 0.6, backgroundColor: '#1e293b' },
+  successCard: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 40, padding: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', gap: 24 },
+  successTitle: { fontSize: 28, fontWeight: '900', color: '#f8fafc' },
+  badgeContainer: { paddingBottom: 8 },
+  statusBadge: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 14, backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', fontSize: 12, fontWeight: '900' },
+  successHint: { color: '#94a3b8', fontSize: 15, textAlign: 'center', lineHeight: 24 },
+  resetButton: { width: '100%', backgroundColor: '#f8fafc', borderRadius: 24, paddingVertical: 18, alignItems: 'center' },
+  resetButtonText: { color: '#020617', fontSize: 13, fontWeight: '900' },
 });

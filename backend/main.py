@@ -178,8 +178,11 @@ async def list_zones():
     from shared.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
+        # Deduplicate at SQL level to ensure clean UI regardless of DB state
         result = await db.execute(text(
-            "SELECT id, name, city, composite_risk_score, flood_risk_score, traffic_risk_score, store_risk_score, lat, lon FROM zones ORDER BY city, name"
+            "SELECT DISTINCT ON (lower(name), lower(city)) "
+            "id, name, city, composite_risk_score, flood_risk_score, traffic_risk_score, store_risk_score, lat, lon "
+            "FROM zones ORDER BY lower(name), lower(city), id"
         ))
         zones = [
             {

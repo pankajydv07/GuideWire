@@ -16,6 +16,7 @@ function TabBarIcon(props: {
 
 export default function TabLayout() {
   const { isAuthenticated, isReady } = useAuth();
+  const headerShown = useClientOnlyValue(false, true);
 
   if (!isReady) {
     return (
@@ -34,7 +35,7 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: Colors.dark.tint,
         tabBarInactiveTintColor: '#475569',
-        headerShown: useClientOnlyValue(false, true),
+        headerShown: headerShown,
         headerStyle: { backgroundColor: Colors.dark.background },
         headerTitleStyle: { fontWeight: '900', color: Colors.dark.text, fontSize: 24, letterSpacing: -0.5 },
         headerShadowVisible: false,
@@ -85,6 +86,22 @@ export default function TabLayout() {
           title: 'Node',
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
           headerTitle: 'Identity Node',
+        }}
+      />
+      <Tabs.Screen
+        name="manual-claim"
+        options={{
+          title: 'Report',
+          tabBarIcon: ({ color }) => <TabBarIcon name="warning" color={color} />,
+          headerTitle: 'Incident Telemetry',
+        }}
+      />
+      <Tabs.Screen
+        name="two"
+        options={{
+          title: 'Assets',
+          tabBarIcon: ({ color }) => <TabBarIcon name="cubes" color={color} />,
+          headerTitle: 'Digital Assets',
         }}
       />
     </Tabs>

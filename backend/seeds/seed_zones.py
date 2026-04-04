@@ -43,11 +43,19 @@ async def seed():
     print("🌍 Seeding zones...")
     async with AsyncSessionLocal() as session:
         for z in ZONES:
+            # Check if zone with this name already exists
+            check = await session.execute(
+                text("SELECT id FROM zones WHERE name = :name"),
+                {"name": z["name"]}
+            )
+            if check.fetchone():
+                print(f"  ⚠️  Zone '{z['name']}' already exists, skipping.")
+                continue
+
             await session.execute(
                 text("""
                     INSERT INTO zones (id, name, city, flood_risk_score, traffic_risk_score, store_risk_score, composite_risk_score, lat, lon)
                     VALUES (:id, :name, :city, :flood, :traffic, :store, :composite, :lat, :lon)
-                    ON CONFLICT DO NOTHING
                 """),
                 {
                     "id": uuid.uuid4().hex,

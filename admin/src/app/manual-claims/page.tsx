@@ -3,24 +3,38 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ClipboardList, 
+  Activity, 
+  ArrowRight, 
+  Calendar, 
   CheckCircle, 
-  XCircle, 
+  ClipboardList, 
   Clock, 
-  Eye,
-  Calendar,
-  MapPin,
-  Camera,
-  Activity,
-  ShieldAlert,
-  ArrowRight,
-  ChevronRight
+  Eye, 
+  MapPin, 
+  ShieldAlert, 
+  XCircle, 
+  Camera 
 } from "lucide-react";
 
 import { adminApi, API_BASE } from "@/lib/api";
-import { formatTriggerWithEmoji, shortId, formatApiDate } from "@/lib/format";
+import { 
+  getTriggerEmoji, 
+  formatTriggerLabel, 
+  shortId, 
+  formatApiDate 
+} from "@/lib/format";
 import type { ManualClaimReview } from "@/lib/types";
 import { STATUS_STYLES } from "@/lib/types";
+
+const PROTOCOL_THEME: Record<string, { color: string, bg: string, ring: string, text: string }> = {
+  heavy_rain: { color: "blue", bg: "bg-blue-500/10", ring: "ring-blue-500/20", text: "text-blue-400" },
+  traffic_congestion: { color: "amber", bg: "bg-amber-500/10", ring: "ring-amber-500/20", text: "text-amber-400" },
+  store_closure: { color: "rose", bg: "bg-rose-500/10", ring: "ring-rose-500/20", text: "text-rose-400" },
+  platform_outage: { color: "purple", bg: "bg-purple-500/10", ring: "ring-purple-500/20", text: "text-purple-400" },
+  regulatory_curfew: { color: "red", bg: "bg-red-500/10", ring: "ring-red-500/20", text: "text-red-400" },
+  community_signal: { color: "indigo", bg: "bg-indigo-500/10", ring: "ring-indigo-500/20", text: "text-indigo-400" },
+  default: { color: "slate", bg: "bg-slate-500/10", ring: "ring-slate-500/20", text: "text-slate-400" },
+};
 
 export default function ManualClaimsPage() {
   const [claims, setClaims] = useState<ManualClaimReview[]>([]);
@@ -30,6 +44,8 @@ export default function ManualClaimsPage() {
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
+
+  const getTheme = (type: string) => PROTOCOL_THEME[type] || PROTOCOL_THEME.default;
 
   const loadClaims = async () => {
     try {
@@ -126,36 +142,45 @@ export default function ManualClaimsPage() {
                    <div className="text-slate-600 font-bold uppercase tracking-[0.2em] text-xs">Surveillance Clear</div>
                 </motion.div>
               ) : (
-                pendingClaims.map((claim, idx) => (
-                  <motion.div
-                    key={claim.id}
-                    layout
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className={`glass-card rounded-[2rem] p-6 group cursor-pointer transition-all duration-300 ${selectedClaim?.id === claim.id ? "ring-2 ring-indigo-500/50 bg-indigo-500/[0.05]" : "hover:bg-white/[0.02]"}`}
-                    onClick={() => { setSelectedClaim(claim); setShowRejectInput(false); }}
-                  >
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-5">
-                          <div className="h-14 w-14 rounded-2xl bg-white/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform duration-500 shadow-xl ring-1 ring-white/10">
-                             {formatTriggerWithEmoji(claim.disruption_type)}
-                          </div>
-                          <div>
-                             <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">Rider Node {shortId(claim.rider_id).toUpperCase()}</div>
-                             <div className="text-base font-bold text-slate-100">{claim.rider_name || "Anonymous Sector"}</div>
-                             <div className="text-xs text-indigo-400/60 font-medium mt-1 uppercase tracking-widest">{claim.disruption_type.replace(/_/g, " ")}</div>
-                          </div>
-                       </div>
-                       <div className="text-right">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">{formatApiDate(claim.created_at)}</div>
-                          <div className="mt-3 flex items-center justify-end gap-2 text-[10px] font-bold text-indigo-400 group-hover:translate-x-1 transition-transform">
-                             ANALYZE <ArrowRight className="w-3 h-3" />
-                          </div>
-                       </div>
-                    </div>
-                  </motion.div>
-                ))
+                pendingClaims.map((claim, idx) => {
+                  const theme = getTheme(claim.disruption_type);
+                  return (
+                    <motion.div
+                      key={claim.id}
+                      layout
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`glass-card rounded-[2rem] p-6 group cursor-pointer transition-all duration-300 ${selectedClaim?.id === claim.id ? "ring-2 ring-indigo-500/50 bg-indigo-500/[0.05]" : "hover:bg-white/[0.02]"}`}
+                      onClick={() => { setSelectedClaim(claim); setShowRejectInput(false); }}
+                    >
+                      <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-6">
+                            <div className={`h-16 w-16 rounded-[1.5rem] ${theme.bg} flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500 shadow-2xl ${theme.ring} ring-1 backdrop-blur-md`}>
+                               {getTriggerEmoji(claim.disruption_type)}
+                            </div>
+                            <div>
+                               <div className="flex items-center gap-2 mb-1.5 font-mono">
+                                  <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">Node {shortId(claim.rider_id).toUpperCase()}</div>
+                                  <div className={`h-1 w-1 rounded-full ${theme.bg.replace("bg-", "bg-opacity-100 bg-")}`} />
+                                  <div className={`text-[9px] font-black uppercase tracking-[0.2em] ${theme.text} italic`}>Telemetry Sync</div>
+                               </div>
+                               <div className="text-lg font-bold text-slate-100 group-hover:text-white transition-colors">{claim.rider_name || "Anonymous Sector"}</div>
+                               <div className={`text-[10px] ${theme.text} font-black mt-1 uppercase tracking-[0.3em] opacity-80 group-hover:opacity-100 transition-opacity`}>
+                                  {formatTriggerLabel(claim.disruption_type)}
+                               </div>
+                            </div>
+                         </div>
+                         <div className="text-right">
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">{formatApiDate(claim.created_at)}</div>
+                            <div className="mt-3 flex items-center justify-end gap-2 text-[10px] font-black text-indigo-400 group-hover:translate-x-1 transition-transform tracking-widest">
+                               ANALYZE <ArrowRight className="w-3 h-3" />
+                            </div>
+                         </div>
+                      </div>
+                    </motion.div>
+                  );
+                })
               )}
             </AnimatePresence>
           </div>
@@ -166,20 +191,23 @@ export default function ManualClaimsPage() {
                 <h2 className="text-xl font-bold text-white tracking-tight italic">Processed Protocol</h2>
              </div>
              <div className="space-y-3">
-                {processedClaims.slice(0, 10).map((claim) => (
-                  <div key={claim.id} className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/10 group hover:bg-slate-900/20 transition-colors">
-                     <div className="flex items-center gap-4">
-                        <span className="text-xl opacity-40 group-hover:opacity-100 transition-opacity">{formatTriggerWithEmoji(claim.disruption_type)}</span>
-                        <div>
-                           <div className="text-sm font-bold text-slate-400 group-hover:text-slate-200 transition-colors">{claim.rider_name || shortId(claim.rider_id)}</div>
-                           {claim.reviewer_notes ? <div className="text-[10px] text-slate-600 font-medium mt-0.5">{claim.reviewer_notes}</div> : null}
-                        </div>
-                     </div>
-                     <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] ${STATUS_STYLES[claim.review_status] || (claim.spam_score >= 70 ? "bg-rose-500/10 text-rose-500 ring-rose-500/20" : STATUS_STYLES.pending)}`}>
-                        {claim.spam_score >= 70 ? "Spam Rejected" : claim.review_status}
-                     </span>
-                  </div>
-                ))}
+                {processedClaims.slice(0, 10).map((claim) => {
+                  const theme = getTheme(claim.disruption_type);
+                  return (
+                    <div key={claim.id} className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/10 group hover:bg-slate-900/20 transition-colors">
+                       <div className="flex items-center gap-4">
+                          <span className="text-2xl opacity-40 group-hover:opacity-100 transition-opacity">{getTriggerEmoji(claim.disruption_type)}</span>
+                          <div>
+                             <div className="text-sm font-bold text-slate-400 group-hover:text-slate-200 transition-colors">{claim.rider_name || shortId(claim.rider_id)}</div>
+                             <div className="text-[9px] text-slate-600 font-black uppercase tracking-widest mt-0.5">{formatTriggerLabel(claim.disruption_type)}</div>
+                          </div>
+                       </div>
+                       <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] ${STATUS_STYLES[claim.review_status] || (claim.spam_score >= 70 ? "bg-rose-500/10 text-rose-500 ring-rose-500/20" : STATUS_STYLES.pending)}`}>
+                          {claim.spam_score >= 70 ? "Spam Rejected" : claim.review_status}
+                       </span>
+                    </div>
+                  );
+                })}
              </div>
           </div>
         </section>
@@ -216,11 +244,11 @@ export default function ManualClaimsPage() {
                 </div>
 
                 <div className="mb-10 mt-4">
-                   <div className="h-24 w-24 rounded-[2.5rem] bg-gradient-to-br from-indigo-500/10 to-purple-500/10 mx-auto flex items-center justify-center text-5xl mb-8 ring-1 ring-white/10 shadow-2xl">
-                      {formatTriggerWithEmoji(selectedClaim.disruption_type)}
+                   <div className={`h-24 w-24 rounded-[2.5rem] ${getTheme(selectedClaim.disruption_type).bg} mx-auto flex items-center justify-center text-5xl mb-8 ${getTheme(selectedClaim.disruption_type).ring} ring-1 shadow-2xl backdrop-blur-xl`}>
+                      {getTriggerEmoji(selectedClaim.disruption_type)}
                    </div>
                    <div className="text-center">
-                      <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.3em] mb-2">Subject Identity</div>
+                      <div className={`text-[10px] font-black ${getTheme(selectedClaim.disruption_type).text} uppercase tracking-[0.3em] mb-2`}>Subject Identity</div>
                       <h3 className="text-2xl font-bold text-white tracking-tight">{selectedClaim.rider_name || "Unknown Agent"}</h3>
                       <p className="text-[11px] text-slate-500 font-mono mt-2 tracking-wider">{selectedClaim.rider_id}</p>
                    </div>
