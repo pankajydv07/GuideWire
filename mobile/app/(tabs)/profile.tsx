@@ -1,22 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from 'react';
+import { StyleSheet, TouchableOpacity, ScrollView, View, Text, Image, ActivityIndicator } from 'react-native';
+import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type RiskProfile } from '../../services/api';
-
-const platformLabel = (platform?: string) => {
-  switch (platform) {
-    case 'zepto':
-      return '🟢 Zepto';
-    case 'blinkit':
-      return '🟡 Blinkit';
-    case 'swiggy':
-      return '🟠 Swiggy';
-    default:
-      return platform || 'Platform';
-  }
-};
+import Colors from '../../constants/Colors';
 
 export default function ProfileScreen() {
   const { rider, logout } = useAuth();
@@ -24,116 +12,131 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.riders.getRiskProfile()
+    api.riders
+      .getRiskProfile()
       .then(setRiskProfile)
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  const earningsRows = useMemo(() => {
-    const source = riskProfile?.four_week_earnings || {};
-    return Object.entries(source)
-      .map(([week, amount]) => ({ week: week.replace('_', ' ').toUpperCase(), amount }))
-      .sort((a, b) => b.week.localeCompare(a.week));
-  }, [riskProfile?.four_week_earnings]);
+  const menuItems = [
+    { icon: 'shield-account', label: 'Security Protocol', sub: 'Biometric and encrypted keys' },
+    { icon: 'map-marker-radius', label: 'Active Zones', sub: `${rider?.zone || 'Primary'} perimeter` },
+    { icon: 'bank-transfer', label: 'Payout Nodes', sub: `UPI: ${rider?.upi_id || 'Not linked'}` },
+    { icon: 'bell-ring', label: 'Signal Alerts', sub: 'Parametric push enabled' },
+  ];
 
-  const maxEarnings = Math.max(...earningsRows.map((row) => row.amount), 1);
+  const avgYield = riskProfile?.four_week_earnings
+    ? Object.values(riskProfile.four_week_earnings).reduce((a, b) => a + b, 0)
+    : 0;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Profile</Text>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInUp.delay(200).springify()} style={styles.profileHeader}>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: `https://api.dicebear.com/7.x/avataaars/svg?seed=${rider?.phone || 'default'}` }}
+              style={styles.avatar}
+            />
+            <View style={styles.statusDot} />
+          </View>
+          <Text style={styles.name}>{rider?.name || 'Rider Node'}</Text>
+          <Text style={styles.phone}>{rider?.phone || '+91 91234 56789'}</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.name}>{rider?.name || 'Rider'}</Text>
-          <Text style={styles.platform}>{platformLabel(rider?.platform)}</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Phone</Text>
-            <Text style={styles.detailValue}>{rider?.phone || '-'}</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statVal}>{rider?.trust_score ?? 100}</Text>
+              <Text style={styles.statLabel}>TRUST</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Text style={styles.statVal}>{riskProfile?.composite_risk_score ?? '--'}</Text>
+              <Text style={styles.statLabel}>RISK INDEX</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Text style={styles.statVal}>Rs {avgYield}</Text>
+              <Text style={styles.statLabel}>AVG YIELD</Text>
+            </View>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Zone</Text>
-            <Text style={styles.detailValue}>{rider?.zone || rider?.city || '-'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>UPI</Text>
-            <Text style={styles.detailValue}>{rider?.upi_id || 'Not added'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Trust Score</Text>
-            <Text style={styles.detailValue}>{rider?.trust_score ?? 0}/100</Text>
-          </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Risk Profile</Text>
+        <View style={styles.riskGrid}>
+          <Text style={styles.gridTitle}>ENVIRONMENTAL TELEMETRY</Text>
           {loading ? (
-            <ActivityIndicator color="#38bdf8" />
-          ) : riskProfile ? (
-            <>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Flood Risk</Text>
-                <Text style={styles.detailValue}>{riskProfile.zone_flood_risk}/100</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Traffic Risk</Text>
-                <Text style={styles.detailValue}>{riskProfile.zone_traffic_risk}/100</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Composite Risk</Text>
-                <Text style={styles.detailValue}>{riskProfile.composite_risk_score}/100</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Income Volatility</Text>
-                <Text style={styles.detailValue}>{riskProfile.income_volatility}</Text>
-              </View>
-
-              <Text style={styles.chartTitle}>4-week earnings</Text>
-              {earningsRows.length > 0 ? (
-                earningsRows.map((row) => (
-                  <View key={row.week} style={styles.chartRow}>
-                    <Text style={styles.chartLabel}>{row.week}</Text>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${(row.amount / maxEarnings) * 100}%` }]} />
-                    </View>
-                    <Text style={styles.chartValue}>₹{row.amount}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.mutedText}>No earnings history available yet.</Text>
-              )}
-            </>
+            <ActivityIndicator color={Colors.dark.tint} />
           ) : (
-            <Text style={styles.mutedText}>Risk profile unavailable right now.</Text>
+            <View style={styles.gridRow}>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridVal}>{riskProfile?.zone_flood_risk ?? '--'}%</Text>
+                <Text style={styles.gridLabel}>FLOOD RISK</Text>
+              </View>
+              <View style={styles.gridItem}>
+                <Text style={styles.gridVal}>{riskProfile?.zone_traffic_risk ?? '--'}%</Text>
+                <Text style={styles.gridLabel}>TRAFFIC INTENSITY</Text>
+              </View>
+            </View>
           )}
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={() => void logout()}>
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
+        <View style={styles.menuContainer}>
+          {menuItems.map((item, index) => (
+            <Animated.View key={item.label} entering={FadeInDown.delay(400 + index * 100).springify()}>
+              <TouchableOpacity style={styles.menuItem}>
+                <View style={styles.menuIconContainer}>
+                  <Text style={styles.menuIcon}>{item.icon}</Text>
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <Text style={styles.menuLabel}>{item.label}</Text>
+                  <Text style={styles.menuSub}>{item.sub}</Text>
+                </View>
+                <Text style={styles.chevron}>{'>'}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
+        </View>
+
+        <Animated.View entering={FadeInDown.delay(900).springify()}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => void logout()}>
+            <Text style={styles.logoutText}>Terminate Session</Text>
+          </TouchableOpacity>
+          <Text style={styles.versionText}>System OS v2.4.0-STITCH</Text>
+        </Animated.View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { padding: 20, gap: 16 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc' },
-  card: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#334155', gap: 12 },
-  name: { fontSize: 24, fontWeight: 'bold', color: '#f8fafc' },
-  platform: { fontSize: 14, color: '#38bdf8', fontWeight: '600' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#f8fafc' },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  detailLabel: { color: '#94a3b8', fontSize: 14 },
-  detailValue: { color: '#f8fafc', fontSize: 14, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
-  chartTitle: { color: '#e2e8f0', fontSize: 14, fontWeight: '600', marginTop: 8 },
-  chartRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  chartLabel: { width: 60, color: '#94a3b8', fontSize: 12 },
-  barTrack: { flex: 1, height: 8, backgroundColor: '#334155', borderRadius: 4 },
-  barFill: { height: '100%', backgroundColor: '#38bdf8', borderRadius: 4 },
-  chartValue: { width: 64, color: '#cbd5e1', fontSize: 12, textAlign: 'right', fontWeight: '700' },
-  mutedText: { color: '#64748b', fontSize: 13 },
-  logoutButton: { borderWidth: 1, borderColor: '#ef4444', borderRadius: 14, padding: 16, alignItems: 'center' },
-  logoutText: { color: '#ef4444', fontSize: 16, fontWeight: '700' },
+  container: { flex: 1, backgroundColor: '#020617' },
+  scroll: { padding: 24, paddingBottom: 120 },
+  profileHeader: { alignItems: 'center', marginBottom: 32, marginTop: 20 },
+  avatarContainer: { width: 100, height: 100, borderRadius: 36, backgroundColor: 'rgba(56, 189, 248, 0.1)', padding: 4, position: 'relative', marginBottom: 20 },
+  avatar: { width: '100%', height: '100%', borderRadius: 32 },
+  statusDot: { position: 'absolute', bottom: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#10b981', borderWidth: 4, borderColor: '#020617' },
+  name: { fontSize: 24, fontWeight: '900', color: '#f8fafc', marginBottom: 4, letterSpacing: -0.5 },
+  phone: { fontSize: 13, color: '#475569', fontWeight: '700', letterSpacing: 1 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, paddingVertical: 20, paddingHorizontal: 10, marginTop: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  statBox: { flex: 1, alignItems: 'center' },
+  statVal: { color: '#f8fafc', fontSize: 18, fontWeight: '900' },
+  statLabel: { color: '#475569', fontSize: 9, fontWeight: '800', marginTop: 4, letterSpacing: 1 },
+  statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.05)' },
+  riskGrid: { backgroundColor: 'rgba(56, 189, 248, 0.02)', borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.05)' },
+  gridTitle: { color: '#334155', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16 },
+  gridRow: { flexDirection: 'row', gap: 12 },
+  gridItem: { flex: 1, backgroundColor: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  gridVal: { color: '#38bdf8', fontSize: 20, fontWeight: '900' },
+  gridLabel: { color: '#475569', fontSize: 8, fontWeight: '800', marginTop: 4, letterSpacing: 0.5 },
+  menuContainer: { gap: 12, marginBottom: 40 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  menuIconContainer: { width: 44, height: 44, borderRadius: 16, backgroundColor: 'rgba(56, 189, 248, 0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  menuIcon: { color: Colors.dark.tint, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  menuTextContainer: { flex: 1 },
+  menuLabel: { color: '#f8fafc', fontSize: 15, fontWeight: '800' },
+  menuSub: { color: '#475569', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  chevron: { color: '#334155', fontSize: 20, fontWeight: '700' },
+  logoutBtn: { backgroundColor: 'rgba(244, 63, 94, 0.05)', paddingVertical: 20, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(244, 63, 94, 0.1)' },
+  logoutText: { color: '#f43f5e', fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  versionText: { textAlign: 'center', color: '#1e293b', fontSize: 10, fontWeight: '800', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' },
 });

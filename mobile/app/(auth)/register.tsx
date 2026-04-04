@@ -1,20 +1,41 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboard } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboard, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 
-const PLATFORMS = [
-  { id: 'zepto', name: 'Zepto', emoji: '🟢' },
-  { id: 'blinkit', name: 'Blinkit', emoji: '🟡' },
-  { id: 'swiggy', name: 'Swiggy', emoji: '🟠' }
-];
+import { api } from '../../services/api';
+import Colors from '../../constants/Colors';
+
+interface Platform {
+  id: string;
+  name: string;
+  icon: string;
+}
 
 export default function RegisterScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('');
   const [upiId, setUpiId] = useState('');
-  
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
+  // Fetch platforms from backend — single source of truth
+  useEffect(() => {
+    api.config.get()
+      .then(cfg => setPlatforms(cfg.platforms))
+      .catch(() => {
+        // Falling back to hardcoded only if backend is unreachable
+        setPlatforms([
+          { id: 'zepto', name: 'Zepto', icon: '⚡' },
+          { id: 'blinkit', name: 'Blinkit', icon: '📦' },
+          { id: 'swiggy', name: 'Swiggy', icon: '🛵' },
+        ]);
+      })
+      .finally(() => setLoadingConfig(false));
+  }, []);
+
   const isUpiValid = upiId.length > 3 && /^[\w.-]+@[\w.-]+$/.test(upiId);
   const isValid = name.trim().length > 0 && platform !== '' && isUpiValid;
 
@@ -26,76 +47,99 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={Keyboard.dismiss}
-      >
-        <Text style={styles.title}>Create Account</Text>
-
-        <Text style={styles.label}>Your Name</Text>
-        <TextInput 
-          style={styles.input} 
-          value={name} 
-          onChangeText={setName} 
-          placeholder="Enter your name" 
-          placeholderTextColor="#64748b" 
-        />
-
-        <Text style={styles.label}>Platform</Text>
-        <View style={styles.chips}>
-          {PLATFORMS.map((p) => (
-            <TouchableOpacity 
-              key={p.id} 
-              style={[styles.chip, platform === p.id && styles.chipActive]} 
-              onPress={() => setPlatform(p.id)}
-            >
-              <Text style={styles.chipEmoji}>{p.emoji}</Text>
-              <Text style={[styles.chipText, platform === p.id && styles.chipTextActive]}>{p.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>UPI ID</Text>
-        <TextInput 
-          style={styles.input} 
-          value={upiId} 
-          onChangeText={setUpiId} 
-          placeholder="name@oksbi" 
-          placeholderTextColor="#64748b" 
-          autoCapitalize="none"
-        />
-        {upiId.length > 0 && !isUpiValid && (
-           <Text style={styles.errorHint}>Please enter a valid UPI ID (e.g., name@bank)</Text>
-        )}
-
-        <TouchableOpacity 
-          style={[styles.button, !isValid && styles.buttonDisabled]} 
-          onPress={handleNext} 
-          disabled={!isValid}
+    <View style={styles.container}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView 
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.buttonText}>Select Zone →</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          <Animated.View entering={FadeInUp.delay(200).springify()}>
+            <Text style={styles.title}>Identity Setup</Text>
+            <Text style={styles.subtitle}>Initialize your rider profile to enable parametric security.</Text>
+          </Animated.View>
+
+          <View style={styles.form}>
+            <Animated.View entering={FadeInDown.delay(400).springify()}>
+              <Text style={styles.label}>OPERATOR NAME</Text>
+              <TextInput 
+                style={styles.input} 
+                value={name} 
+                onChangeText={setName} 
+                placeholder="Enter full name" 
+                placeholderTextColor="#334155" 
+              />
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.delay(600).springify()}>
+              <Text style={styles.label}>FLEET PLATFORM</Text>
+              {loadingConfig ? (
+                <ActivityIndicator color={Colors.dark.tint} style={{ marginTop: 12 }} />
+              ) : (
+                <View style={styles.chips}>
+                  {platforms.map((p) => (
+                    <TouchableOpacity 
+                      key={p.id} 
+                      style={[styles.chip, platform === p.id && styles.chipActive]} 
+                      onPress={() => setPlatform(p.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.chipIcon}>{p.icon}</Text>
+                      <Text style={[styles.chipText, platform === p.id && styles.chipTextActive]}>{p.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.delay(800).springify()}>
+              <Text style={styles.label}>REDISTRIBUTION UPI ID</Text>
+              <TextInput 
+                style={styles.input} 
+                value={upiId} 
+                onChangeText={setUpiId} 
+                placeholder="rider@okaxis" 
+                placeholderTextColor="#334155" 
+                autoCapitalize="none"
+              />
+              {upiId.length > 0 && !isUpiValid && (
+                 <Text style={styles.errorHint}>Invalid UPI format (e.g. name@bank)</Text>
+              )}
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.delay(1000).springify()} style={{ marginTop: 24 }}>
+              <TouchableOpacity 
+                style={[styles.button, !isValid && styles.buttonDisabled]} 
+                onPress={handleNext} 
+                disabled={!isValid}
+              >
+                <Text style={styles.buttonText}>ESTABLISH PERIMETERS →</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { padding: 24, gap: 12 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#f8fafc', marginBottom: 12 },
-  label: { color: '#e2e8f0', fontSize: 14, fontWeight: '600', marginTop: 8 },
-  input: { backgroundColor: '#1e293b', color: '#f8fafc', borderRadius: 12, padding: 16, fontSize: 16, borderWidth: 1, borderColor: '#334155' },
-  errorHint: { color: '#fbbf24', fontSize: 12, marginTop: -8 },
-  chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  chip: { flexDirection: 'row', backgroundColor: '#1e293b', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: '#334155', alignItems: 'center', gap: 6 },
-  chipActive: { backgroundColor: '#1e3a8a', borderColor: '#3b82f6' },
-  chipEmoji: { fontSize: 16 },
-  chipText: { color: '#94a3b8', fontWeight: '600' },
-  chipTextActive: { color: '#fff' },
-  button: { backgroundColor: '#2563eb', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 20 },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  container: { flex: 1, backgroundColor: '#020617' },
+  scroll: { padding: 32, paddingBottom: 60 },
+  title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
+  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600', marginTop: 8 },
+  form: { marginTop: 40, gap: 24 },
+  label: { color: Colors.dark.tint, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
+  input: { backgroundColor: 'rgba(255,255,255,0.02)', color: '#f8fafc', borderRadius: 20, padding: 18, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', fontWeight: '700' },
+  errorHint: { color: '#f43f5e', fontSize: 10, fontWeight: '800', marginTop: 8, letterSpacing: 0.5 },
+  chips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  chip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center', gap: 8 },
+  chipActive: { backgroundColor: 'rgba(56, 189, 248, 0.1)', borderColor: 'rgba(56, 189, 248, 0.3)' },
+  chipIcon: { fontSize: 16 },
+  chipText: { color: '#475569', fontWeight: '800', fontSize: 13 },
+  chipTextActive: { color: '#f8fafc' },
+  button: { backgroundColor: Colors.dark.tint, borderRadius: 24, paddingVertical: 22, alignItems: 'center', shadowColor: Colors.dark.tint, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  buttonDisabled: { opacity: 0.2, shadowOpacity: 0 },
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
 });

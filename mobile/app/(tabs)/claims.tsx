@@ -1,36 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { api, type ClaimListItem, type PayoutListItem } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatApiDateTime, parseApiDate } from '../../utils/datetime';
+import Colors from '../../constants/Colors';
+
+const { width } = Dimensions.get('window');
 
 const disruptionEmoji = (type: string) => {
   switch (type) {
-    case 'heavy_rain':
-      return '🌧️';
-    case 'traffic':
-    case 'traffic_congestion':
-      return '🚗';
-    case 'store_closure':
-      return '🏪';
-    case 'platform_outage':
-      return '📱';
-    default:
-      return '⚠️';
+    case 'heavy_rain': return '🌧️';
+    case 'traffic_congestion': return '🚗';
+    case 'store_closure': return '🏪';
+    case 'platform_outage': return '📱';
+    case 'community_signal': return '📣';
+    default: return '⚡';
   }
 };
 
-const statusStyle = (status: string) => {
+const statusConfig = (status: string) => {
   const value = status.toLowerCase();
   if (value === 'paid' || value === 'approved' || value === 'completed') {
-    return { backgroundColor: '#166534', color: '#dcfce7', label: value.toUpperCase() };
+    return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.2)' };
   }
   if (value === 'pending' || value === 'under_review') {
-    return { backgroundColor: '#92400e', color: '#fef3c7', label: value.replace('_', ' ').toUpperCase() };
+    return { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.2)' };
   }
-  return { backgroundColor: '#991b1b', color: '#fee2e2', label: value.toUpperCase() };
+  return { color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)', border: 'rgba(244, 63, 94, 0.2)' };
 };
 
 export default function ClaimsScreen() {
@@ -44,7 +44,6 @@ export default function ClaimsScreen() {
 
   const loadData = async () => {
     if (!token) return;
-
     setError(null);
     const [claimData, payoutData] = await Promise.all([
       api.claims.list(),
@@ -59,25 +58,22 @@ export default function ClaimsScreen() {
       setLoading(false);
       return;
     }
-
     setLoading(true);
     loadData()
       .catch((err) => {
         console.error(err);
-        setError(err instanceof Error ? err.message : 'Failed to load claims.');
+        setError(err instanceof Error ? err.message : 'Telemetry sync failed.');
       })
       .finally(() => setLoading(false));
   }, [token]);
 
   const onRefresh = useCallback(async () => {
     if (!token) return;
-
     setRefreshing(true);
     try {
       await loadData();
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'Failed to refresh claims.');
+      setError('Telemetry sync failed.');
     } finally {
       setRefreshing(false);
     }
@@ -93,105 +89,139 @@ export default function ClaimsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#38bdf8" />
-      </SafeAreaView>
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.dark.tint} />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#38bdf8" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.dark.tint} />}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Claims & Payouts</Text>
-
-        <View style={styles.toggleRow}>
-          <TouchableOpacity style={[styles.toggleButton, activeTab === 'claims' && styles.toggleButtonActive]} onPress={() => setActiveTab('claims')}>
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity 
+            style={[styles.toggleBtn, activeTab === 'claims' && styles.toggleBtnActive]} 
+            onPress={() => setActiveTab('claims')}
+          >
             <Text style={[styles.toggleText, activeTab === 'claims' && styles.toggleTextActive]}>Claims</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.toggleButton, activeTab === 'payouts' && styles.toggleButtonActive]} onPress={() => setActiveTab('payouts')}>
+          <TouchableOpacity 
+            style={[styles.toggleBtn, activeTab === 'payouts' && styles.toggleBtnActive]} 
+            onPress={() => setActiveTab('payouts')}
+          >
             <Text style={[styles.toggleText, activeTab === 'payouts' && styles.toggleTextActive]}>Payouts</Text>
           </TouchableOpacity>
         </View>
 
         {activeTab === 'claims' ? (
-          error ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : sortedClaims.length > 0 ? (
-            sortedClaims.map((claim) => {
-              const badge = statusStyle(claim.status);
+          sortedClaims.length > 0 ? (
+            sortedClaims.map((claim, index) => {
+              const cfg = statusConfig(claim.status);
               return (
-                <View key={claim.claim_id} style={styles.card}>
-                  <View style={styles.cardRow}>
-                    <View style={[styles.typeBadge, { backgroundColor: claim.type === 'manual' ? '#92400e' : '#1d4ed8' }]}>
-                      <Text style={styles.typeBadgeText}>{claim.type === 'manual' ? '📝 Manual' : '🤖 Auto'}</Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: badge.backgroundColor }]}>
-                      <Text style={[styles.statusText, { color: badge.color }]}>{badge.label}</Text>
+                <Animated.View 
+                  key={claim.claim_id} 
+                  entering={FadeInDown.delay(index * 100).springify()}
+                  layout={Layout.springify()}
+                  style={styles.card}
+                >
+                  <View style={styles.cardHeader}>
+                     <View style={[styles.typeBadge, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                        <Text style={styles.typeBadgeText}>{claim.type === 'manual' ? '📝 MANUAL' : '🤖 AUTO'}</Text>
+                     </View>
+                     <View style={[styles.statusBadge, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+                        <Text style={[styles.statusText, { color: cfg.color }]}>{claim.status.toUpperCase()}</Text>
+                     </View>
+                  </View>
+
+                  <View style={styles.cardBody}>
+                    <Text style={styles.claimTrigger}>
+                       {disruptionEmoji(claim.disruption_type)} {claim.disruption_type.replace(/_/g, ' ').toUpperCase()}
+                    </Text>
+                    <View style={styles.amountContainer}>
+                       <Text style={styles.currencySymbol}>₹</Text>
+                       <Text style={styles.claimAmount}>{claim.payout_amount}</Text>
                     </View>
                   </View>
-                  <Text style={styles.claimTrigger}>
-                    {disruptionEmoji(claim.disruption_type)} {claim.disruption_type.replace(/_/g, ' ')}
-                  </Text>
-                  <Text style={styles.claimAmount}>₹{claim.payout_amount}</Text>
-                  <Text style={styles.claimMeta}>Income loss ₹{claim.income_loss}</Text>
-                  <Text style={styles.claimMeta}>{formatApiDateTime(claim.created_at)}</Text>
-                </View>
+
+                  <View style={styles.cardFooter}>
+                     <Text style={styles.footerLabel}>DATE: {formatApiDateTime(claim.created_at)}</Text>
+                     <Text style={styles.footerLabel}>LOSS: ₹{claim.income_loss}</Text>
+                  </View>
+                </Animated.View>
               );
             })
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No claims yet. You’re covered — if a disruption happens, it’ll appear here.</Text>
+            <View style={styles.emptyContainer}>
+               <Text style={styles.emptyEmoji}>🛡️</Text>
+               <Text style={styles.emptyTitle}>Secure Perimeters</Text>
+               <Text style={styles.emptySubtitle}>No active disruptions detected. You're fully protected across all zones.</Text>
             </View>
           )
         ) : payouts.length > 0 ? (
-          payouts.map((payout) => (
-            <View key={payout.payout_id} style={styles.card}>
-              <View style={styles.cardRow}>
-                <Text style={styles.payoutAmount}>₹{payout.amount}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: '#166534' }]}>
-                  <Text style={[styles.statusText, { color: '#dcfce7' }]}>{payout.status === 'completed' ? 'CREDITED' : payout.status.toUpperCase()}</Text>
-                </View>
+          payouts.map((payout, index) => (
+            <Animated.View 
+              key={payout.payout_id} 
+              entering={FadeInDown.delay(index * 100).springify()}
+              style={styles.payoutCard}
+            >
+              <View style={styles.payoutHeader}>
+                 <Text style={styles.payoutRef}>UPI/{payout.reference_id.slice(-8).toUpperCase()}</Text>
+                 <Text style={styles.payoutStatus}>CREDITED</Text>
               </View>
-              <Text style={styles.claimMeta}>UPI Ref: {payout.reference_id}</Text>
-              <Text style={styles.claimMeta}>{formatApiDateTime(payout.created_at)}</Text>
-            </View>
+              <View style={styles.payoutBody}>
+                 <Text style={styles.payoutAmountText}>+₹{payout.amount}</Text>
+                 <Text style={styles.payoutDate}>{formatApiDateTime(payout.created_at)}</Text>
+              </View>
+            </Animated.View>
           ))
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No payouts yet this week.</Text>
+          <View style={styles.emptyContainer}>
+             <Text style={styles.emptyEmoji}>🏦</Text>
+             <Text style={styles.emptyTitle}>Vault Empty</Text>
+             <Text style={styles.emptySubtitle}>No payout distributions recorded in this cycle.</Text>
           </View>
         )}
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#020617' },
   center: { justifyContent: 'center', alignItems: 'center' },
-  scroll: { padding: 20, gap: 14 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc' },
-  toggleRow: { flexDirection: 'row', backgroundColor: '#1e293b', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: '#334155' },
-  toggleButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  toggleButtonActive: { backgroundColor: '#2563eb' },
-  toggleText: { color: '#94a3b8', fontWeight: '600' },
+  scroll: { padding: 20 },
+  toggleContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 20, padding: 6, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  toggleBtn: { flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
+  toggleBtnActive: { backgroundColor: Colors.dark.tint },
+  toggleText: { color: '#475569', fontWeight: '800', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
   toggleTextActive: { color: '#fff' },
-  card: { backgroundColor: '#1e293b', borderRadius: 14, padding: 16, gap: 6, borderWidth: 1, borderColor: '#334155' },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  typeBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  typeBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  statusText: { fontSize: 10, fontWeight: '700' },
-  claimTrigger: { color: '#f8fafc', fontWeight: '700', fontSize: 15, marginTop: 2 },
-  claimAmount: { color: '#38bdf8', fontSize: 24, fontWeight: 'bold' },
-  payoutAmount: { color: '#22c55e', fontSize: 24, fontWeight: 'bold' },
-  claimMeta: { color: '#94a3b8', fontSize: 12 },
-  emptyCard: { backgroundColor: '#1e293b', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#334155' },
-  emptyText: { color: '#94a3b8', fontSize: 14, lineHeight: 20 },
-  errorText: { color: '#fca5a5', fontSize: 14, lineHeight: 20 },
+  card: { backgroundColor: 'rgba(30, 41, 59, 0.4)', borderRadius: 28, padding: 24, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  typeBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  typeBadgeText: { color: '#94a3b8', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+  cardBody: { marginBottom: 20 },
+  claimTrigger: { color: '#f8fafc', fontWeight: '900', fontSize: 18, marginBottom: 4, letterSpacing: -0.5 },
+  amountContainer: { flexDirection: 'row', alignItems: 'baseline' },
+  currencySymbol: { color: Colors.dark.tint, fontSize: 18, fontWeight: '900', marginRight: 2 },
+  claimAmount: { color: '#fff', fontSize: 36, fontWeight: '900' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 16 },
+  footerLabel: { color: '#475569', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  payoutCard: { backgroundColor: 'rgba(16, 185, 129, 0.03)', borderRadius: 24, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.1)' },
+  payoutHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  payoutRef: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  payoutStatus: { color: '#10b981', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  payoutBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  payoutAmountText: { color: '#10b981', fontSize: 24, fontWeight: '900' },
+  payoutDate: { color: '#475569', fontSize: 11, fontWeight: '700' },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyEmoji: { fontSize: 48, marginBottom: 20, opacity: 0.2 },
+  emptyTitle: { color: '#f8fafc', fontSize: 18, fontWeight: '900', marginBottom: 8 },
+  emptySubtitle: { color: '#475569', fontSize: 14, textAlign: 'center', lineHeight: 22, maxWidth: 240 },
 });

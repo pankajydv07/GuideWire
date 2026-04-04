@@ -8,7 +8,7 @@ All other devs READ from these tables — only Dev 1 WRITES to them.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, DECIMAL, UniqueConstraint, JSON, Time
+from sqlalchemy import String, Integer, DateTime, ForeignKey, DECIMAL, UniqueConstraint, JSON, Time, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
@@ -44,8 +44,8 @@ class Rider(Base):
     upi_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     kyc_status: Mapped[str] = mapped_column(String(20), default="pending")
     trust_score: Mapped[int] = mapped_column(Integer, default=50)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now())
 
     # Relationships
     zone = relationship("Zone", back_populates="riders")
@@ -62,7 +62,7 @@ class RiderRiskProfile(Base):
     income_volatility: Mapped[float] = mapped_column(DECIMAL(4, 2), default=0)
     disruption_probability: Mapped[float] = mapped_column(DECIMAL(4, 2), default=0)
     four_week_earnings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now())
 
     # Relationships
     rider = relationship("Rider", back_populates="risk_profile")

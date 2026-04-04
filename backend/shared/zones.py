@@ -17,30 +17,6 @@ _zone_by_id: Dict[str, Dict] = {}
 _zone_by_name: Dict[str, Dict] = {}
 _loaded = False
 
-# ── Hardcoded fallback (used if DB is unreachable at import time) ─────────────
-_FALLBACK_ZONES = [
-    {
-        "id": "a1b2c3d4-0001-0001-0001-000000000001",
-        "name": "gachibowli", "city": "Hyderabad",
-        "lat": 17.4401, "lon": 78.3489, "rider_ids": [],
-    },
-    {
-        "id": "a1b2c3d4-0002-0002-0002-000000000002",
-        "name": "koramangala", "city": "Bengaluru",
-        "lat": 12.9279, "lon": 77.6271, "rider_ids": [],
-    },
-    {
-        "id": "a1b2c3d4-0003-0003-0003-000000000003",
-        "name": "andheri_west", "city": "Mumbai",
-        "lat": 19.1288, "lon": 72.8278, "rider_ids": [],
-    },
-    {
-        "id": "a1b2c3d4-0004-0004-0004-000000000004",
-        "name": "rajouri_garden", "city": "Delhi",
-        "lat": 28.6442, "lon": 77.1194, "rider_ids": [],
-    },
-]
-
 
 async def _load_zones_from_db():
     """Load all zones from the Postgres `zones` table + attach rider_ids."""
@@ -60,7 +36,10 @@ async def _load_zones_from_db():
             rows = result.fetchall()
 
             if not rows:
-                logger.warning("No zones found in DB — using fallback")
+                logger.error("No zones found in DB! Perimeter scan yielded 0 result.")
+                _zones = []
+                _zone_by_id = {}
+                _zone_by_name = {}
                 return
 
             zones = []
@@ -95,45 +74,31 @@ async def _load_zones_from_db():
                         f"({sum(len(z['rider_ids']) for z in _zones)} riders total)")
 
     except Exception as e:
-        logger.error(f"Failed to load zones from DB: {e}")
+        logger.error(f"Critical: Failed to load zones from DB: {e}")
 
 
 def _ensure_loaded():
-    """Ensure zones are loaded. If not, sync-run the async loader or use fallback."""
-    global _zones, _zone_by_id, _zone_by_name, _loaded
+    """Ensure zones are loaded. If not, schedule a sync-run or use empty state."""
+    global _loaded
 
     if _loaded:
         return
 
-    # Try async load
     try:
-        loop = asyncio.get_running_loop()
-        # We're inside an async context — schedule the load
-        loop.create_task(_load_zones_from_db())
-        # Meanwhile, use fallback until task completes
-        if not _zones:
-            _zones = _FALLBACK_ZONES[:]
-            _zone_by_id = {z["id"]: z for z in _zones}
-            _zone_by_name = {z["name"].lower(): z for z in _zones}
+        # Check if loop is running
+        asyncio.get_running_loop()
+        # If running, we assume load_zones() was called in lifespan
     except RuntimeError:
-        # No running loop — run synchronously
+        # Run synchronously
         try:
             asyncio.run(_load_zones_from_db())
         except Exception:
-            if not _zones:
-                _zones = _FALLBACK_ZONES[:]
-                _zone_by_id = {z["id"]: z for z in _zones}
-                _zone_by_name = {z["name"].lower(): z for z in _zones}
+            pass
 
 
 async def load_zones():
     """Explicit async loader — call from app lifespan startup."""
     await _load_zones_from_db()
-    if not _loaded:
-        global _zones, _zone_by_id, _zone_by_name
-        _zones = _FALLBACK_ZONES[:]
-        _zone_by_id = {z["id"]: z for z in _zones}
-        _zone_by_name = {z["name"].lower(): z for z in _zones}
 
 
 # ── Public API (same as before) ──────────────────────────────────────────────

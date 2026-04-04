@@ -1,234 +1,294 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Zap, 
+  MapPin, 
+  Users, 
+  Clock, 
+  BarChart, 
+  AlertTriangle,
+  PlayCircle,
+  Activity,
+  History,
+  Info
+} from "lucide-react";
 
 import { adminApi } from "@/lib/api";
-import { formatDateTime, formatDurationSince, formatTriggerWithEmoji } from "@/lib/format";
-import type { DisruptionEvent, TriggerStatusResponse, Zone } from "@/lib/types";
-
-const INJECT_ACTIONS = [
-  { key: "heavy_rain", label: "Heavy Rain", emoji: "🌧️", className: "bg-sky-600 hover:bg-sky-500", payload: { trigger_type: "heavy_rain", rainfall_mm: 60 } },
-  { key: "traffic_congestion", label: "Traffic Jam", emoji: "🚗", className: "bg-orange-600 hover:bg-orange-500", payload: { trigger_type: "traffic_congestion", congestion_index: 90 } },
-  { key: "store_closure", label: "Store Closed", emoji: "🏪", className: "bg-rose-600 hover:bg-rose-500", payload: { trigger_type: "store_closure" } },
-  { key: "platform_outage", label: "Platform Down", emoji: "📱", className: "bg-fuchsia-600 hover:bg-fuchsia-500", payload: { trigger_type: "platform_outage" } },
-  { key: "regulatory_curfew", label: "Regulatory", emoji: "🚫", className: "bg-red-700 hover:bg-red-600", payload: { trigger_type: "regulatory_curfew" } },
-] as const;
+import { formatDurationSince, formatTriggerWithEmoji, formatApiDate } from "@/lib/format";
+import type { TriggerStatusResponse, ActiveTrigger, DisruptionEvent, Zone } from "@/lib/types";
 
 export default function TriggersPage() {
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [selectedZone, setSelectedZone] = useState("");
   const [status, setStatus] = useState<TriggerStatusResponse | null>(null);
   const [events, setEvents] = useState<DisruptionEvent[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [triggerTypes, setTriggerTypes] = useState<{ type: string; label: string; icon: string; desc?: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [triggering, setTriggering] = useState<string | null>(null);
+  const [selectedZone, setSelectedZone] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  // Group zones by city for the dropdown
+  const zonesByCity = useMemo(() => {
+    const groups: Record<string, Zone[]> = {};
+    for (const zone of zones) {
+      const city = zone.city ?? "Other";
+      if (!groups[city]) groups[city] = [];
+      groups[city].push(zone);
+    }
+    return groups;
+  }, [zones]);
 
-    const load = async () => {
-      try {
-        await adminApi.autoLogin();
-        const [zonesResponse, statusResponse, eventsResponse] = await Promise.all([
-          adminApi.zones.list(),
-          adminApi.triggers.getStatus(),
-          adminApi.triggers.getDisruptionEvents(),
-        ]);
-
-        if (!active) return;
-        setZones(zonesResponse.zones);
-        setSelectedZone((current) => current || zonesResponse.zones[0]?.name || "");
-        setStatus(statusResponse);
-        setEvents(eventsResponse.events);
-        setMessage(null);
-      } catch (err) {
-        if (!active) return;
-        setMessage({
-          type: "error",
-          text: err instanceof Error ? err.message : "Failed to load trigger dashboard.",
-        });
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    void load();
-    const interval = window.setInterval(() => void load(), 10000);
-
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  const handleInject = async (action: (typeof INJECT_ACTIONS)[number]) => {
-    if (!selectedZone) return;
-
-    setActiveAction(action.key);
-    setMessage(null);
-
+  const loadData = async () => {
     try {
-      await adminApi.triggers.inject({
-        ...action.payload,
-        zone: selectedZone,
-        duration_seconds: 1800,
-      });
-
-      const [statusResponse, eventsResponse] = await Promise.all([
+      const [statusRes, eventsRes] = await Promise.all([
         adminApi.triggers.getStatus(),
         adminApi.triggers.getDisruptionEvents(),
       ]);
-
-      setStatus(statusResponse);
-      setEvents(eventsResponse.events);
-      setMessage({
-        type: "success",
-        text: `${action.label} injected into ${selectedZone}.`,
-      });
+      setStatus(statusRes);
+      setEvents(eventsRes.events);
     } catch (err) {
-      setMessage({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to inject trigger.",
-      });
+      console.error("Failed to sync network triggers:", err);
     } finally {
-      setActiveAction(null);
+      setLoading(false);
     }
   };
 
+  // Load zones & trigger types from DB (same source as mobile app)
+  useEffect(() => {
+    adminApi.zones.list()
+      .then((res) => {
+        setZones(res.zones);
+        if (res.zones.length > 0) {
+          setSelectedZone(res.zones[0].name);
+        }
+      })
+      .catch(() => console.error("Failed to load zones"));
+
+    adminApi.config.get()
+      .then((cfg) => setTriggerTypes(cfg.trigger_types))
+      .catch(() => console.error("Failed to load trigger types"));
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+    const interval = window.setInterval(() => void loadData(), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const simulateTrigger = async (type: string) => {
+    setTriggering(type);
+    try {
+      await adminApi.triggers.inject({
+        trigger_type: type,
+        zone: selectedZone,
+      });
+      await loadData();
+    } catch (err) {
+      alert("Simulation sequence failed to initiate.");
+    } finally {
+      setTriggering(null);
+    }
+  };
+
+  // Trigger descriptions — display-only, not business logic
+  const TRIGGER_DESC: Record<string, string> = {
+    heavy_rain: "Flood detection in urban zones",
+    traffic_congestion: "Major arterial route blockage",
+    platform_outage: "Digital infrastructure failure",
+    regulatory: "Emergency movement restrictions",
+    store_closed: "Dark store closure detected",
+    community_signal: "Community anomaly threshold breached",
+  };
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Trigger Management</h1>
-        <p className="mt-2 text-sm text-slate-400">Inject demo disruptions, inspect live triggers, and review the event log.</p>
-      </div>
-
-      {message ? (
-        <div
-          className={`rounded-2xl border p-4 text-sm ${
-            message.type === "success"
-              ? "border-emerald-900/70 bg-emerald-950/40 text-emerald-200"
-              : "border-red-900/70 bg-red-950/40 text-red-200"
-          }`}
-        >
-          {message.text}
+    <div className="space-y-12">
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between"
+      >
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Network Surveillance</h1>
+          <p className="text-slate-400 font-medium">Monitoring parametric anomalies and disruption sequences.</p>
         </div>
-      ) : null}
+        
+        <div className="flex items-center gap-3 glass px-5 py-2.5 rounded-2xl ring-1 ring-white/5">
+           <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Scanning Zones</span>
+        </div>
+      </motion.div>
 
-      <section className="rounded-3xl border border-amber-800/70 bg-gradient-to-r from-amber-950/60 via-slate-900/90 to-slate-900/90 p-6 shadow-xl shadow-amber-950/10">
-        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-amber-300">Demo Injection Panel</h2>
-            <p className="mt-1 text-sm text-slate-400">Fire live disruptions against the current backend trigger service.</p>
-          </div>
-          <label className="flex min-w-52 flex-col gap-2 text-sm text-slate-400">
-            Zone
-            <select
-              className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none"
-              value={selectedZone}
-              onChange={(event) => setSelectedZone(event.target.value)}
-              disabled={loading || zones.length === 0}
-            >
-              {zones.map((zone) => (
-                <option key={zone.id} value={zone.name}>
-                  {zone.name} · {zone.city}
-                </option>
-              ))}
-            </select>
-          </label>
+      <section>
+        <div className="flex items-center gap-2 mb-8">
+           <Zap className="w-5 h-5 text-indigo-400" />
+           <h2 className="text-xl font-bold text-white tracking-tight">Active Anomalies</h2>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {INJECT_ACTIONS.map((action) => {
-            const loadingAction = activeAction === action.key;
-            return (
-              <button
-                key={action.key}
-                type="button"
-                disabled={!selectedZone || loadingAction}
-                onClick={() => void handleInject(action)}
-                className={`rounded-2xl px-4 py-4 text-left text-sm font-medium text-white transition ${action.className} ${
-                  loadingAction ? "scale-[0.98] animate-pulse shadow-[0_0_30px_rgba(251,191,36,0.25)]" : ""
-                } disabled:cursor-not-allowed disabled:opacity-50`}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence mode="popLayout">
+            {!status || status.active_triggers.length === 0 ? (
+              <motion.div 
+                key="empty-active"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="col-span-full rounded-[2.5rem] border border-dashed border-slate-800 bg-slate-900/10 py-20 text-center"
               >
-                <div className="text-xl">{action.emoji}</div>
-                <div className="mt-3">{loadingAction ? "Injecting..." : action.label}</div>
-              </button>
-            );
-          })}
+                 <div className="text-slate-600 font-bold uppercase tracking-[0.2em] text-xs">No active disruptions detected.</div>
+              </motion.div>
+            ) : (
+              status.active_triggers.map((trigger: ActiveTrigger, idx: number) => (
+                <motion.div
+                  key={trigger.trigger_id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="glass-card rounded-[2.5rem] p-8 relative overflow-hidden group"
+                >
+                  <div className="absolute top-0 right-0 p-8">
+                     <span className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-rose-400 ring-1 ring-rose-500/20">
+                        <span className="h-1 w-1 rounded-full bg-rose-400 animate-ping" /> Live
+                     </span>
+                  </div>
+
+                  <div className="mb-8">
+                    <div className="text-2xl font-bold text-white mb-1">
+                       {formatTriggerWithEmoji(trigger.type)}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500 font-medium lowercase italic">
+                       {trigger.severity} intensity
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                       <MapPin className="w-4 h-4 text-slate-600" />
+                       <span className="text-sm font-bold text-slate-300">{trigger.zone}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                       <Users className="w-4 h-4 text-slate-600" />
+                       <span className="text-sm font-bold text-slate-300">{trigger.affected_riders} impacted</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                       <Clock className="w-4 h-4 text-slate-600" />
+                       <span className="text-sm font-bold text-indigo-400">{formatDurationSince(trigger.active_since)} active</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Active Triggers</h2>
-            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Refresh 10s</span>
+      <div className="grid gap-10 xl:grid-cols-[1fr_0.4fr]">
+        <section className="glass-card rounded-[3rem] p-10">
+          <div className="flex items-center justify-between mb-10">
+             <div className="flex items-center gap-3">
+                <History className="w-6 h-6 text-slate-400" />
+                <h2 className="text-2xl font-bold text-white tracking-tight">Disruption History</h2>
+             </div>
+             <BarChart className="w-5 h-5 text-slate-700" />
           </div>
 
-          {!status || status.active_triggers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-center text-sm text-slate-500">
-              No active disruptions.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {status.active_triggers.map((trigger) => (
-                <div key={trigger.trigger_id} className="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-100">{formatTriggerWithEmoji(trigger.type)}</div>
-                      <div className="mt-1 text-sm text-slate-400">{trigger.zone}</div>
-                    </div>
-                    <span className="rounded-full bg-red-950/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-red-300 ring-1 ring-red-800/80">
-                      {trigger.severity}
-                    </span>
+          <div className="space-y-4">
+            {loading ? (
+               Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-20 rounded-[1.5rem] bg-white/5 animate-pulse" />
+               ))
+            ) : events.length === 0 ? (
+               <div className="text-center py-10 text-slate-600 uppercase tracking-widest text-xs font-bold">Archive Empty</div>
+            ) : (
+              events.slice(0, 10).map((event: DisruptionEvent, idx: number) => (
+                <motion.div 
+                  key={event.event_id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/20 hover:bg-slate-900/40 transition-colors"
+                >
+                  <div className="flex items-center gap-5">
+                     <div className="h-10 w-10 rounded-2xl bg-white/5 flex items-center justify-center text-xl">
+                        {formatTriggerWithEmoji(event.trigger_type)}
+                     </div>
+                     <div>
+                        <div className="text-sm font-bold text-slate-200">{event.trigger_type.replace(/_/g, " ").toUpperCase()}</div>
+                        <div className="text-xs text-slate-500 font-medium mt-1">{event.zone} • {event.severity}</div>
+                     </div>
                   </div>
-                  <div className="mt-4 grid gap-2 text-sm text-slate-400 md:grid-cols-3">
-                    <span>{trigger.affected_riders} riders affected</span>
-                    <span>{formatDurationSince(trigger.active_since)} active</span>
-                    <span className="truncate">{trigger.threshold}</span>
+                  <div className="text-right">
+                     <div className="text-xs font-bold text-slate-500 mb-1">LOGGED AT</div>
+                     <div className="text-sm font-bold text-slate-400">{formatApiDate(event.created_at)}</div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                </motion.div>
+              ))
+            )}
+          </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Disruption History</h2>
-            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{events.length} events</span>
+        <section className="glass-card rounded-[3rem] p-10 h-fit sticky top-8">
+          <div className="flex items-center gap-3 mb-10">
+             <PlayCircle className="w-6 h-6 text-emerald-400" />
+             <h2 className="text-2xl font-bold text-white tracking-tight">Simulator</h2>
           </div>
+          
+          <div className="space-y-6">
+            <div>
+               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 block px-2">Target Zone</label>
+               <select 
+                 value={selectedZone}
+                 onChange={(e) => setSelectedZone(e.target.value)}
+                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold appearance-none"
+               >
+                  {zones.length === 0 ? (
+                    <option disabled>Loading zones...</option>
+                  ) : (
+                    Object.entries(zonesByCity).map(([city, cityZones]) => (
+                      <optgroup key={city} label={city.charAt(0).toUpperCase() + city.slice(1)}>
+                        {cityZones.map((z) => (
+                          <option key={z.id} value={z.name}>
+                            {z.name.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))
+                  )}
+               </select>
+            </div>
 
-          {events.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-center text-sm text-slate-500">
-              No disruption events recorded yet.
+            <div className="p-6 rounded-[2rem] bg-amber-500/5 border border-amber-500/10">
+               <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-3 h-3 text-amber-500" />
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-amber-200">Simulation Alert</span>
+               </div>
+               <p className="text-[10px] text-amber-200/60 leading-relaxed font-medium">Injected triggers generate real automated payout sequences for active riders in the target zone.</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 text-left text-slate-400">
-                    <th className="pb-3 pr-4 font-medium">Time</th>
-                    <th className="pb-3 pr-4 font-medium">Zone</th>
-                    <th className="pb-3 pr-4 font-medium">Type</th>
-                    <th className="pb-3 pr-4 font-medium">Severity</th>
-                    <th className="pb-3 pr-4 font-medium">Affected</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((event) => (
-                    <tr key={event.event_id} className="border-b border-slate-800/60 text-slate-200">
-                      <td className="py-3 pr-4 text-slate-400">{formatDateTime(event.created_at)}</td>
-                      <td className="py-3 pr-4">{event.zone}</td>
-                      <td className="py-3 pr-4">{formatTriggerWithEmoji(event.trigger_type)}</td>
-                      <td className="py-3 pr-4 capitalize text-red-300">{event.severity}</td>
-                      <td className="py-3 pr-4">{event.affected_riders}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            <div className="space-y-3">
+              {triggerTypes.map((opt) => (
+                <button
+                  key={opt.type}
+                  disabled={triggering !== null}
+                  onClick={() => simulateTrigger(opt.type)}
+                  className={`w-full flex items-center justify-between p-5 rounded-3xl border border-slate-800/60 bg-slate-900/60 transition-all hover:scale-[1.02] active:scale-[0.98] group ${triggering === opt.type ? "opacity-50" : "hover:border-emerald-500/30 hover:bg-emerald-500/[0.02]"}`}
+                >
+                  <div className="flex items-center gap-4">
+                     <span className="text-2xl group-hover:scale-110 transition-transform">{opt.icon}</span>
+                     <div className="text-left">
+                        <div className="text-sm font-bold text-slate-200">{opt.label}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{TRIGGER_DESC[opt.type] || "Network anomaly simulation"}</div>
+                     </div>
+                  </div>
+                  {triggering === opt.type ? (
+                     <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                  ) : (
+                     <PlayCircle className="w-4 h-4 text-slate-700 group-hover:text-emerald-500" />
+                  )}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
         </section>
       </div>
     </div>

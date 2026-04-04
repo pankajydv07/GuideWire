@@ -1,29 +1,26 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import Colors from '../../constants/Colors';
 
 export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { login } = useAuth();
+  const { login, setTempToken } = useAuth();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  
-  const [timer, setTimer] = useState(30);
-
-  useEffect(() => {
-    if (timer > 0) {
-      const interval = setInterval(() => setTimer((t) => t - 1), 1000);
-      return () => clearInterval(interval);
-    }
-  }, [timer]);
 
   const handleVerify = async () => {
-    setErrorMsg('');
+    if (otp.length !== 6) {
+      Alert.alert('Incomplete Signal', 'Please enter the 6-digit verification sequence.');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await api.riders.verifyOtp(phone!, otp);
@@ -36,86 +33,67 @@ export default function OtpScreen() {
         }
 
         if (result.temp_token) {
-          await AsyncStorage.setItem('temp_token', result.temp_token);
-          api.setToken(result.temp_token);
+          await setTempToken(result.temp_token);
           router.push({ pathname: '/(auth)/register', params: { phone } });
           return;
         }
 
-        setErrorMsg('Unable to continue. Please try again.');
+        Alert.alert('System Mismatch', 'Unable to continue. Please retry transmission.');
       } else {
-        setErrorMsg('Invalid OTP. Please try again.');
+        Alert.alert('Verification Failed', 'Invalid sequence detected.');
       }
     } catch (err: any) {
-      setErrorMsg('Invalid OTP. Please try again.');
+      Alert.alert('System Error', err.message || 'Signal disruption detected during verification.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResend = async () => {
-    if (timer > 0) return;
-    try {
-      await api.riders.sendOtp(phone!);
-      setTimer(30);
-      setErrorMsg('');
-    } catch (err) {
-      setErrorMsg('Failed to resend OTP.');
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Verify OTP</Text>
-      <Text style={styles.subtitle}>Enter the code sent to {phone}</Text>
-      <Text style={styles.hint}>💡 Demo OTP: 123456</Text>
+      <View style={styles.content}>
+        <Animated.View entering={FadeInUp.delay(200).springify()}>
+           <Text style={styles.title}>Secure Node Verification</Text>
+           <Text style={styles.subtitle}>Sequence sent to {phone}. Enter the 6-digit decryption key below.</Text>
+        </Animated.View>
 
-      <TextInput
-        style={[styles.input, errorMsg ? styles.inputError : null]}
-        value={otp}
-        onChangeText={(val) => { setOtp(val); setErrorMsg(''); }}
-        keyboardType="number-pad"
-        placeholder="123456"
-        placeholderTextColor="#64748b"
-        maxLength={6}
-        autoFocus
-      />
-      
-      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+        <Animated.View entering={FadeInDown.delay(400).springify()} style={styles.inputContainer}>
+           <TextInput
+             style={styles.input}
+             value={otp}
+             onChangeText={setOtp}
+             keyboardType="number-pad"
+             maxLength={6}
+             placeholder="000 000"
+             placeholderTextColor="#334155"
+             autoFocus
+           />
+           <TouchableOpacity 
+             style={styles.btn} 
+             onPress={handleVerify} 
+             disabled={loading}
+           >
+             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>VALIDATE SIGNAL</Text>}
+           </TouchableOpacity>
+        </Animated.View>
 
-      <TouchableOpacity 
-        style={[styles.button, otp.length < 6 && styles.buttonDisabled]} 
-        onPress={handleVerify} 
-        disabled={loading || otp.length < 6}
-      >
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify</Text>}
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        style={styles.resendContainer} 
-        onPress={handleResend}
-        disabled={timer > 0}
-      >
-        <Text style={[styles.resendText, timer > 0 && styles.resendTextDisabled]}>
-          {timer > 0 ? `Resend OTP in ${timer}s` : 'Resend OTP'}
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+           <Text style={styles.backText}>Cancel Protocol</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 24, justifyContent: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#f8fafc', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#94a3b8', marginBottom: 4 },
-  hint: { fontSize: 13, color: '#fbbf24', marginBottom: 24 },
-  input: { backgroundColor: '#1e293b', color: '#f8fafc', borderRadius: 12, padding: 16, fontSize: 24, textAlign: 'center', letterSpacing: 8, borderWidth: 1, borderColor: '#334155' },
-  inputError: { borderColor: '#ef4444' },
-  errorText: { color: '#ef4444', fontSize: 14, textAlign: 'center', marginTop: 8 },
-  button: { backgroundColor: '#2563eb', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 24, height: 56, justifyContent: 'center' },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  resendContainer: { marginTop: 20, alignItems: 'center' },
-  resendText: { color: '#38bdf8', fontSize: 15, fontWeight: '600' },
-  resendTextDisabled: { color: '#64748b' }
+  container: { flex: 1, backgroundColor: '#020617' },
+  content: { flex: 1, padding: 32, justifyContent: 'center' },
+  title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', marginBottom: 12, letterSpacing: -1 },
+  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600' },
+  inputContainer: { marginTop: 40, gap: 20 },
+  input: { backgroundColor: 'rgba(255,255,255,0.03)', color: '#f8fafc', borderRadius: 24, padding: 24, fontSize: 32, textAlign: 'center', fontWeight: '900', letterSpacing: 8, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.2)' },
+  btn: { backgroundColor: Colors.dark.tint, paddingVertical: 20, borderRadius: 20, shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+  backBtn: { marginTop: 24 },
+  backText: { color: '#475569', textAlign: 'center', fontWeight: '800', textTransform: 'uppercase', fontSize: 12, letterSpacing: 1 },
 });

@@ -143,6 +143,14 @@ class AdminApiClient {
     list: () => this.request<{ zones: Zone[] }>("GET", "/api/zones"),
   };
 
+  config = {
+    get: () =>
+      this.request<{
+        platforms: { id: string; name: string; icon: string }[];
+        trigger_types: { type: string; label: string; icon: string }[];
+      }>("GET", "/api/config"),
+  };
+
   stats = {
     overview: async (): Promise<OverviewData> => {
       await this.autoLogin();

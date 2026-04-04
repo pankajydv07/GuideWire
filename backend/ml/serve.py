@@ -6,6 +6,8 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from .demo_model import DemoRiskModel
+
 
 MODEL_PATH = Path(__file__).resolve().parent / "model_artifacts" / "risk_model.pkl"
 METADATA_PATH = Path(__file__).resolve().parent / "model_artifacts" / "feature_names.json"
@@ -36,13 +38,15 @@ feature_names = []
 def load_artifacts() -> None:
     global model, metadata, feature_names
 
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model artifact not found: {MODEL_PATH}")
     if not METADATA_PATH.exists():
         raise FileNotFoundError(f"Metadata artifact not found: {METADATA_PATH}")
 
-    with MODEL_PATH.open("rb") as f:
-        model = pickle.load(f)
+    if MODEL_PATH.exists():
+        with MODEL_PATH.open("rb") as f:
+            model = pickle.load(f)
+    else:
+        # Fall back to a deterministic demo model when the artifact is missing.
+        model = DemoRiskModel()
 
     with METADATA_PATH.open("r", encoding="utf-8") as f:
         metadata = json.load(f)
@@ -52,6 +56,8 @@ def load_artifacts() -> None:
         metadata = {"features": metadata, "model_version": "legacy"}
     else:
         feature_names = metadata.get("features", [])
+        if not MODEL_PATH.exists():
+            metadata = {**metadata, "model_version": "demo-fallback"}
 
 
 def probability_to_band(probability: float) -> str:

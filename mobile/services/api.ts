@@ -93,7 +93,12 @@ export interface Zone {
   id: string;
   name: string;
   city: string;
-  risk_score: number;
+  risk_score?: number;
+  flood_risk?: number;
+  traffic_risk?: number;
+  store_risk?: number;
+  lat?: number;
+  lon?: number;
 }
 
 export interface PolicyQuoteTier {
@@ -293,7 +298,15 @@ class ApiClient {
 
   zones = {
     list: () =>
-      this.request<{ zones: Zone[] }>('GET', '/api/riders/zones'),
+      this.request<{ zones: Zone[] }>('GET', '/api/zones'),
+  };
+
+  config = {
+    get: () =>
+      this.request<{
+        platforms: { id: string; name: string; icon: string }[];
+        trigger_types: { type: string; label: string; icon: string }[];
+      }>('GET', '/api/config'),
   };
 
   policies = {

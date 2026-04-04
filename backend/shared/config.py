@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     OPENWEATHERMAP_API_KEY: str = ""
     GOOGLE_MAPS_API_KEY: str = ""
 
+    # ─── SMS / OTP (MSG91) ─────────────────────────────
+    MSG91_AUTH_KEY: str = ""
+    MSG91_OTP_TEMPLATE_ID: str = ""
+    MSG91_OTP_LENGTH: int = 6
+    MSG91_OTP_EXPIRY_MINUTES: int = 5
+    OTP_DEV_BYPASS_CODE: str = "123456"
+
     # ─── Admin ──────────────────────────────────────────
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "changeme"
@@ -34,6 +41,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     APP_NAME: str = "RiderShield"
     APP_VERSION: str = "1.0.0"
+
+    # ─── Services ───────────────────────────────────────
+    ML_SERVICE_URL: str = "http://ml:8001"
 
     # ─── File Storage ───────────────────────────────────
     UPLOAD_DIR: str = "./uploads"

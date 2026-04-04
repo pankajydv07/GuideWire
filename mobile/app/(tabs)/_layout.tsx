@@ -1,26 +1,26 @@
-/**
- * Tab layout — main app after authentication.
- * 
- * 4 tabs:
- *   1. Dashboard (Dev 2 + Dev 3) — active policy + disruption alerts
- *   2. Claims (Dev 4) — claim history + payout history
- *   3. Manual Claim (Dev 5) — submit manual claim
- *   4. Profile (Dev 1) — rider profile + risk data
- */
-
+import React from 'react';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Redirect, Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 
+import Colors from '../../constants/Colors';
 import { useAuth } from '../../contexts/AuthContext';
+import { useClientOnlyValue } from '../../components/useClientOnlyValue';
+
+function TabBarIcon(props: {
+  name: React.ComponentProps<typeof FontAwesome>['name'];
+  color: string;
+}) {
+  return <FontAwesome size={22} style={{ marginBottom: -3 }} {...props} />;
+}
 
 export default function TabLayout() {
   const { isAuthenticated, isReady } = useAuth();
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a' }}>
-        <ActivityIndicator color="#38bdf8" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617' }}>
+        <ActivityIndicator color={Colors.dark.tint} size="large" />
       </View>
     );
   }
@@ -32,39 +32,59 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#38bdf8',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b', paddingBottom: 4 },
-        headerStyle: { backgroundColor: '#0f172a' },
-        headerTintColor: '#f8fafc',
+        tabBarActiveTintColor: Colors.dark.tint,
+        tabBarInactiveTintColor: '#475569',
+        headerShown: useClientOnlyValue(false, true),
+        headerStyle: { backgroundColor: Colors.dark.background },
+        headerTitleStyle: { fontWeight: '900', color: Colors.dark.text, fontSize: 24, letterSpacing: -0.5 },
+        headerShadowVisible: false,
+        tabBarStyle: {
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          elevation: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          borderRadius: 24,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
+          borderTopWidth: 0,
+          borderWidth: 1,
+          borderColor: 'rgba(56, 189, 248, 0.1)',
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark" size={size} color={color} />,
+          title: 'Guardian',
+          tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
+          headerTitle: 'RiderShield',
         }}
       />
       <Tabs.Screen
         name="claims"
         options={{
-          title: 'Claims',
-          tabBarIcon: ({ color, size }) => <Ionicons name="document-text" size={size} color={color} />,
+          title: 'History',
+          tabBarIcon: ({ color }) => <TabBarIcon name="history" color={color} />,
+          headerTitle: 'Claim Archive',
         }}
       />
       <Tabs.Screen
         name="manual-claim"
         options={{
           title: 'Report',
-          tabBarIcon: ({ color, size }) => <Ionicons name="camera" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="camera" color={color} />,
+          headerTitle: 'Report Disruption',
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          title: 'Node',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+          headerTitle: 'Identity Node',
         }}
       />
     </Tabs>

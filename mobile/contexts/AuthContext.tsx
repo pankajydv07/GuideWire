@@ -1,8 +1,5 @@
 /**
  * Auth context — manages JWT token + rider profile globally.
- * 
- * Usage in any screen:
- *   const { rider, token, login, logout } = useAuth();
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
@@ -17,6 +14,7 @@ interface AuthContextType {
   login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  setTempToken: (token: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -39,11 +37,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const setTempToken = useCallback(async (jwt: string | null) => {
+    if (jwt) {
+      api.setToken(jwt);
+      await AsyncStorage.setItem('temp_token', jwt);
+    } else {
+      await AsyncStorage.removeItem('temp_token');
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     setToken(null);
     setRider(null);
     api.clearToken();
-    await AsyncStorage.multiRemove(['jwt_token', 'rider_slots', 'rider_upi_id']);
+    await AsyncStorage.multiRemove(['jwt_token', 'rider_slots', 'rider_upi_id', 'temp_token']);
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -60,7 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const restoreSession = async () => {
       try {
         const jwt = await AsyncStorage.getItem('jwt_token');
-        if (!jwt) return;
+        if (!jwt) {
+          const temp = await AsyncStorage.getItem('temp_token');
+          if (temp) {
+            api.setToken(temp);
+          }
+          return;
+        }
 
         setToken(jwt);
         api.setToken(jwt);
@@ -75,6 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           api.clearToken();
           await AsyncStorage.removeItem('jwt_token');
         }
+      } catch (err) {
+        console.error('Failed to restore session:', err);
       } finally {
         setIsReady(true);
       }
@@ -84,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ rider, token, isAuthenticated: !!token, isReady, login, logout, refreshProfile }}>
+    <AuthContext.Provider value={{ rider, token, isAuthenticated: !!token, isReady, login, logout, refreshProfile, setTempToken }}>
       {children}
     </AuthContext.Provider>
   );
