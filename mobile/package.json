@@ -4,6 +4,11 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "start:clear": "expo start --clear",
+    "start:offline": "set EXPO_OFFLINE=1 && expo start",
+    "start:offline:clear": "set EXPO_OFFLINE=1 && expo start --clear",
+    "start:no-doctor": "set EXPO_NO_DEPENDENCY_VALIDATION=1 && expo start",
+    "start:no-doctor:clear": "set EXPO_NO_DEPENDENCY_VALIDATION=1 && expo start --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web"

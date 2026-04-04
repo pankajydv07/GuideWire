@@ -37,6 +37,7 @@ export default function ManualClaimScreen() {
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [availableTypes, setAvailableTypes] = useState<any[]>([]);
   const [result, setResult] = useState<ManualClaimSubmitResponse | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     api.config.get()
@@ -88,6 +89,7 @@ export default function ManualClaimScreen() {
   const handleSubmit = async () => {
     if (!validate() || !photo) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const formData = new FormData();
       formData.append('disruption_type', disruptionType);
@@ -106,7 +108,8 @@ export default function ManualClaimScreen() {
       const response = await api.manualClaims.submit(formData);
       setResult(response);
     } catch (error) {
-      setErrors((prev) => ({ ...prev, description: 'Sync failure' }));
+      const message = error instanceof Error ? error.message : 'Sync failure';
+      setSubmitError(message);
     } finally {
       setSubmitting(false);
     }
@@ -211,6 +214,13 @@ export default function ManualClaimScreen() {
               />
             </View>
 
+            {submitError ? (
+              <View style={styles.submitErrorBox}>
+                <Ionicons name="alert-circle" size={18} color="#f43f5e" />
+                <Text style={styles.submitErrorText}>{submitError}</Text>
+              </View>
+            ) : null}
+
             {/* SPACER FOR THE STICKY BUTTON OVERLAY */}
             <View style={{ height: 120 }} />
           </View>
@@ -295,6 +305,8 @@ const styles = StyleSheet.create({
   photoPreview: { width: '100%', height: '100%' },
   photoReset: { position: 'absolute', top: 12, right: 12 },
   input: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', padding: 20, color: '#f8fafc', fontSize: 15, fontWeight: '600', minHeight: 120 },
+  submitErrorBox: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 14, borderRadius: 18, backgroundColor: 'rgba(244, 63, 94, 0.08)', borderWidth: 1, borderColor: 'rgba(244, 63, 94, 0.2)' },
+  submitErrorText: { flex: 1, color: '#fecdd3', fontSize: 12, lineHeight: 18, fontWeight: '600' },
   stickyActionContainer: { 
     position: 'absolute', 
     bottom: 0, 

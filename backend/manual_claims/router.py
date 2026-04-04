@@ -53,11 +53,17 @@ async def submit_manual_claim(
     if not policy:
         raise HTTPException(status_code=400, detail="No active policy found for this rider.")
 
-    # 2. Rate Limit (1 manual claim per policy)
-    existing_stmt = select(ManualClaim).where(ManualClaim.policy_id == policy.id)
+    # 2. Allow resubmission after rejection, but block duplicate open/resolved claims
+    existing_stmt = select(ManualClaim).where(
+        ManualClaim.policy_id == policy.id,
+        ManualClaim.review_status.in_(["pending", "approved"])
+    )
     existing_result = await db.execute(existing_stmt)
     if existing_result.scalars().first():
-        raise HTTPException(status_code=400, detail="Only one manual claim allowed per policy period.")
+        raise HTTPException(
+            status_code=400,
+            detail="A manual claim is already active for this policy period."
+        )
 
     # 3. Save Photo
     file_ext = os.path.splitext(photo.filename)[1]
