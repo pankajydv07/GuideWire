@@ -1,20 +1,33 @@
 from typing import List, Optional, Dict
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
+
+from rider_service.phone_utils import normalize_indian_mobile
 
 # ─── OTP Schemas ────────────────────────────────────
 
 class OTPRequest(BaseModel):
     phone: str = Field(..., example="+919876543210")
 
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        return normalize_indian_mobile(value)
+
 class OTPResponse(BaseModel):
     message: str
     expires_in: int
+    dev_otp: Optional[str] = None
 
 class OTPVerifyRequest(BaseModel):
     phone: str
     otp: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        return normalize_indian_mobile(value)
 
 class OTPVerifyResponse(BaseModel):
     valid: bool

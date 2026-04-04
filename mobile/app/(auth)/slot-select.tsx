@@ -44,6 +44,8 @@ export default function SlotSelectScreen() {
       const city = params.city as string;
       if (!city) throw new Error('City parameter missing. Please re-select your zone.');
 
+      await AsyncStorage.setItem('rider_slots', JSON.stringify(selectedSlots));
+
       const regResult = await api.riders.register({
          name: params.name as string,
          platform: params.platform as string,

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, A
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { api, type ClaimListItem, type PayoutListItem } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,7 +43,7 @@ export default function ClaimsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!token) return;
     setError(null);
     const [claimData, payoutData] = await Promise.all([
@@ -51,7 +52,7 @@ export default function ClaimsScreen() {
     ]);
     setClaims(claimData.claims || []);
     setPayouts(payoutData.payouts || []);
-  };
+  }, [token]);
 
   useEffect(() => {
     if (!token) {
@@ -65,7 +66,18 @@ export default function ClaimsScreen() {
         setError(err instanceof Error ? err.message : 'Telemetry sync failed.');
       })
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+
+      loadData().catch((err) => {
+        console.error(err);
+        setError(err instanceof Error ? err.message : 'Telemetry sync failed.');
+      });
+    }, [token, loadData])
+  );
 
   const onRefresh = useCallback(async () => {
     if (!token) return;
@@ -77,7 +89,7 @@ export default function ClaimsScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token, loadData]);
 
   const sortedClaims = useMemo(
     () =>
@@ -116,6 +128,8 @@ export default function ClaimsScreen() {
             <Text style={[styles.toggleText, activeTab === 'payouts' && styles.toggleTextActive]}>Payouts</Text>
           </TouchableOpacity>
         </View>
+
+        {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
 
         {activeTab === 'claims' ? (
           sortedClaims.length > 0 ? (
@@ -195,6 +209,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020617' },
   center: { justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20 },
+  errorBanner: {
+    color: '#fecaca',
+    backgroundColor: 'rgba(127, 29, 29, 0.35)',
+    borderColor: 'rgba(248, 113, 113, 0.25)',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   toggleContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 20, padding: 6, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   toggleBtn: { flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
   toggleBtnActive: { backgroundColor: Colors.dark.tint },

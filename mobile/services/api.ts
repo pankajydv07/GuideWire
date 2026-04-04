@@ -1,14 +1,26 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+const currentHostname =
+  typeof globalThis !== 'undefined' && 'location' in globalThis
+    ? globalThis.location?.hostname || ''
+    : '';
+const currentProtocol =
+  typeof globalThis !== 'undefined' && 'location' in globalThis
+    ? globalThis.location?.protocol || 'http:'
+    : 'http:';
 const expoHost =
   Constants.expoConfig?.hostUri?.split(':')[0] ||
   Constants.manifest2?.extra?.expoClient?.hostUri?.split(':')[0] ||
-  '';
+  Constants.manifest?.debuggerHost?.split(':')[0] ||
+  currentHostname;
 
 const configuredApiBase = process.env.EXPO_PUBLIC_API_URL?.trim() || '';
 const defaultCandidates = [
   configuredApiBase,
+  currentHostname && currentHostname !== 'localhost' && currentHostname !== '127.0.0.1'
+    ? `${currentProtocol === 'https:' ? 'https' : 'http'}://${currentHostname}:8000`
+    : '',
   expoHost ? `http://${expoHost}:8000` : '',
   Platform.OS === 'android' ? 'http://10.0.2.2:8000' : '',
   'http://localhost:8000',
@@ -269,7 +281,7 @@ class ApiClient {
 
   riders = {
     sendOtp: (phone: string) =>
-      this.request<{ message: string; expires_in: number }>('POST', '/api/riders/send-otp', { phone }),
+      this.request<{ message: string; expires_in: number; dev_otp?: string }>('POST', '/api/riders/send-otp', { phone }),
 
     verifyOtp: (phone: string, otp: string) =>
       this.request<OtpVerifyResponse>('POST', '/api/riders/verify-otp', { phone, otp }),

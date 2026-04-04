@@ -1,14 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 
 import { Sidebar } from "@/components/Sidebar";
 
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
 
 export const metadata: Metadata = {
   title: "RiderShield Admin",
@@ -18,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} min-h-screen bg-[#020617] text-slate-100 antialiased selection:bg-sky-500/30`}>
+      <body className="min-h-screen bg-[#020617] text-slate-100 antialiased selection:bg-sky-500/30">
         {/* Animated Background Layers */}
         <div className="fixed inset-0 -z-10 bg-[#020617]" />
         <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.08),_transparent_40%),radial-gradient(circle_at_bottom_left,_rgba(129,140,248,0.08),_transparent_40%)]" />
