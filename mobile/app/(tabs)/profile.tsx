@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type RiskProfile } from '../../services/api';
@@ -37,6 +39,11 @@ export default function ProfileScreen() {
   }, [riskProfile?.four_week_earnings]);
 
   const maxEarnings = Math.max(...earningsRows.map((row) => row.amount), 1);
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -107,7 +114,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+        <TouchableOpacity style={styles.logoutButton} onPress={() => void handleLogout()}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>

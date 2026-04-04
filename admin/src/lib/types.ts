@@ -40,6 +40,7 @@ export interface ManualClaimReview {
   weather_match?: boolean | null;
   traffic_match?: boolean | null;
   review_status: string;
+  reviewer_notes?: string | null;
   created_at: string;
 }
 

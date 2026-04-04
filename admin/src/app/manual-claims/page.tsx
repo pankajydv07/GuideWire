@@ -58,6 +58,8 @@ export default function ManualClaimsPage() {
     setClaims((current) => current.filter((claim) => claim.id !== claimId));
   };
 
+  const isReviewLocked = (claim: ManualClaimReview) => claim.review_status !== "pending" || claim.spam_score >= 70;
+
   const handleApprove = async (claim: ManualClaimReview) => {
     if (!claim.claim_id) {
       setError("Manual claim is missing the linked claim id required for approval.");
@@ -131,6 +133,7 @@ export default function ManualClaimsPage() {
                 : `${API_BASE}${claim.photo_url}`
               : null;
             const isAutoRejected = claim.spam_score >= 70;
+            const isLocked = isReviewLocked(claim);
             const isSubmitting = submittingId === claim.id;
 
             return (
@@ -151,6 +154,10 @@ export default function ManualClaimsPage() {
                     {isAutoRejected ? (
                       <span className="rounded-full bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-300 ring-1 ring-red-800/80">
                         Auto-Rejected
+                      </span>
+                    ) : claim.review_status === "rejected" ? (
+                      <span className="rounded-full bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-300 ring-1 ring-red-800/80">
+                        Rejected
                       </span>
                     ) : null}
                   </div>
@@ -198,7 +205,7 @@ export default function ManualClaimsPage() {
                   </div>
                 </div>
 
-                {!isAutoRejected ? (
+                {!isLocked ? (
                   <div className="mt-6 flex flex-col gap-3">
                     <div className="flex flex-wrap gap-3">
                       <button
@@ -240,6 +247,13 @@ export default function ManualClaimsPage() {
                         </button>
                       </div>
                     ) : null}
+                  </div>
+                ) : claim.review_status === "rejected" ? (
+                  <div className="mt-6 rounded-2xl border border-red-900/50 bg-red-950/20 px-4 py-3 text-sm text-red-200">
+                    {claim.reviewer_notes ||
+                      (isAutoRejected
+                        ? "This claim was auto-rejected by the trust checks."
+                        : "This claim has already been rejected.")}
                   </div>
                 ) : null}
               </article>

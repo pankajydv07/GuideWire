@@ -56,9 +56,10 @@ async def list_manual_claims(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns list of pending manual claims.
+    Returns list of manual claims that still matter to operations:
+    pending review plus auto-rejected/manual-rejected items.
     """
-    stmt = select(ManualClaim).where(ManualClaim.review_status == "pending")
+    stmt = select(ManualClaim).where(ManualClaim.review_status.in_(("pending", "rejected")))
     
     if sort == "spam_score":
         if order == "desc":
@@ -107,6 +108,7 @@ async def list_manual_claims(
                 "weather_match": claim.weather_match,
                 "traffic_match": claim.traffic_match,
                 "review_status": claim.review_status,
+                "reviewer_notes": claim.reviewer_notes,
                 "created_at": claim.created_at.isoformat() if claim.created_at else None,
             }
         )

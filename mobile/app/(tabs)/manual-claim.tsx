@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
-import { api } from '../../services/api';
+import { api, type ManualClaimSubmitResponse } from '../../services/api';
 
 const DISRUPTION_TYPES = [
-  { id: 'heavy_rain', label: 'Weather', emoji: '🌧️', desc: 'Rain, flooding, storms' },
-  { id: 'traffic', label: 'Traffic', emoji: '🚗', desc: 'Congestion, road blocks' },
-  { id: 'store_closure', label: 'Store Closed', emoji: '🏪', desc: 'Dark store shut down' },
-  { id: 'platform_outage', label: 'Platform Down', emoji: '📱', desc: 'App not working' },
-  { id: 'other', label: 'Other', emoji: '❓', desc: 'Other disruption' },
+  { id: 'heavy_rain', label: 'Weather', emoji: 'Rain', desc: 'Rain, flooding, storms' },
+  { id: 'traffic', label: 'Traffic', emoji: 'Traffic', desc: 'Congestion, road blocks' },
+  { id: 'store_closure', label: 'Store Closed', emoji: 'Store', desc: 'Dark store shut down' },
+  { id: 'platform_outage', label: 'Platform Down', emoji: 'App', desc: 'App not working' },
+  { id: 'other', label: 'Other', emoji: 'Other', desc: 'Other disruption' },
 ];
 
 type FormErrors = {
@@ -27,7 +28,7 @@ export default function ManualClaimScreen() {
   const [location, setLocation] = useState<Location.LocationObjectCoords | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ claim_id?: string; manual_claim_id?: string; status: string } | null>(null);
+  const [result, setResult] = useState<ManualClaimSubmitResponse | null>(null);
 
   const canSubmit = useMemo(
     () => Boolean(disruptionType && photo && description.trim().length >= 10 && location),
@@ -116,11 +117,7 @@ export default function ManualClaimScreen() {
         type: photo.mimeType || 'image/jpeg',
       } as never);
 
-      const response = await api.manualClaims.submit(formData) as {
-        claim_id?: string;
-        manual_claim_id?: string;
-        status: string;
-      };
+      const response = await api.manualClaims.submit(formData);
       setResult(response);
     } catch (error) {
       setErrors((prev) => ({
@@ -142,14 +139,27 @@ export default function ManualClaimScreen() {
   };
 
   if (result) {
+    const isRejected = result.status === 'rejected';
+
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.successCard}>
-          <Text style={styles.successEmoji}>✅</Text>
-          <Text style={styles.successTitle}>Claim Submitted Successfully</Text>
+          <Text style={styles.successEmoji}>{isRejected ? 'Rejected' : 'Submitted'}</Text>
+          <Text style={styles.successTitle}>
+            {isRejected ? 'Claim Auto-Rejected' : 'Claim Submitted Successfully'}
+          </Text>
           <Text style={styles.successText}>Claim ID: {result.claim_id || result.manual_claim_id}</Text>
           <Text style={styles.successText}>Status: {result.status.replace('_', ' ')}</Text>
-          <Text style={styles.successHint}>Track your claim in the Claims tab.</Text>
+          <Text style={styles.successHint}>{result.message}</Text>
+          {result.rejection_reasons.length > 0 ? (
+            <View style={styles.reasonList}>
+              {result.rejection_reasons.map((reason) => (
+                <Text key={reason} style={styles.reasonText}>- {reason}</Text>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.successHint}>Track your claim in the Claims tab.</Text>
+          )}
           <TouchableOpacity style={styles.submitButton} onPress={resetForm}>
             <Text style={styles.submitText}>Submit Another</Text>
           </TouchableOpacity>
@@ -195,14 +205,14 @@ export default function ManualClaimScreen() {
           {photo ? (
             <>
               <Image source={{ uri: photo.uri }} style={styles.preview} />
-              <Text style={styles.photoStatus}>✅ Photo captured</Text>
+              <Text style={styles.photoStatus}>Photo captured</Text>
             </>
           ) : (
-            <Text style={styles.hint}>Capture what’s happening on the ground.</Text>
+            <Text style={styles.hint}>Capture what is happening on the ground.</Text>
           )}
           <View style={styles.photoActions}>
             <TouchableOpacity style={styles.secondaryButton} onPress={takePhoto}>
-              <Text style={styles.secondaryButtonText}>{photo ? 'Retake Photo' : '📸 Take Photo'}</Text>
+              <Text style={styles.secondaryButtonText}>{photo ? 'Retake Photo' : 'Take Photo'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={choosePhoto}>
               <Text style={styles.secondaryButtonText}>Choose from Gallery</Text>
@@ -210,9 +220,9 @@ export default function ManualClaimScreen() {
           </View>
           {errors.photo ? <Text style={styles.errorText}>{errors.photo}</Text> : null}
           <Text style={styles.locationText}>
-            📍 Location:{' '}
+            Location:{' '}
             {location
-              ? `${location.latitude.toFixed(4)}° N, ${location.longitude.toFixed(4)}° E`
+              ? `${location.latitude.toFixed(4)} N, ${location.longitude.toFixed(4)} E`
               : 'Not captured yet'}
           </Text>
           {errors.location ? <Text style={styles.errorText}>{errors.location}</Text> : null}
@@ -255,7 +265,7 @@ const styles = StyleSheet.create({
   chips: { gap: 10 },
   typeChip: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' },
   typeChipSelected: { borderColor: '#38bdf8', backgroundColor: '#11203a' },
-  typeEmoji: { fontSize: 24 },
+  typeEmoji: { width: 52, color: '#e2e8f0', fontWeight: '700' },
   typeCopy: { flex: 1 },
   typeTitle: { color: '#f8fafc', fontWeight: '700' },
   typeTitleSelected: { color: '#38bdf8' },
@@ -272,8 +282,10 @@ const styles = StyleSheet.create({
   submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   errorText: { color: '#fca5a5', fontSize: 12 },
   successCard: { margin: 20, marginTop: 80, backgroundColor: '#1e293b', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#334155', alignItems: 'center', gap: 10 },
-  successEmoji: { fontSize: 48 },
+  successEmoji: { fontSize: 32, fontWeight: '700', color: '#f8fafc' },
   successTitle: { color: '#f8fafc', fontSize: 22, fontWeight: '700' },
   successText: { color: '#cbd5e1', fontSize: 14 },
   successHint: { color: '#94a3b8', fontSize: 13, textAlign: 'center' },
+  reasonList: { alignSelf: 'stretch', gap: 8, marginTop: 6, padding: 14, borderRadius: 12, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' },
+  reasonText: { color: '#fca5a5', fontSize: 13, lineHeight: 18 },
 });

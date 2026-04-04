@@ -65,3 +65,43 @@ def calculate_spam_score(
         score += 40
 
     return min(score, 100)
+
+
+def explain_spam_rejection(
+    gps_distance_m: float,
+    time_delta_min: float,
+    disruption_type: str,
+    weather_match: bool = False,
+    traffic_match: bool = False,
+) -> list[str]:
+    """
+    Return human-readable reasons that contributed to a high spam score.
+    """
+    reasons: list[str] = []
+
+    if gps_distance_m > 500:
+        reasons.append(f"Photo GPS is {int(gps_distance_m)}m away from the reported incident location.")
+
+    if time_delta_min > 30:
+        if time_delta_min >= 900:
+            reasons.append("Photo metadata is missing or unusable, so the capture time could not be verified.")
+        else:
+            reasons.append(f"Photo capture time differs from the reported incident time by {int(time_delta_min)} minutes.")
+
+    confirmed = False
+    if disruption_type == "weather" and weather_match:
+        confirmed = True
+    elif disruption_type == "traffic" and traffic_match:
+        confirmed = True
+    elif disruption_type not in ["weather", "traffic"] and (weather_match or traffic_match):
+        confirmed = True
+
+    if not confirmed:
+        if disruption_type == "weather":
+            reasons.append("Historical weather data did not confirm the reported weather disruption.")
+        elif disruption_type == "traffic":
+            reasons.append("Traffic data did not confirm unusual congestion for the reported incident.")
+        else:
+            reasons.append("Independent validation signals did not corroborate the reported disruption.")
+
+    return reasons

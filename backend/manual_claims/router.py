@@ -11,9 +11,16 @@ from shared.auth import get_current_rider
 from policy_service.models import Policy
 from manual_claims.models import ManualClaim
 from manual_claims.photo_handler import extract_exif_data
-from manual_claims.geo_validation import haversine_distance, calculate_spam_score
+from manual_claims.geo_validation import (
+    haversine_distance,
+    calculate_spam_score,
+    explain_spam_rejection,
+)
 from trigger_service.service import check_historical_conditions
-from claims_service.service import process_manual_claim as dev4_process_manual_claim
+from claims_service.service import (
+    process_manual_claim as dev4_process_manual_claim,
+    reject_manual_claim as dev4_reject_manual_claim,
+)
 
 router = APIRouter()
 
@@ -89,10 +96,20 @@ async def submit_manual_claim(
         traffic_match=conditions.get("traffic", False)
     )
 
+    rejection_reasons = explain_spam_rejection(
+        gps_distance_m=dist_m,
+        time_delta_min=time_delta_min,
+        disruption_type=disruption_type,
+        weather_match=conditions.get("weather", False),
+        traffic_match=conditions.get("traffic", False),
+    )
+
     # 6. Create Records
     review_status = "pending"
     if spam_score >= 70:
         review_status = "rejected" # Auto-reject extremely high spam scores
+
+    auto_reject_reason = "; ".join(rejection_reasons) if rejection_reasons else "Auto-rejected due to high spam score."
 
     # Call Dev 4 logic to create the financial claim anchor
     # We pass it as "manual" type
@@ -107,6 +124,9 @@ async def submit_manual_claim(
         db=db
     )
     dev4_claim_id = dev4_result["claim_id"]
+
+    if review_status == "rejected":
+        await dev4_reject_manual_claim(uuid.UUID(dev4_claim_id), auto_reject_reason, db=db)
 
     new_manual = ManualClaim(
         rider_id=rider.id,
@@ -125,7 +145,9 @@ async def submit_manual_claim(
         geo_valid=(dist_m < 500),
         weather_match=conditions.get("weather"),
         traffic_match=conditions.get("traffic"),
-        review_status=review_status
+        review_status=review_status,
+        reviewer_notes=auto_reject_reason if review_status == "rejected" else None,
+        reviewed_at=datetime.utcnow() if review_status == "rejected" else None,
     )
     
     db.add(new_manual)
@@ -136,7 +158,8 @@ async def submit_manual_claim(
         "manual_claim_id": str(new_manual.id),
         "status": review_status,
         "spam_score": spam_score,
-        "message": "Claim submitted successfully." if review_status == "pending" else "Claim auto-rejected due to high spam score."
+        "message": "Claim submitted successfully." if review_status == "pending" else auto_reject_reason,
+        "rejection_reasons": rejection_reasons if review_status == "rejected" else [],
     }
 
 @router.get("/{claim_id}")
