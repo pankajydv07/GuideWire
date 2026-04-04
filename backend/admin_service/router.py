@@ -168,14 +168,31 @@ async def approve_claim(
     """
     Approves a claim and triggers payout.
     """
-    # 1. Update Manual Claim Status if it exists
-    manual_stmt = select(ManualClaim).where(ManualClaim.claim_id == claim_id)
+    # 1. Resolve the correct Claim ID
+    # We try finding by manual_claim.id first (common frontend mismatch), then by claim.id
+    manual_claim = None
+    target_claim_id = claim_id
+
+    # Try finding as ManualClaim.id
+    manual_stmt = select(ManualClaim).where(ManualClaim.id == claim_id)
     manual_result = await db.execute(manual_stmt)
     manual_claim = manual_result.scalar_one_or_none()
 
-    # 2. Call Dev 4 Engine
-    result = await approve_manual_claim(claim_id, db=db)
+    if manual_claim:
+        target_claim_id = manual_claim.claim_id
+    else:
+        # Try finding as ManualClaim.claim_id
+        manual_stmt = select(ManualClaim).where(ManualClaim.claim_id == claim_id)
+        manual_result = await db.execute(manual_stmt)
+        manual_claim = manual_result.scalar_one_or_none()
+
+    if not target_claim_id:
+        raise HTTPException(status_code=404, detail="Target financial claim reference missing.")
+
+    # 2. Call Dev 4 Engine with the resolved Claim ID
+    result = await approve_manual_claim(target_claim_id, db=db)
     
+    # 3. Finalize Manual Claim review status
     if manual_claim:
         manual_claim.review_status = "approved"
         manual_claim.reviewed_at = datetime.utcnow()
@@ -196,14 +213,30 @@ async def reject_claim(
     """
     reason = data.get("reason", "Fraud detected or insufficient evidence.")
     
-    # 1. Update Manual Claim Status if it exists
-    manual_stmt = select(ManualClaim).where(ManualClaim.claim_id == claim_id)
+    # 1. Resolve the correct Claim ID
+    manual_claim = None
+    target_claim_id = claim_id
+
+    # Try finding as ManualClaim.id
+    manual_stmt = select(ManualClaim).where(ManualClaim.id == claim_id)
     manual_result = await db.execute(manual_stmt)
     manual_claim = manual_result.scalar_one_or_none()
 
-    # 2. Call Dev 4 Engine
-    result = await reject_manual_claim(claim_id, reason, db=db)
+    if manual_claim:
+        target_claim_id = manual_claim.claim_id
+    else:
+        # Try finding as ManualClaim.claim_id
+        manual_stmt = select(ManualClaim).where(ManualClaim.claim_id == claim_id)
+        manual_result = await db.execute(manual_stmt)
+        manual_claim = manual_result.scalar_one_or_none()
+
+    if not target_claim_id:
+        raise HTTPException(status_code=404, detail="Target financial claim reference missing.")
+
+    # 2. Call Dev 4 Engine with the resolved Claim ID
+    result = await reject_manual_claim(target_claim_id, reason, db=db)
     
+    # 3. Finalize Manual Claim review status
     if manual_claim:
         manual_claim.review_status = "rejected"
         manual_claim.reviewer_notes = reason

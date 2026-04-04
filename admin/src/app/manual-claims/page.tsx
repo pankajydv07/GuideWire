@@ -73,12 +73,17 @@ export default function ManualClaimsPage() {
       return;
     }
 
+    if (!selectedClaim?.claim_id) {
+      alert("Invalid claim propagation. Sector ID missing.");
+      return;
+    }
+
     setReviewing(claimId);
     try {
       if (status === "approved") {
-        await adminApi.claims.approve(claimId);
+        await adminApi.claims.approve(selectedClaim.claim_id);
       } else {
-        await adminApi.claims.reject(claimId, rejectReason);
+        await adminApi.claims.reject(selectedClaim.claim_id, rejectReason);
       }
       
       await loadClaims();
