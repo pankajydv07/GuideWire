@@ -89,19 +89,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="manual-claim"
-        options={{
-          title: 'Report',
-          tabBarIcon: ({ color }) => <TabBarIcon name="warning" color={color} />,
-          headerTitle: 'Incident Telemetry',
-        }}
-      />
-      <Tabs.Screen
         name="two"
         options={{
-          title: 'Assets',
-          tabBarIcon: ({ color }) => <TabBarIcon name="cubes" color={color} />,
-          headerTitle: 'Digital Assets',
+          href: null,
         }}
       />
     </Tabs>
