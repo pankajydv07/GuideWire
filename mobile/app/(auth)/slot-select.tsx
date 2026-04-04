@@ -20,6 +20,7 @@ export default function SlotSelectScreen() {
   const { login } = useAuth();
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const toggleSlot = (id: string) => {
     setSelectedSlots(prev => {
@@ -30,8 +31,14 @@ export default function SlotSelectScreen() {
   };
 
   const handleComplete = async () => {
+    setErrorMsg('');
     setLoading(true);
     try {
+      const tempToken = await AsyncStorage.getItem('temp_token');
+      if (!tempToken) {
+        throw new Error('Your verification session expired. Please verify OTP again.');
+      }
+
       // 1. Register rider payload
       const payload = {
          name: params.name as string,
@@ -42,13 +49,14 @@ export default function SlotSelectScreen() {
          upi_id: params.upiId as string
       };
 
-      const regResult = await api.riders.register(payload);
+      const regResult = await api.riders.register(payload, tempToken);
       
       // 2. Persist slots and upi_id for later use in policy flows
       await AsyncStorage.setItem('rider_slots', JSON.stringify(selectedSlots));
       if (params.upiId) {
         await AsyncStorage.setItem('rider_upi_id', params.upiId as string);
       }
+      await AsyncStorage.removeItem('temp_token');
 
       // 3. Perform contextual login returning real tokens resolving app
       const token = regResult.jwt_token; 
@@ -61,6 +69,7 @@ export default function SlotSelectScreen() {
       // 4. Push to final policy flow wrapper
       router.replace('/policy/select');
     } catch (err: any) {
+      setErrorMsg(err.message || 'An error occurred during onboarding.');
       Alert.alert('Registration Failed', err.message || 'An error occurred during onboarding.');
     } finally {
       setLoading(false);
@@ -73,6 +82,7 @@ export default function SlotSelectScreen() {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Pick Working Slots</Text>
       <Text style={styles.subtitle}>Select up to 4 slots (Current: {selectedSlots.length})</Text>
+      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
       <ScrollView contentContainerStyle={styles.grid}>
         {TIME_SLOTS.map((slot) => {
@@ -119,6 +129,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc', paddingHorizontal: 24, paddingTop: 20 },
   subtitle: { fontSize: 14, color: '#94a3b8', paddingHorizontal: 24, marginBottom: 20 },
+  errorText: { color: '#fca5a5', paddingHorizontal: 24, marginBottom: 12 },
   grid: { paddingHorizontal: 24, paddingBottom: 100, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
   card: { width: '48%', backgroundColor: '#1e293b', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#334155', alignItems: 'center', marginBottom: 8 },
   cardActive: { backgroundColor: '#1e3a8a', borderColor: '#3b82f6' },

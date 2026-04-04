@@ -8,7 +8,7 @@
  *   4. Profile (Dev 1) — rider profile + risk data
  */
 
-import { Redirect, Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -26,7 +26,7 @@ export default function TabLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/" />;
+    return null;
   }
 
   return (

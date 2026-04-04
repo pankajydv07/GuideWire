@@ -18,7 +18,9 @@ class OTPVerifyRequest(BaseModel):
 
 class OTPVerifyResponse(BaseModel):
     valid: bool
-    temp_token: str
+    temp_token: Optional[str] = None
+    jwt_token: Optional[str] = None
+    is_registered: bool = False
 
 
 # ─── Registration Schemas ──────────────────────────

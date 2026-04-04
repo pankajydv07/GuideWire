@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, A
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api, type ClaimListItem, type PayoutListItem } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { formatApiDateTime, parseApiDate } from '../../utils/datetime';
 
 const disruptionEmoji = (type: string) => {
   switch (type) {
@@ -32,13 +34,18 @@ const statusStyle = (status: string) => {
 };
 
 export default function ClaimsScreen() {
+  const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<'claims' | 'payouts'>('claims');
   const [claims, setClaims] = useState<ClaimListItem[]>([]);
   const [payouts, setPayouts] = useState<PayoutListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
+    if (!token) return;
+
+    setError(null);
     const [claimData, payoutData] = await Promise.all([
       api.claims.list(),
       api.payouts.list(),
@@ -48,22 +55,39 @@ export default function ClaimsScreen() {
   };
 
   useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     loadData()
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setError(err instanceof Error ? err.message : 'Failed to load claims.');
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [token]);
 
   const onRefresh = useCallback(async () => {
+    if (!token) return;
+
     setRefreshing(true);
     try {
       await loadData();
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh claims.');
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [token]);
 
   const sortedClaims = useMemo(
-    () => [...claims].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    () =>
+      [...claims].sort(
+        (a, b) => (parseApiDate(b.created_at)?.getTime() || 0) - (parseApiDate(a.created_at)?.getTime() || 0)
+      ),
     [claims]
   );
 
@@ -93,7 +117,11 @@ export default function ClaimsScreen() {
         </View>
 
         {activeTab === 'claims' ? (
-          sortedClaims.length > 0 ? (
+          error ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : sortedClaims.length > 0 ? (
             sortedClaims.map((claim) => {
               const badge = statusStyle(claim.status);
               return (
@@ -111,7 +139,7 @@ export default function ClaimsScreen() {
                   </Text>
                   <Text style={styles.claimAmount}>₹{claim.payout_amount}</Text>
                   <Text style={styles.claimMeta}>Income loss ₹{claim.income_loss}</Text>
-                  <Text style={styles.claimMeta}>{new Date(claim.created_at).toLocaleString()}</Text>
+                  <Text style={styles.claimMeta}>{formatApiDateTime(claim.created_at)}</Text>
                 </View>
               );
             })
@@ -130,7 +158,7 @@ export default function ClaimsScreen() {
                 </View>
               </View>
               <Text style={styles.claimMeta}>UPI Ref: {payout.reference_id}</Text>
-              <Text style={styles.claimMeta}>{new Date(payout.created_at).toLocaleString()}</Text>
+              <Text style={styles.claimMeta}>{formatApiDateTime(payout.created_at)}</Text>
             </View>
           ))
         ) : (
@@ -165,4 +193,5 @@ const styles = StyleSheet.create({
   claimMeta: { color: '#94a3b8', fontSize: 12 },
   emptyCard: { backgroundColor: '#1e293b', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#334155' },
   emptyText: { color: '#94a3b8', fontSize: 14, lineHeight: 20 },
+  errorText: { color: '#fca5a5', fontSize: 14, lineHeight: 20 },
 });

@@ -24,9 +24,9 @@ async def send_otp(request: OTPRequest):
 
 # ─── POST /verify-otp ───────────────────────────────
 @router.post("/verify-otp", response_model=OTPVerifyResponse)
-async def verify_otp(request: OTPVerifyRequest):
-    """Verify OTP and return a temporary token for registration."""
-    result = await service.verify_otp(request.phone, request.otp)
+async def verify_otp(request: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
+    """Verify OTP and log in existing riders directly, otherwise return a temporary token for registration."""
+    result = await service.verify_otp(request.phone, request.otp, db)
     if not result["valid"]:
         error_code = result.get("error", "INVALID_OTP")
         message = "OTP expired or not found" if error_code == "OTP_EXPIRED" else "Invalid OTP"
@@ -34,6 +34,7 @@ async def verify_otp(request: OTPVerifyRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": error_code, "message": message}
         )
+
     return result
 
 

@@ -31,6 +31,8 @@ def calculate_spam_score(
     disruption_type: str,
     weather_match: bool = False,
     traffic_match: bool = False,
+    exif_gps_available: bool = True,
+    exif_timestamp_available: bool = True,
 ) -> int:
     """
     Calculate composite spam score (0-100).
@@ -45,12 +47,20 @@ def calculate_spam_score(
     score = 0
 
     # 1. Location mismatch (35% weight)
-    if gps_distance_m > 500:
-        score += 35
+    # Web uploads often lack EXIF GPS entirely, which should flag for review,
+    # not auto-reject a legitimate claim by itself.
+    if exif_gps_available:
+        if gps_distance_m > 500:
+            score += 35
+    else:
+        score += 10
 
     # 2. Time anomaly (25% weight)
-    if time_delta_min > 30:
-        score += 25
+    if exif_timestamp_available:
+        if time_delta_min > 30:
+            score += 25
+    else:
+        score += 10
 
     # 3. Weather/Traffic match (40% weight total)
     confirmed = False

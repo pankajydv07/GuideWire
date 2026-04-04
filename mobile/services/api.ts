@@ -198,6 +198,13 @@ export interface ManualClaimSubmitResponse {
   rejection_reasons: string[];
 }
 
+export interface OtpVerifyResponse {
+  valid: boolean;
+  temp_token?: string | null;
+  jwt_token?: string | null;
+  is_registered: boolean;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -213,10 +220,11 @@ class ApiClient {
     method: HttpMethod,
     path: string,
     body?: unknown,
-    isFormData = false
+    isFormData = false,
+    extraHeaders?: Record<string, string>
   ): Promise<T> {
     const apiBase = await resolveApiBase();
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...(extraHeaders || {}) };
 
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`;
@@ -259,10 +267,19 @@ class ApiClient {
       this.request<{ message: string; expires_in: number }>('POST', '/api/riders/send-otp', { phone }),
 
     verifyOtp: (phone: string, otp: string) =>
-      this.request<{ valid: boolean; temp_token: string }>('POST', '/api/riders/verify-otp', { phone, otp }),
+      this.request<OtpVerifyResponse>('POST', '/api/riders/verify-otp', { phone, otp }),
 
-    register: (data: { name: string; platform: string; city: string; zone_id: string; slots: string[]; upi_id: string }) =>
-      this.request<RiderProfile>('POST', '/api/riders/register', data),
+    register: (
+      data: { name: string; platform: string; city: string; zone_id: string; slots: string[]; upi_id: string },
+      tempToken?: string
+    ) =>
+      this.request<RiderProfile>(
+        'POST',
+        '/api/riders/register',
+        data,
+        false,
+        tempToken ? { Authorization: `Bearer ${tempToken}` } : undefined
+      ),
 
     onboard: (data: { typical_slots: string[]; plan_tier: string }) =>
       this.request<unknown>('POST', '/api/riders/onboard', data),
@@ -276,7 +293,7 @@ class ApiClient {
 
   zones = {
     list: () =>
-      this.request<{ zones: Zone[] }>('GET', '/api/zones'),
+      this.request<{ zones: Zone[] }>('GET', '/api/riders/zones'),
   };
 
   policies = {

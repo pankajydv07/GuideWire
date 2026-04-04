@@ -70,6 +70,9 @@ async def submit_manual_claim(
     # 4. Extract EXIF & Validate
     exif_data = extract_exif_data(file_path)
     
+    has_exif_gps = exif_data.get("lat") is not None and exif_data.get("lon") is not None
+    has_exif_timestamp = exif_data.get("timestamp") is not None
+
     # Haversine distance: Photo GPS vs Declared GPS
     dist_m = haversine_distance(
         exif_data.get("lat"), exif_data.get("lon"),
@@ -79,10 +82,10 @@ async def submit_manual_claim(
     # Time delta
     incident_dt = datetime.fromisoformat(incident_time.replace('Z', '+00:00'))
     time_delta_min = 0
-    if exif_data.get("timestamp"):
+    if has_exif_timestamp:
         time_delta_min = abs((exif_data["timestamp"] - incident_dt.replace(tzinfo=None)).total_seconds() / 60)
     else:
-        time_delta_min = 999.0 # Penalize missing timestamp
+        time_delta_min = 0
 
     # Corroboration from Dev 3
     conditions = await check_historical_conditions(str(rider.zone_id), incident_dt, db)
@@ -93,7 +96,9 @@ async def submit_manual_claim(
         time_delta_min=time_delta_min,
         disruption_type=disruption_type,
         weather_match=conditions.get("weather", False),
-        traffic_match=conditions.get("traffic", False)
+        traffic_match=conditions.get("traffic", False),
+        exif_gps_available=has_exif_gps,
+        exif_timestamp_available=has_exif_timestamp,
     )
 
     rejection_reasons = explain_spam_rejection(
@@ -107,7 +112,7 @@ async def submit_manual_claim(
     # 6. Create Records
     review_status = "pending"
     if spam_score >= 70:
-        review_status = "rejected" # Auto-reject extremely high spam scores
+        review_status = "rejected"
 
     auto_reject_reason = "; ".join(rejection_reasons) if rejection_reasons else "Auto-rejected due to high spam score."
 
@@ -142,7 +147,7 @@ async def submit_manual_claim(
         telemetry_lon=longitude,
         gps_distance_m=int(dist_m) if dist_m < 999999 else None,
         spam_score=spam_score,
-        geo_valid=(dist_m < 500),
+        geo_valid=(dist_m < 500) if has_exif_gps else None,
         weather_match=conditions.get("weather"),
         traffic_match=conditions.get("traffic"),
         review_status=review_status,

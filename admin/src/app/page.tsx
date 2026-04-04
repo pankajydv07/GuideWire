@@ -7,6 +7,7 @@ import {
   formatCurrency,
   formatDurationSince,
   formatPercent,
+  parseApiDate,
   formatRelativeTime,
   formatTriggerWithEmoji,
 } from "@/lib/format";
@@ -89,7 +90,10 @@ export default function AdminOverview() {
     }));
 
     return [...autoItems, ...manualItems]
-      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+      .sort(
+        (left, right) =>
+          (parseApiDate(right.created_at)?.getTime() || 0) - (parseApiDate(left.created_at)?.getTime() || 0)
+      )
       .slice(0, 5);
   }, [data]);
 

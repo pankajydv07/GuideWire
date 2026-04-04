@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { login } = useAuth();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -25,8 +28,21 @@ export default function OtpScreen() {
     try {
       const result = await api.riders.verifyOtp(phone!, otp);
       if (result.valid) {
-        api.setToken(result.temp_token);
-        router.push({ pathname: '/(auth)/register', params: { phone } });
+        if (result.is_registered && result.jwt_token) {
+          await AsyncStorage.removeItem('temp_token');
+          await login(result.jwt_token);
+          router.replace('/(tabs)');
+          return;
+        }
+
+        if (result.temp_token) {
+          await AsyncStorage.setItem('temp_token', result.temp_token);
+          api.setToken(result.temp_token);
+          router.push({ pathname: '/(auth)/register', params: { phone } });
+          return;
+        }
+
+        setErrorMsg('Unable to continue. Please try again.');
       } else {
         setErrorMsg('Invalid OTP. Please try again.');
       }
