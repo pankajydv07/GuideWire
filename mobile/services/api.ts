@@ -309,8 +309,17 @@ class ApiClient {
   };
 
   zones = {
-    list: () =>
-      this.request<{ zones: Zone[] }>('GET', '/api/zones'),
+    list: async () => {
+      try {
+        return await this.request<{ zones: Zone[] }>('GET', '/api/zones');
+      } catch (primaryError) {
+        try {
+          return await this.request<{ zones: Zone[] }>('GET', '/api/riders/zones');
+        } catch {
+          throw primaryError;
+        }
+      }
+    },
   };
 
   config = {

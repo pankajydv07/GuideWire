@@ -1,8 +1,7 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Tabs } from 'expo-router';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { Redirect, Tabs } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
 
 import Colors from '../../constants/Colors';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,7 +27,7 @@ export default function TabLayout() {
   }
 
   if (!isAuthenticated) {
-    return null;
+    return <Redirect href="/" />;
   }
 
   return (
@@ -55,16 +54,14 @@ export default function TabLayout() {
           borderWidth: 1,
           borderColor: 'rgba(56, 189, 248, 0.1)',
         },
-        tabBarBackground: () => (
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-        ),
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Guardian',
           tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
-          headerTitle: 'RIDER🛡️SHIELD',
+          headerTitle: 'RiderShield',
         }}
       />
       <Tabs.Screen
@@ -76,6 +73,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="manual-claim"
+        options={{
+          title: 'Report',
+          tabBarIcon: ({ color }) => <TabBarIcon name="camera" color={color} />,
+          headerTitle: 'Report Disruption',
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Node',
@@ -84,19 +89,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="manual-claim"
-        options={{
-          title: 'Report',
-          tabBarIcon: ({ color }) => <TabBarIcon name="warning" color={color} />,
-          headerTitle: 'Incident Telemetry',
-        }}
-      />
-      <Tabs.Screen
         name="two"
         options={{
-          title: 'Assets',
-          tabBarIcon: ({ color }) => <TabBarIcon name="cubes" color={color} />,
-          headerTitle: 'Digital Assets',
+          href: null,
         }}
       />
     </Tabs>
