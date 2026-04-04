@@ -34,6 +34,10 @@ services:
     build: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,6 +52,12 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+      ML_SERVICE_URL: http://ml:8001
+      UPLOAD_DIR: /app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,6 +75,11 @@ services:
     build: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+      ML_SERVICE_URL: http://ml:8001
     depends_on:
       postgres:
         condition: service_healthy

@@ -24,8 +24,8 @@ export default function ZoneSelectScreen() {
             setSelectedCity(firstCity);
          }
       })
-      .catch(() => {
-        setError('Unable to load zone results from the backend.');
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Unable to load zone results from the backend.');
       })
       .finally(() => setLoading(false));
   }, []);
