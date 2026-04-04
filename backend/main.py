@@ -162,16 +162,54 @@ async def health_check():
 @app.get("/api/zones", tags=["Zones"])
 async def list_zones():
     """List available zones — public endpoint."""
-    from sqlalchemy import select, text
+    from sqlalchemy import text
     from shared.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(text(
-            "SELECT id, name, city, composite_risk_score FROM zones ORDER BY city, name"
+            "SELECT id, name, city, composite_risk_score, flood_risk_score, traffic_risk_score, store_risk_score, lat, lon FROM zones ORDER BY city, name"
         ))
         zones = [
-            {"id": str(row[0]), "name": row[1], "city": row[2], "risk_score": row[3]}
+            {
+                "id": str(row[0]), 
+                "name": row[1], 
+                "city": row[2], 
+                "risk_score": row[3],
+                "flood_risk": row[4],
+                "traffic_risk": row[5],
+                "store_risk": row[6],
+                "lat": row[7],
+                "lon": row[8]
+            }
             for row in result.fetchall()
         ]
 
     return {"zones": zones}
+
+
+# ─── App Config (public) ─────────────────────────────
+@app.get("/api/config", tags=["Config"])
+async def get_config():
+    """Return supported platforms and trigger types — single source of truth for frontends."""
+    from shared.schemas import Platform, TriggerType
+
+    PLATFORM_META = {"zepto": "⚡", "blinkit": "📦", "swiggy": "🛵"}
+    TRIGGER_META = {
+        "heavy_rain": "🌧️",
+        "traffic_congestion": "🚗",
+        "store_closed": "🏪",
+        "platform_outage": "📱",
+        "regulatory": "🚫",
+        "community_signal": "📣",
+    }
+
+    platforms = [
+        {"id": p.value, "name": p.value.capitalize(), "icon": PLATFORM_META.get(p.value, "🚀")}
+        for p in Platform
+    ]
+    trigger_types = [
+        {"type": t.value, "label": t.value.replace("_", " ").title(), "icon": TRIGGER_META.get(t.value, "⚠️")}
+        for t in TriggerType
+    ]
+
+    return {"platforms": platforms, "trigger_types": trigger_types}

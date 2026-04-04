@@ -20,7 +20,7 @@ const TIME_SLOTS = [
 
 export default function SlotSelectScreen() {
   const params = useLocalSearchParams();
-  const { login } = useAuth();
+  const { login, setTempToken } = useAuth();
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -33,28 +33,38 @@ export default function SlotSelectScreen() {
   };
 
   const handleComplete = async () => {
+    console.log("🚀 Initializing Shield Protocol with slots:", selectedSlots);
     setLoading(true);
     try {
       const tempToken = await AsyncStorage.getItem('temp_token');
-      if (!tempToken) throw new Error('Session restoration failed.');
+      console.log("🔑 Temp Token Status:", tempToken ? "PRESENT" : "MISSING");
+      
+      if (!tempToken) throw new Error('Session restoration failed. Please restart local node.');
+
+      const city = params.city as string;
+      if (!city) throw new Error('City parameter missing. Please re-select your zone.');
 
       const regResult = await api.riders.register({
          name: params.name as string,
          platform: params.platform as string,
-         city: (params.city as string) || 'bengaluru',
+         city,
          zone_id: params.zoneId as string,
          slots: selectedSlots,
          upi_id: params.upiId as string
       }, tempToken);
       
+      console.log("✅ Registration Successful:", regResult.rider_id);
       const token = regResult.jwt_token; 
       if (token) {
         await login(token);
+        await setTempToken(null); // Clear registration session
+        console.log("🔓 Login successful, routing to dash...");
         router.replace('/(tabs)');
       } else {
-        throw new Error("Activation sequence failed.");
+        throw new Error("Activation sequence failed: No token returned.");
       }
     } catch (err: any) {
+      console.error("❌ Initialization Error:", err);
       Alert.alert('Protocol Error', err.message || 'Onboarding sequence interrupted.');
     } finally {
       setLoading(false);
@@ -100,21 +110,21 @@ export default function SlotSelectScreen() {
             );
           })}
         </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity 
-            style={[styles.button, !isCompleteReady && styles.buttonDisabled]} 
-            disabled={!isCompleteReady || loading}
-            onPress={handleComplete}
-          >
-            {loading ? (
-               <ActivityIndicator color="#fff" />
-            ) : (
-               <Text style={styles.buttonText}>INITIALIZE SHIELD →</Text>
-            )}
-          </TouchableOpacity>
-        </View>
       </SafeAreaView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity 
+          style={[styles.button, !isCompleteReady && styles.buttonDisabled]} 
+          disabled={!isCompleteReady || loading}
+          onPress={handleComplete}
+        >
+          {loading ? (
+             <ActivityIndicator color="#fff" />
+          ) : (
+             <Text style={styles.buttonText}>INITIALIZE SHIELD →</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -124,7 +134,7 @@ const styles = StyleSheet.create({
   header: { padding: 32, paddingBottom: 16 },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
   subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600', marginTop: 8 },
-  grid: { paddingHorizontal: 32, paddingBottom: 120, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  grid: { paddingHorizontal: 32, paddingBottom: 140, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   cardWrapper: { width: '48%', marginBottom: 16 },
   card: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
   cardActive: { borderColor: Colors.dark.tint, backgroundColor: 'rgba(56, 189, 248, 0.05)' },
@@ -132,7 +142,17 @@ const styles = StyleSheet.create({
   icon: { fontSize: 32, marginBottom: 12 },
   label: { fontSize: 14, fontWeight: '900', color: '#f8fafc', textAlign: 'center', marginBottom: 4 },
   time: { fontSize: 11, color: '#475569', textAlign: 'center', fontWeight: '700' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 32, paddingBottom: 40, backgroundColor: 'rgba(2, 6, 23, 0.9)' },
+  footer: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    padding: 32, 
+    paddingBottom: 40, 
+    backgroundColor: 'rgba(2, 6, 23, 0.95)',
+    zIndex: 1000, // Ensure it's on top in Web mode
+    elevation: 10
+  },
   button: { backgroundColor: Colors.dark.tint, paddingVertical: 22, borderRadius: 24, alignItems: 'center', shadowColor: Colors.dark.tint, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
   buttonDisabled: { opacity: 0.2, shadowOpacity: 0 },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 }

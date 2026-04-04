@@ -55,6 +55,15 @@ async def seed():
 
         count = 0
         for r in RIDERS:
+            # Check if rider already exists by phone to avoid duplicates and FK errors
+            check = await session.execute(
+                text("SELECT id FROM riders WHERE phone = :phone"), 
+                {"phone": r["phone"]}
+            )
+            existing = check.fetchone()
+            if existing:
+                continue
+
             zone_id = zone_map.get(r["zone"])
             if not zone_id:
                 print(f"  ⚠️  Zone '{r['zone']}' not found, skipping {r['name']}")
@@ -67,7 +76,6 @@ async def seed():
                 text("""
                     INSERT INTO riders (id, phone, name, platform, city, zone_id, upi_id, kyc_status, trust_score)
                     VALUES (:id, :phone, :name, :platform, :city, :zone_id, :upi_id, 'verified', :trust)
-                    ON CONFLICT (phone) DO NOTHING
                 """),
                 {
                     "id": rider_id,
@@ -77,20 +85,19 @@ async def seed():
                     "city": r["city"],
                     "zone_id": zone_id,
                     "upi_id": r["upi"],
-                    "trust": 75 + (count % 3) * 5,  # 75, 80, 85 rotation
+                    "trust": 75 + (count % 3) * 5,
                 },
             )
 
             # Insert risk profile
-            volatility = round(0.30 + (count % 5) * 0.08, 2)   # 0.30 → 0.62 range
-            disruption = round(0.15 + (count % 4) * 0.12, 2)    # 0.15 → 0.51 range
+            volatility = round(0.30 + (count % 5) * 0.08, 2)
+            disruption = round(0.15 + (count % 4) * 0.12, 2)
             week_base = 3800 + (count * 50)
 
             await session.execute(
                 text("""
                     INSERT INTO rider_risk_profiles (id, rider_id, zone_id, income_volatility, disruption_probability, four_week_earnings)
-                    VALUES (:id, :rider_id, :zone_id, :vol, :dis, :earnings::jsonb)
-                    ON CONFLICT (rider_id) DO NOTHING
+                    VALUES (:id, :rider_id, :zone_id, :vol, :dis, cast(:earnings as jsonb))
                 """),
                 {
                     "id": str(uuid.uuid4()),

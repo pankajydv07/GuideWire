@@ -11,7 +11,7 @@ import Colors from '../../constants/Colors';
 
 export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { login } = useAuth();
+  const { login, setTempToken } = useAuth();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -33,8 +33,7 @@ export default function OtpScreen() {
         }
 
         if (result.temp_token) {
-          await AsyncStorage.setItem('temp_token', result.temp_token);
-          api.setToken(result.temp_token);
+          await setTempToken(result.temp_token);
           router.push({ pathname: '/(auth)/register', params: { phone } });
           return;
         }

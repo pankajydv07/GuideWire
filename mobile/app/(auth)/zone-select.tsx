@@ -57,6 +57,12 @@ export default function ZoneSelectScreen() {
     return { color: '#f43f5e', label: 'CRITICAL', bg: 'rgba(244, 63, 94, 0.1)' };
   };
 
+  const getMetricColor = (val: number) => {
+    if (val < 40) return '#10b981';
+    if (val <= 70) return '#f59e0b';
+    return '#f43f5e';
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -104,12 +110,33 @@ export default function ZoneSelectScreen() {
                   onPress={() => setSelectedZone(zone)}
                   activeOpacity={0.8}
                 >
-                  <View style={styles.zoneInfo}>
-                    <Text style={[styles.zoneName, isSelected && { color: Colors.dark.tint }]}>{zone.name}</Text>
-                    <Text style={styles.zoneCity}>{zone.city.toUpperCase()}</Text>
-                  </View>
-                  <View style={[styles.riskBadge, { backgroundColor: risk.bg }]}>
-                    <Text style={[styles.riskText, { color: risk.color }]}>{risk.label}</Text>
+                   <View style={{ flex: 1 }}>
+                    <View style={styles.cardHeaderSmall}>
+                      <View style={styles.zoneInfo}>
+                        <Text style={[styles.zoneName, isSelected && { color: Colors.dark.tint }]}>{zone.name}</Text>
+                        <Text style={styles.zoneCity}>{zone.city.toUpperCase()}</Text>
+                      </View>
+                      <View style={[styles.riskBadge, { backgroundColor: risk.bg }]}>
+                        <Text style={[styles.riskText, { color: risk.color }]}>{risk.label}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.metricsRow}>
+                       <View style={styles.metricItem}>
+                          <Text style={{ fontSize: 14 }}>🌧️</Text>
+                          <Text style={[styles.metricValue, { color: getMetricColor(zone.flood_risk || 0) }]}>{zone.flood_risk}%</Text>
+                       </View>
+                       <View style={styles.metricDivider} />
+                       <View style={styles.metricItem}>
+                          <Text style={{ fontSize: 14 }}>🚗</Text>
+                          <Text style={[styles.metricValue, { color: getMetricColor(zone.traffic_risk || 0) }]}>{zone.traffic_risk}%</Text>
+                       </View>
+                       <View style={styles.metricDivider} />
+                       <View style={styles.metricItem}>
+                          <Text style={{ fontSize: 14 }}>🏪</Text>
+                          <Text style={[styles.metricValue, { color: getMetricColor(zone.store_risk || 0) }]}>{zone.store_risk}%</Text>
+                       </View>
+                    </View>
                   </View>
                 </TouchableOpacity>
               </Animated.View>
@@ -144,14 +171,19 @@ const styles = StyleSheet.create({
   cityTabText: { color: '#475569', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
   cityTabTextActive: { color: '#f8fafc' },
   list: { paddingHorizontal: 32, gap: 12, paddingBottom: 120 },
-  card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  card: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   cardActive: { borderColor: Colors.dark.tint, backgroundColor: 'rgba(56, 189, 248, 0.05)' },
+  cardHeaderSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   zoneInfo: { flex: 1 },
   zoneName: { fontSize: 18, fontWeight: '900', color: '#f8fafc', marginBottom: 4 },
   zoneCity: { fontSize: 10, color: '#475569', fontWeight: '800', letterSpacing: 1 },
   riskBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   riskText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 32, paddingBottom: 40, backgroundColor: 'rgba(2, 6, 23, 0.9)' },
+  metricsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 12 },
+  metricItem: { flex: 1, alignItems: 'center', gap: 4 },
+  metricValue: { fontSize: 12, fontWeight: '800' },
+  metricDivider: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.05)' },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 32, paddingBottom: 40, backgroundColor: 'rgba(2, 6, 23, 0.9)', zIndex: 10 },
   button: { backgroundColor: Colors.dark.tint, paddingVertical: 22, borderRadius: 24, alignItems: 'center', shadowColor: Colors.dark.tint, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
   buttonDisabled: { opacity: 0.2, shadowOpacity: 0 },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 }

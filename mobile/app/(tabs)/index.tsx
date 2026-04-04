@@ -123,6 +123,25 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
+        {rider?.zone && (
+          <Animated.View entering={FadeInUp.delay(50).springify()} style={styles.zoneHealthBar}>
+            <View style={styles.zoneHealthItem}>
+               <Text style={styles.zoneHealthIcon}>🌧️</Text>
+               <Text style={styles.zoneHealthValue}>24%</Text>
+            </View>
+            <View style={styles.zoneHealthDivider} />
+            <View style={styles.zoneHealthItem}>
+               <Text style={styles.zoneHealthIcon}>🚗</Text>
+               <Text style={styles.zoneHealthValue}>68%</Text>
+            </View>
+            <View style={styles.zoneHealthDivider} />
+            <View style={styles.zoneHealthItem}>
+               <Text style={styles.zoneHealthIcon}>🏪</Text>
+               <Text style={styles.zoneHealthValue}>12%</Text>
+            </View>
+          </Animated.View>
+        )}
+
         {refreshError ? (
           <View style={styles.errorAlert}>
             <Text style={styles.errorText}>{refreshError}</Text>
@@ -266,6 +285,11 @@ const styles = StyleSheet.create({
   subtext: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   refreshMeta: { fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: '600' },
   profileIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
+  zoneHealthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0f172a', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 20, borderWidth: 1, borderColor: '#1e293b' },
+  zoneHealthItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  zoneHealthIcon: { fontSize: 16 },
+  zoneHealthValue: { color: '#f8fafc', fontSize: 13, fontWeight: '800' },
+  zoneHealthDivider: { width: 1, height: 16, backgroundColor: '#1e293b' },
   card: { backgroundColor: '#0f172a', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#1e293b' },
   activePolicyCard: { backgroundColor: '#0f172a', borderColor: '#1e293b', borderTopWidth: 4, borderTopColor: '#38bdf8' },
   unprotectedCard: { backgroundColor: '#1e293b', alignItems: 'center', textAlign: 'center', paddingVertical: 32 },

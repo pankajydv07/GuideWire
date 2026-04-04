@@ -43,7 +43,7 @@ export default function PolicySelectScreen() {
       } catch (_error) {}
 
       try {
-        const data = await api.policies.getQuote(slots, rider?.city || 'bengaluru');
+        const data = await api.policies.getQuote(slots, rider?.city ?? '');
         setQuote(data);
       } catch (error) {
         console.error('Error fetching quotes:', error);

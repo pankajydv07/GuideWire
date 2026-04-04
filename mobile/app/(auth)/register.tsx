@@ -1,24 +1,41 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboard } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboard, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 
+import { api } from '../../services/api';
 import Colors from '../../constants/Colors';
 
-const PLATFORMS = [
-  { id: 'zepto', name: 'Zepto', icon: '⚡' },
-  { id: 'blinkit', name: 'Blinkit', icon: '📦' },
-  { id: 'swiggy', name: 'Swiggy', icon: '🛵' },
-  { id: 'zomato', name: 'Zomato', icon: '🍕' }
-];
+interface Platform {
+  id: string;
+  name: string;
+  icon: string;
+}
 
 export default function RegisterScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('');
   const [upiId, setUpiId] = useState('');
-  
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
+  // Fetch platforms from backend — single source of truth
+  useEffect(() => {
+    api.config.get()
+      .then(cfg => setPlatforms(cfg.platforms))
+      .catch(() => {
+        // Falling back to hardcoded only if backend is unreachable
+        setPlatforms([
+          { id: 'zepto', name: 'Zepto', icon: '⚡' },
+          { id: 'blinkit', name: 'Blinkit', icon: '📦' },
+          { id: 'swiggy', name: 'Swiggy', icon: '🛵' },
+        ]);
+      })
+      .finally(() => setLoadingConfig(false));
+  }, []);
+
   const isUpiValid = upiId.length > 3 && /^[\w.-]+@[\w.-]+$/.test(upiId);
   const isValid = name.trim().length > 0 && platform !== '' && isUpiValid;
 
@@ -57,19 +74,23 @@ export default function RegisterScreen() {
 
             <Animated.View entering={FadeInDown.delay(600).springify()}>
               <Text style={styles.label}>FLEET PLATFORM</Text>
-              <View style={styles.chips}>
-                {PLATFORMS.map((p) => (
-                  <TouchableOpacity 
-                    key={p.id} 
-                    style={[styles.chip, platform === p.id && styles.chipActive]} 
-                    onPress={() => setPlatform(p.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.chipIcon}>{p.icon}</Text>
-                    <Text style={[styles.chipText, platform === p.id && styles.chipTextActive]}>{p.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {loadingConfig ? (
+                <ActivityIndicator color={Colors.dark.tint} style={{ marginTop: 12 }} />
+              ) : (
+                <View style={styles.chips}>
+                  {platforms.map((p) => (
+                    <TouchableOpacity 
+                      key={p.id} 
+                      style={[styles.chip, platform === p.id && styles.chipActive]} 
+                      onPress={() => setPlatform(p.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.chipIcon}>{p.icon}</Text>
+                      <Text style={[styles.chipText, platform === p.id && styles.chipTextActive]}>{p.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(800).springify()}>

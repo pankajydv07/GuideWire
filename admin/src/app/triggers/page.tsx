@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Zap, 
@@ -17,14 +17,27 @@ import {
 
 import { adminApi } from "@/lib/api";
 import { formatDurationSince, formatTriggerWithEmoji, formatApiDate } from "@/lib/format";
-import type { TriggerStatusResponse, ActiveTrigger, DisruptionEvent } from "@/lib/types";
+import type { TriggerStatusResponse, ActiveTrigger, DisruptionEvent, Zone } from "@/lib/types";
 
 export default function TriggersPage() {
   const [status, setStatus] = useState<TriggerStatusResponse | null>(null);
   const [events, setEvents] = useState<DisruptionEvent[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [triggerTypes, setTriggerTypes] = useState<{ type: string; label: string; icon: string; desc?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState<string | null>(null);
-  const [selectedZone, setSelectedZone] = useState("MG Road");
+  const [selectedZone, setSelectedZone] = useState("");
+
+  // Group zones by city for the dropdown
+  const zonesByCity = useMemo(() => {
+    const groups: Record<string, Zone[]> = {};
+    for (const zone of zones) {
+      const city = zone.city ?? "Other";
+      if (!groups[city]) groups[city] = [];
+      groups[city].push(zone);
+    }
+    return groups;
+  }, [zones]);
 
   const loadData = async () => {
     try {
@@ -40,6 +53,22 @@ export default function TriggersPage() {
       setLoading(false);
     }
   };
+
+  // Load zones & trigger types from DB (same source as mobile app)
+  useEffect(() => {
+    adminApi.zones.list()
+      .then((res) => {
+        setZones(res.zones);
+        if (res.zones.length > 0) {
+          setSelectedZone(res.zones[0].name);
+        }
+      })
+      .catch(() => console.error("Failed to load zones"));
+
+    adminApi.config.get()
+      .then((cfg) => setTriggerTypes(cfg.trigger_types))
+      .catch(() => console.error("Failed to load trigger types"));
+  }, []);
 
   useEffect(() => {
     void loadData();
@@ -62,12 +91,15 @@ export default function TriggersPage() {
     }
   };
 
-  const simulationOptions = [
-    { type: "heavy_rain", label: "Heavy Rain", icon: "🌧️", desc: "Flood detection in urban zones" },
-    { type: "traffic_congestion", label: "Gridlock", icon: "🚗", desc: "Major arterial route blockage" },
-    { type: "platform_outage", label: "Node Outage", icon: "📱", desc: "Digital infrastructure failure" },
-    { type: "regulatory_curfew", label: "State Curfew", icon: "🚫", desc: "Emergency movement restrictions" }
-  ];
+  // Trigger descriptions — display-only, not business logic
+  const TRIGGER_DESC: Record<string, string> = {
+    heavy_rain: "Flood detection in urban zones",
+    traffic_congestion: "Major arterial route blockage",
+    platform_outage: "Digital infrastructure failure",
+    regulatory: "Emergency movement restrictions",
+    store_closed: "Dark store closure detected",
+    community_signal: "Community anomaly threshold breached",
+  };
 
   return (
     <div className="space-y-12">
@@ -209,11 +241,19 @@ export default function TriggersPage() {
                  onChange={(e) => setSelectedZone(e.target.value)}
                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold appearance-none"
                >
-                  <option value="MG Road">MG Road</option>
-                  <option value="Indiranagar">Indiranagar</option>
-                  <option value="Koramangala">Koramangala</option>
-                  <option value="HSR Layout">HSR Layout</option>
-                  <option value="Whitefield">Whitefield</option>
+                  {zones.length === 0 ? (
+                    <option disabled>Loading zones...</option>
+                  ) : (
+                    Object.entries(zonesByCity).map(([city, cityZones]) => (
+                      <optgroup key={city} label={city.charAt(0).toUpperCase() + city.slice(1)}>
+                        {cityZones.map((z) => (
+                          <option key={z.id} value={z.name}>
+                            {z.name.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))
+                  )}
                </select>
             </div>
 
@@ -226,7 +266,7 @@ export default function TriggersPage() {
             </div>
 
             <div className="space-y-3">
-              {simulationOptions.map((opt) => (
+              {triggerTypes.map((opt) => (
                 <button
                   key={opt.type}
                   disabled={triggering !== null}
@@ -237,7 +277,7 @@ export default function TriggersPage() {
                      <span className="text-2xl group-hover:scale-110 transition-transform">{opt.icon}</span>
                      <div className="text-left">
                         <div className="text-sm font-bold text-slate-200">{opt.label}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{opt.desc}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{TRIGGER_DESC[opt.type] || "Network anomaly simulation"}</div>
                      </div>
                   </div>
                   {triggering === opt.type ? (

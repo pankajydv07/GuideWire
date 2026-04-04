@@ -58,8 +58,10 @@ async def register(
     
     phone = payload.get("sub")
     
+    from shared.schemas import Platform
+    
     # 2. Validate platform
-    valid_platforms = ["zepto", "blinkit", "swiggy"]
+    valid_platforms = [p.value for p in Platform]
     if request.platform.lower() not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
