@@ -9,7 +9,7 @@ import asyncio
 import logging
 from typing import Optional, List, Dict
 
-logger = logging.getLogger("ridershield.zones")
+logger = logging.getLogger("zylo.zones")
 
 # ── Runtime state ─────────────────────────────────────────────────────────────
 _zones: List[Dict] = []

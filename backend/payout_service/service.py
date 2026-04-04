@@ -12,7 +12,7 @@ from claims_service.models import Claim, Payout
 from policy_service.models import Policy
 from rider_service.models import Rider
 
-logger = logging.getLogger("ridershield.payouts")
+logger = logging.getLogger("zylo.payouts")
 
 
 async def process_upi_payout(claim_id: UUID, rider_id: UUID, amount: int, db: AsyncSession) -> Payout:

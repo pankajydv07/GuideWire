@@ -1,5 +1,5 @@
 """
-RiderShield -- Full API Test Suite (v2)
+Zylo -- Full API Test Suite (v2)
 Run: python test_api.py
 """
 import httpx, sys, io

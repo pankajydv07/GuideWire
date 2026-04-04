@@ -61,7 +61,7 @@ export default function TabLayout() {
         options={{
           title: 'Guardian',
           tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
-          headerTitle: 'RiderShield',
+          headerTitle: 'Zylo',
         }}
       />
       <Tabs.Screen

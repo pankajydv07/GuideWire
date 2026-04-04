@@ -1,4 +1,4 @@
-# RiderShield — Product Requirements Document (PRD)
+# Zylo — Product Requirements Document (PRD)
 
 ## Parametric Income Protection for Delivery Riders
 
@@ -30,9 +30,9 @@
 
 ## 1. Executive Summary
 
-### 1.1 What is RiderShield?
+### 1.1 What is Zylo?
 
-RiderShield is a **parametric income protection system** designed for quick-commerce delivery riders (Zepto, Blinkit, Swiggy Instamart). It provides automatic payouts when external disruptions—rain, traffic congestion, store closures, or platform outages—cause income loss.
+Zylo is a **parametric income protection system** designed for quick-commerce delivery riders (Zepto, Blinkit, Swiggy Instamart). It provides automatic payouts when external disruptions—rain, traffic congestion, store closures, or platform outages—cause income loss.
 
 ### 1.2 Core Value Proposition
 
@@ -85,7 +85,7 @@ India's q-commerce sector (~$11.5B) runs on an invisible workforce of delivery p
 
 ### 2.3 The Solution: Parametric Insurance
 
-**Instead of proving a loss**, RiderShield uses measurable, objective data signals (rainfall mm, congestion index, store status) as automatic triggers. **If the data says it happened, the rider gets paid.**
+**Instead of proving a loss**, Zylo uses measurable, objective data signals (rainfall mm, congestion index, store status) as automatic triggers. **If the data says it happened, the rider gets paid.**
 
 > **Coverage Scope (Strict):** Income loss from external disruptions only. Health, life, vehicle damage, and accidents are explicitly excluded.
 
@@ -674,7 +674,7 @@ India's q-commerce sector (~$11.5B) runs on an invisible workforce of delivery p
 > 
 > **Action 3:** Link platform (select Zepto) → Select zone (Koramangala) → Select slots (6–11 PM)
 > 
-> **Voiceover:** *"RiderShield starts with a simple mobile-first registration. Just your phone, platform, zone, and work hours—and you're in."*
+> **Voiceover:** *"Zylo starts with a simple mobile-first registration. Just your phone, platform, zone, and work hours—and you're in."*
 
 ---
 
@@ -753,7 +753,7 @@ India's q-commerce sector (~$11.5B) runs on an invisible workforce of delivery p
 
 > **Visual:** Cycle repeats — Rider working, system protecting
 > 
-> **Voiceover:** *"RiderShield: protection that actually works for gig workers. Registration, policy, auto-trigger, zero-touch payout. That's the hackathon demo."*
+> **Voiceover:** *"Zylo: protection that actually works for gig workers. Registration, policy, auto-trigger, zero-touch payout. That's the hackathon demo."*
 
 ---
 
@@ -859,4 +859,4 @@ POST   /api/admin/claims/{id}/reject
 
 *Document Version: 1.0*  
 *Created: March 2026*  
-*For: RiderShield Hackathon Team*
+*For: Zylo Hackathon Team*

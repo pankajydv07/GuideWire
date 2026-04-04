@@ -10,7 +10,7 @@ import type {
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const TOKEN_STORAGE_KEY = "ridershield_admin_token";
+const TOKEN_STORAGE_KEY = "zylo_admin_token";
 
 function computeDashboardStats(
   autoClaims: AutoClaim[],

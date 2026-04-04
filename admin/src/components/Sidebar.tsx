@@ -71,7 +71,7 @@ export function Sidebar() {
                <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-sky-400 bg-clip-text text-transparent">RiderShield</div>
+              <div className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-sky-400 bg-clip-text text-transparent">Zylo</div>
               <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">Admin Command</div>
             </div>
           </div>

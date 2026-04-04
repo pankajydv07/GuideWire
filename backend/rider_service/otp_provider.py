@@ -6,7 +6,7 @@ from shared.config import settings
 from shared.redis_client import get_redis
 
 
-logger = logging.getLogger("ridershield.otp")
+logger = logging.getLogger("zylo.otp")
 
 
 class OTPDispatchResult(TypedDict, total=False):

@@ -18,7 +18,7 @@ from policy_service.models import Policy
 from claims_service.fraud import run_fraud_check, check_duplicate_claim
 from payout_service.service import process_upi_payout
 
-logger = logging.getLogger("ridershield.claims")
+logger = logging.getLogger("zylo.claims")
 
 # We use 180 as a realistic fallback hourly rate for delivery riders if no baseline exists
 FALLBACK_HOURLY_RATE = 180

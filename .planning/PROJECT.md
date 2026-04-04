@@ -1,8 +1,8 @@
-# RiderShield — Parametric Insurance for Quick-Commerce Riders
+# Zylo — Parametric Insurance for Quick-Commerce Riders
 
 ## What This Is
 
-RiderShield is an AI-powered parametric insurance platform that protects quick-commerce delivery riders (Blinkit, Zepto, Instamart) from income loss caused by external disruptions — heavy rain, flooding, traffic congestion, dark store shutdowns, AQI spikes, or government curfews. The system automatically detects disruptions via external APIs and rider activity signals, then triggers compensation payouts without any manual claims process. Built as a hackathon/prototype using simulated (Stripe test mode) payouts.
+Zylo is an AI-powered parametric insurance platform that protects quick-commerce delivery riders (Blinkit, Zepto, Instamart) from income loss caused by external disruptions — heavy rain, flooding, traffic congestion, dark store shutdowns, AQI spikes, or government curfews. The system automatically detects disruptions via external APIs and rider activity signals, then triggers compensation payouts without any manual claims process. Built as a hackathon/prototype using simulated (Stripe test mode) payouts.
 
 ## Core Value
 

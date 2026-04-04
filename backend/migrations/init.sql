@@ -1,7 +1,7 @@
 -- ============================================================
--- RiderShield — Full Database Schema Initialization
+-- Zylo — Full Database Schema Initialization
 -- Owner: Dev 1 (Rider Service)
--- Run: psql -U postgres -d ridershield -f migrations/init.sql
+-- Run: psql -U postgres -d zylo -f migrations/init.sql
 -- ============================================================
 
 -- Enable extensions

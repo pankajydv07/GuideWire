@@ -1,7 +1,7 @@
-# RiderShield — Technical Requirements Document (TRD)
+# Zylo — Technical Requirements Document (TRD)
 
 **Version:** 1.0  
-**Project:** RiderShield — Parametric Income Protection System  
+**Project:** Zylo — Parametric Income Protection System  
 **Date:** March 30, 2026  
 **Authors:** Software Architecture Team  
 **Context:** Hackathon project for 5 developers
@@ -1635,15 +1635,15 @@ services:
   postgres:
     image: timescale/timescale:latest-pg15
     environment:
-      POSTGRES_USER: ridershield
+      POSTGRES_USER: zylo
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ridershield
+      POSTGRES_DB: zylo
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ridershield"]
+      test: ["CMD-SHELL", "pg_isready -U zylo"]
       interval: 10s
       timeout: 5s
 
@@ -1704,7 +1704,7 @@ volumes:
 # .env.example
 
 # Database
-DATABASE_URL=postgresql://ridershield:password@postgres:5432/ridershield
+DATABASE_URL=postgresql://zylo:password@postgres:5432/zylo
 
 # Redis
 REDIS_URL=redis://:@redis:6379/0
@@ -1731,8 +1731,8 @@ ADMIN_PASSWORD=changeme
 
 ```bash
 # Clone and start
-git clone https://github.com/your-team/ridershield.git
-cd ridershield
+git clone https://github.com/your-team/zylo.git
+cd zylo
 
 # Copy environment template
 cp .env.example .env
@@ -1837,7 +1837,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-logger = logging.getLogger("ridershield")
+logger = logging.getLogger("zylo")
 
 # Usage
 logger.info(f"Rider {rider_id} registered successfully")
@@ -1940,7 +1940,7 @@ Each rider has:
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = "postgresql://ridershield:password@localhost:5432/ridershield"
+DATABASE_URL = "postgresql://zylo:password@localhost:5432/zylo"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 ```
