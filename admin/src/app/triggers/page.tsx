@@ -16,8 +16,24 @@ import {
 } from "lucide-react";
 
 import { adminApi } from "@/lib/api";
-import { formatDurationSince, formatTriggerWithEmoji, formatApiDate } from "@/lib/format";
+import { 
+  formatDurationSince, 
+  getTriggerEmoji, 
+  formatTriggerLabel, 
+  formatApiDate 
+} from "@/lib/format";
 import type { TriggerStatusResponse, ActiveTrigger, DisruptionEvent, Zone } from "@/lib/types";
+
+const PROTOCOL_THEME: Record<string, { color: string, bg: string, ring: string, text: string }> = {
+  heavy_rain: { color: "blue", bg: "bg-blue-500/10", ring: "ring-blue-500/20", text: "text-blue-400" },
+  traffic_congestion: { color: "amber", bg: "bg-amber-500/10", ring: "ring-amber-500/20", text: "text-amber-400" },
+  store_closure: { color: "rose", bg: "bg-rose-500/10", ring: "ring-rose-500/20", text: "text-rose-400" },
+  platform_outage: { color: "purple", bg: "bg-purple-500/10", ring: "ring-purple-500/20", text: "text-purple-400" },
+  extreme_heat: { color: "orange", bg: "bg-orange-500/10", ring: "ring-orange-500/20", text: "text-orange-400" },
+  regulatory_curfew: { color: "red", bg: "bg-red-500/10", ring: "ring-red-500/20", text: "text-red-400" },
+  community_signal: { color: "indigo", bg: "bg-indigo-500/10", ring: "ring-indigo-500/20", text: "text-indigo-400" },
+  default: { color: "slate", bg: "bg-slate-500/10", ring: "ring-slate-500/20", text: "text-slate-400" },
+};
 
 export default function TriggersPage() {
   const [status, setStatus] = useState<TriggerStatusResponse | null>(null);
@@ -27,6 +43,8 @@ export default function TriggersPage() {
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState<string | null>(null);
   const [selectedZone, setSelectedZone] = useState("");
+
+  const getTheme = (type: string) => PROTOCOL_THEME[type] || PROTOCOL_THEME.default;
 
   // Group zones by city for the dropdown
   const zonesByCity = useMemo(() => {
@@ -137,29 +155,36 @@ export default function TriggersPage() {
                  <div className="text-slate-600 font-bold uppercase tracking-[0.2em] text-xs">No active disruptions detected.</div>
               </motion.div>
             ) : (
-              status.active_triggers.map((trigger: ActiveTrigger, idx: number) => (
-                <motion.div
-                  key={trigger.trigger_id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="glass-card rounded-[2.5rem] p-8 relative overflow-hidden group"
-                >
-                  <div className="absolute top-0 right-0 p-8">
-                     <span className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-rose-400 ring-1 ring-rose-500/20">
-                        <span className="h-1 w-1 rounded-full bg-rose-400 animate-ping" /> Live
-                     </span>
-                  </div>
+                status.active_triggers.map((trigger: ActiveTrigger, idx: number) => {
+                  const theme = getTheme(trigger.type);
+                  return (
+                    <motion.div
+                      key={trigger.trigger_id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="glass-card rounded-[2.5rem] p-8 relative overflow-hidden group shadow-2xl"
+                    >
+                      <div className="absolute top-0 right-0 p-8">
+                         <span className={`flex items-center gap-1.5 rounded-full ${theme.bg} px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${theme.text} ${theme.ring} ring-1 backdrop-blur-sm`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${theme.text.replace("text-", "bg-")} animate-pulse shadow-[0_0_8px]`} /> Live
+                         </span>
+                      </div>
 
-                  <div className="mb-8">
-                    <div className="text-2xl font-bold text-white mb-1">
-                       {formatTriggerWithEmoji(trigger.type)}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-500 font-medium lowercase italic">
-                       {trigger.severity} intensity
-                    </div>
-                  </div>
+                      <div className="mb-8 flex items-center gap-5">
+                        <div className={`h-16 w-16 rounded-3xl ${theme.bg} flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500 shadow-2xl ${theme.ring} ring-1 backdrop-blur-md`}>
+                            {getTriggerEmoji(trigger.type)}
+                        </div>
+                        <div>
+                          <div className={`text-xl font-bold text-white mb-0.5 group-hover:text-white transition-colors`}>
+                             {formatTriggerLabel(trigger.type)}
+                          </div>
+                          <div className={`flex items-center gap-2 text-[10px] ${theme.text} font-black uppercase tracking-[0.2em] italic opacity-80`}>
+                             {trigger.severity} INTENSITY PROTOCOL
+                          </div>
+                        </div>
+                      </div>
 
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
@@ -175,8 +200,9 @@ export default function TriggersPage() {
                        <span className="text-sm font-bold text-indigo-400">{formatDurationSince(trigger.active_since)} active</span>
                     </div>
                   </div>
-                </motion.div>
-              ))
+                    </motion.div>
+                  );
+                })
             )}
           </AnimatePresence>
         </div>
@@ -200,29 +226,32 @@ export default function TriggersPage() {
             ) : events.length === 0 ? (
                <div className="text-center py-10 text-slate-600 uppercase tracking-widest text-xs font-bold">Archive Empty</div>
             ) : (
-              events.slice(0, 10).map((event: DisruptionEvent, idx: number) => (
-                <motion.div 
-                  key={event.event_id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/20 hover:bg-slate-900/40 transition-colors"
-                >
-                  <div className="flex items-center gap-5">
-                     <div className="h-10 w-10 rounded-2xl bg-white/5 flex items-center justify-center text-xl">
-                        {formatTriggerWithEmoji(event.trigger_type)}
-                     </div>
-                     <div>
-                        <div className="text-sm font-bold text-slate-200">{event.trigger_type.replace(/_/g, " ").toUpperCase()}</div>
-                        <div className="text-xs text-slate-500 font-medium mt-1">{event.zone} • {event.severity}</div>
-                     </div>
-                  </div>
-                  <div className="text-right">
-                     <div className="text-xs font-bold text-slate-500 mb-1">LOGGED AT</div>
-                     <div className="text-sm font-bold text-slate-400">{formatApiDate(event.created_at)}</div>
-                  </div>
-                </motion.div>
-              ))
+               events.slice(0, 10).map((event: DisruptionEvent, idx: number) => {
+                  const theme = getTheme(event.trigger_type);
+                  return (
+                    <motion.div 
+                      key={event.event_id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/20 hover:bg-slate-900/40 group transition-all duration-300"
+                    >
+                      <div className="flex items-center gap-6">
+                         <div className={`h-12 w-12 rounded-2xl ${theme.bg} flex items-center justify-center text-2xl ${theme.ring} ring-1 group-hover:scale-105 transition-transform shadow-xl`}>
+                            {getTriggerEmoji(event.trigger_type)}
+                         </div>
+                         <div>
+                            <div className={`text-sm font-bold text-slate-100 group-hover:text-white transition-colors`}>{formatTriggerLabel(event.trigger_type)}</div>
+                            <div className="text-[10px] text-slate-600 font-black uppercase tracking-widest mt-1 group-hover:text-slate-500 transition-colors">{event.zone} • {event.severity} SEVERITY</div>
+                         </div>
+                      </div>
+                      <div className="text-right">
+                         <div className="text-[9px] font-black text-slate-600 mb-1 tracking-widest">LOGGED AT</div>
+                         <div className="text-[11px] font-bold text-slate-400 group-hover:text-slate-300 transition-colors uppercase font-mono">{formatApiDate(event.created_at)}</div>
+                      </div>
+                    </motion.div>
+                  );
+                })
             )}
           </div>
         </section>

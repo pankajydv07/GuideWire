@@ -18,9 +18,20 @@ export default function ZoneSelectScreen() {
   useEffect(() => {
     api.zones.list()
       .then(data => {
-         setZones(data.zones || []);
-         if (data.zones && data.zones.length > 0) {
-            const firstCity = data.zones[0].city;
+         const rawZones = data.zones || [];
+         // Deduplicate by name + city
+         const uniqueZonesMap = new Map();
+         rawZones.forEach(z => {
+           const key = `${z.name.toLowerCase()}-${z.city.toLowerCase()}`;
+           if (!uniqueZonesMap.has(key)) {
+             uniqueZonesMap.set(key, z);
+           }
+         });
+         const uniqueZones = Array.from(uniqueZonesMap.values());
+         
+         setZones(uniqueZones);
+         if (uniqueZones.length > 0) {
+            const firstCity = uniqueZones[0].city;
             setSelectedCity(firstCity);
          }
       })

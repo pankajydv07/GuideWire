@@ -50,13 +50,18 @@ export function formatDateTime(input: string) {
 
 export const formatApiDate = formatDateTime;
 
+export function getTriggerEmoji(type?: string | null) {
+  if (!type) return "⚠️";
+  return TRIGGER_EMOJI[type] || "⚠️";
+}
+
 export function formatTriggerLabel(type?: string | null) {
-  if (!type) return "Unknown Trigger";
-  return TRIGGER_LABELS[type] || type.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  if (!type) return "Unknown Signal";
+  return TRIGGER_LABELS[type] || type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function formatTriggerWithEmoji(type?: string | null) {
-  return `${(type && TRIGGER_EMOJI[type]) || "⚠️"} ${formatTriggerLabel(type)}`;
+  return `${getTriggerEmoji(type)} ${formatTriggerLabel(type)}`;
 }
 
 export function shortId(value?: string | null) {
