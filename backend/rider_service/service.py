@@ -1,37 +1,25 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.config import settings
-from shared.auth import create_temp_token, create_access_token, verify_token
-from shared.redis_client import get_redis
+from shared.auth import create_temp_token, create_access_token
 from rider_service.models import Rider, RiderRiskProfile, RiderZoneBaseline, Zone
+from rider_service.otp_provider import send_otp_code, verify_otp_code
 
 # ─── Service Logic ────────────────────────────────────
 
 async def send_otp(phone: str) -> dict:
-    """Store mock OTP "123456" in Redis with 5-minute TTL."""
-    # In a real app, integrate with an SMS gateway here
-    otp = "123456"
-    redis_client = await get_redis()
-    await redis_client.set(f"otp:{phone}", otp, ex=300)
-    return {"message": "OTP sent", "expires_in": 300}
+    """Generate and dispatch a free/demo OTP."""
+    return await send_otp_code(phone)
 
 
 async def verify_otp(phone: str, otp: str, db: AsyncSession) -> dict:
-    """Verify OTP from Redis. Existing riders get a rider JWT, new phones get a temp registration token."""
-    redis_client = await get_redis()
-    stored_otp = await redis_client.get(f"otp:{phone}")
-    
-    if stored_otp is None:
-        return {"valid": False, "temp_token": None, "error": "OTP_EXPIRED"}
-    
-    if stored_otp != otp:
-        return {"valid": False, "temp_token": None, "error": "INVALID_OTP"}
-    
-    # Delete OTP after successful verification
-    await redis_client.delete(f"otp:{phone}")
+    """Verify OTP, logging in existing riders directly and onboarding new riders with a temp token."""
+    valid, error_code = await verify_otp_code(phone, otp)
+
+    if not valid:
+        return {"valid": False, "temp_token": None, "error": error_code or "INVALID_OTP"}
 
     rider_result = await db.execute(select(Rider).where(Rider.phone == phone))
     rider = rider_result.scalar_one_or_none()

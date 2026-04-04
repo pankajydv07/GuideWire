@@ -9,8 +9,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from shared.config import settings
@@ -83,6 +85,16 @@ app = FastAPI(
 uploads_dir = os.path.abspath(settings.UPLOAD_DIR)
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    first_error = exc.errors()[0] if exc.errors() else {}
+    message = first_error.get("msg", "Invalid request data")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": {"code": "VALIDATION_ERROR", "message": message}},
+    )
 
 # ─── CORS ────────────────────────────────────────────
 app.add_middleware(

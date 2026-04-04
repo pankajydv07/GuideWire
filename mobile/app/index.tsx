@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-} from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
+import { normalizeIndianMobile } from '../utils/phone';
 
 export default function WelcomeScreen() {
   const { isAuthenticated, isReady } = useAuth();
   const [phone, setPhone] = useState('+91');
   const [showLogin, setShowLogin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const normalized = normalizeIndianMobile(phone);
+  const isValid = normalized.valid;
 
   useEffect(() => {
     if (isReady && isAuthenticated) {
@@ -24,17 +26,24 @@ export default function WelcomeScreen() {
   }, [isAuthenticated, isReady]);
 
   const handleSendOtp = async () => {
-    if (phone.length < 13) {
-      Alert.alert('Invalid Number', 'Please enter a valid 10-digit number with +91 country code.');
+    if (!normalized.valid) {
+      setErrorMsg(normalized.error);
       return;
     }
 
+    setErrorMsg('');
     setLoading(true);
     try {
-      await api.riders.sendOtp(phone);
-      router.push({ pathname: '/(auth)/otp', params: { phone } });
+      const response = await api.riders.sendOtp(normalized.normalized);
+      router.push({
+        pathname: '/(auth)/otp',
+        params: {
+          phone: normalized.normalized,
+          devOtp: response.dev_otp || '',
+        },
+      });
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to send OTP. Please try again.');
+      setErrorMsg(err.message || 'Failed to send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -45,8 +54,8 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" translucent />
-      <ImageBackground 
-        source={require('../assets/images/welcome_rider.png')} 
+      <ImageBackground
+        source={require('../assets/images/welcome_rider.png')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -70,8 +79,8 @@ export default function WelcomeScreen() {
                   <Text style={styles.subtitle}>
                     Automatic payout protection for delivery partners against weather, traffic, and platform disruptions.
                   </Text>
-                  <TouchableOpacity 
-                    style={styles.primaryButton} 
+                  <TouchableOpacity
+                    style={styles.primaryButton}
                     activeOpacity={0.8}
                     onPress={() => setShowLogin(true)}
                   >
@@ -80,43 +89,47 @@ export default function WelcomeScreen() {
                 </>
               ) : (
                 <View style={styles.loginForm}>
-                   <Text style={styles.loginLabel}>Enter Phone Number</Text>
-                   <TextInput
-                      style={styles.input}
-                      value={phone}
-                      onChangeText={setPhone}
-                      keyboardType="phone-pad"
-                      placeholder="+919876543210"
-                      placeholderTextColor="#475569"
-                      maxLength={13}
-                    />
-                    <TouchableOpacity 
-                      style={styles.primaryButton} 
-                      onPress={handleSendOtp} 
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <Text style={styles.primaryButtonText}>Send Sec-OTP</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowLogin(false)} style={{ marginTop: 10 }}>
-                        <Text style={styles.backText}>Cancel</Text>
-                    </TouchableOpacity>
+                  <Text style={styles.loginLabel}>Enter Phone Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={phone}
+                    onChangeText={(value) => {
+                      setPhone(value);
+                      setErrorMsg(normalizeIndianMobile(value).error);
+                    }}
+                    keyboardType="phone-pad"
+                    placeholder="+919876543210"
+                    placeholderTextColor="#475569"
+                    maxLength={16}
+                  />
+                  {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                  <TouchableOpacity
+                    style={[styles.primaryButton, (!isValid || loading) && styles.buttonDisabled]}
+                    onPress={handleSendOtp}
+                    disabled={loading || !isValid}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Send Sec-OTP</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowLogin(false)} style={{ marginTop: 10 }}>
+                    <Text style={styles.backText}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
-              <TouchableOpacity 
-                style={styles.secondaryButton} 
+              <TouchableOpacity
+                style={styles.secondaryButton}
                 onPress={() => router.push('/(auth)/register')}
               >
                 <Text style={styles.secondaryButtonText}>Create New Account</Text>
               </TouchableOpacity>
             </Animated.View>
-            
+
             <Animated.Text entering={FadeInDown.delay(900)} style={styles.footerText}>
-               Trusted by 50,000+ delivery partners
+              Trusted by 50,000+ delivery partners
             </Animated.Text>
           </View>
         </LinearGradient>
@@ -137,7 +150,9 @@ const styles = StyleSheet.create({
   loginForm: { gap: 12, backgroundColor: 'rgba(15, 23, 42, 0.8)', padding: 24, borderRadius: 32, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.2)' },
   loginLabel: { color: '#f8fafc', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
   input: { backgroundColor: '#1e293b', color: '#f8fafc', borderRadius: 18, padding: 18, fontSize: 18, borderWidth: 1, borderColor: '#334155', fontWeight: '700' },
+  errorText: { color: '#fca5a5', fontSize: 13, marginTop: -4 },
   primaryButton: { backgroundColor: '#38bdf8', paddingVertical: 20, borderRadius: 20, shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  buttonDisabled: { opacity: 0.5 },
   primaryButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '800', textAlign: 'center' },
   secondaryButton: { paddingVertical: 14 },
   secondaryButtonText: { color: '#f8fafc', fontSize: 16, fontWeight: '700', textAlign: 'center', opacity: 0.8 },

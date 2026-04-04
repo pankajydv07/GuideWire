@@ -35,8 +35,8 @@ export default function ZoneSelectScreen() {
             setSelectedCity(firstCity);
          }
       })
-      .catch(err => {
-        setError('Synchronizing regional data failed.');
+      .catch(() => {
+        setError('Unable to load zone results from the backend.');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -106,6 +106,12 @@ export default function ZoneSelectScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Zone sync failed</Text>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
           {filteredZones.map((zone, index) => {
             const risk = getRiskStatus(zone.risk_score || 0);
             const isSelected = selectedZone?.id === zone.id;
@@ -182,6 +188,15 @@ const styles = StyleSheet.create({
   cityTabText: { color: '#475569', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
   cityTabTextActive: { color: '#f8fafc' },
   list: { paddingHorizontal: 32, gap: 12, paddingBottom: 120 },
+  errorCard: {
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.2)',
+  },
+  errorTitle: { color: '#fca5a5', fontSize: 15, fontWeight: '900', marginBottom: 6 },
+  errorText: { color: '#fecdd3', fontSize: 13, lineHeight: 18, fontWeight: '600' },
   card: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   cardActive: { borderColor: Colors.dark.tint, backgroundColor: 'rgba(56, 189, 248, 0.05)' },
   cardHeaderSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
