@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
@@ -110,11 +110,23 @@ export default function ManualClaimScreen() {
       formData.append('incident_time', new Date().toISOString());
       formData.append('latitude', String(location.latitude));
       formData.append('longitude', String(location.longitude));
-      formData.append('photo', {
-        uri: photo.uri,
-        name: filename,
-        type: photo.mimeType || 'image/jpeg',
-      } as never);
+
+      if (Platform.OS === 'web') {
+        const webFile = (photo as ImagePicker.ImagePickerAsset & { file?: File }).file;
+        if (webFile) {
+          formData.append('photo', webFile, webFile.name || filename);
+        } else {
+          const blob = await fetch(photo.uri).then((res) => res.blob());
+          const file = new File([blob], filename, { type: photo.mimeType || blob.type || 'image/jpeg' });
+          formData.append('photo', file);
+        }
+      } else {
+        formData.append('photo', {
+          uri: photo.uri,
+          name: filename,
+          type: photo.mimeType || 'image/jpeg',
+        } as never);
+      }
 
       const response = await api.manualClaims.submit(formData) as {
         claim_id?: string;

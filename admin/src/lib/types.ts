@@ -35,7 +35,7 @@ export interface ManualClaimReview {
   photo_path?: string | null;
   photo_url?: string | null;
   spam_score: number;
-  geo_valid: boolean;
+  geo_valid?: boolean | null;
   gps_distance_m?: number | null;
   weather_match?: boolean | null;
   traffic_match?: boolean | null;

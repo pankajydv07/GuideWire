@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type PolicyResponse, type TriggerStatus, type PayoutListItem } from '../../services/api';
+import { formatApiDateTime } from '../../utils/datetime';
 
 const triggerEmoji = (type: string) => {
   switch (type) {
@@ -103,7 +104,9 @@ export default function DashboardScreen() {
                 <Text style={styles.statLabel}>Coverage Used</Text>
               </View>
             </View>
-            <Text style={styles.cardFooter}>Week {policy.coverage_week} • Expires {policy.expires_at || 'end of week'}</Text>
+            <Text style={styles.cardFooter}>
+              Week {policy.coverage_week} • Expires {policy.expires_at ? formatApiDateTime(policy.expires_at) : 'end of week'}
+            </Text>
           </View>
         ) : (
           <View style={styles.card}>
@@ -138,7 +141,7 @@ export default function DashboardScreen() {
               <View key={payout.payout_id} style={styles.payoutRow}>
                 <View>
                   <Text style={styles.payoutLabel}>Payout credited</Text>
-                  <Text style={styles.payoutDate}>{new Date(payout.created_at).toLocaleString()}</Text>
+                  <Text style={styles.payoutDate}>{formatApiDateTime(payout.created_at)}</Text>
                   <Text style={styles.payoutRef}>Ref: {payout.reference_id}</Text>
                 </View>
                 <Text style={styles.payoutAmount}>₹{payout.amount}</Text>

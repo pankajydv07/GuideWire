@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { api } from '../../services/api';
+import { api, type Zone } from '../../services/api';
 
 export default function ZoneSelectScreen() {
   const params = useLocalSearchParams();
-  const [zones, setZones] = useState<any[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>('');
-  const [selectedZone, setSelectedZone] = useState<any>(null);
+  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
 
   useEffect(() => {
     api.zones.list()
@@ -19,7 +20,10 @@ export default function ZoneSelectScreen() {
             setSelectedCity(firstCity);
          }
       })
-      .catch(err => console.error("Failed to load zones", err))
+      .catch(err => {
+        console.error("Failed to load zones", err);
+        setError(err instanceof Error ? err.message : 'Failed to load zones');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -59,51 +63,63 @@ export default function ZoneSelectScreen() {
     );
   }
 
+  const hasZones = zones.length > 0;
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Select Your Zone</Text>
 
-      {/* City Filters */}
-      <View style={styles.tabContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-           {cities.map(city => (
-             <TouchableOpacity 
-               key={city} 
-               style={[styles.cityTab, selectedCity === city && styles.cityTabActive]}
-               onPress={() => { setSelectedCity(city); setSelectedZone(null); }}
-             >
-               <Text style={[styles.cityTabText, selectedCity === city && styles.cityTabTextActive]}>{city}</Text>
-             </TouchableOpacity>
-           ))}
-        </ScrollView>
-      </View>
+      {hasZones ? (
+        <>
+          <View style={styles.tabContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {cities.map(city => (
+                <TouchableOpacity
+                  key={city}
+                  style={[styles.cityTab, selectedCity === city && styles.cityTabActive]}
+                  onPress={() => { setSelectedCity(city); setSelectedZone(null); }}
+                >
+                  <Text style={[styles.cityTabText, selectedCity === city && styles.cityTabTextActive]}>{city}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-      <ScrollView contentContainerStyle={styles.list}>
-         {filteredZones.map((zone) => {
-           const risk = getRiskColor(zone.risk_score || 0);
-           const isSelected = selectedZone?.id === zone.id;
-           
-           return (
-             <TouchableOpacity 
-               key={zone.id} 
-               style={[styles.card, isSelected && styles.cardActive]}
-               onPress={() => setSelectedZone(zone)}
-             >
-               <View>
-                 <Text style={[styles.zoneName, isSelected && { color: '#38bdf8' }]}>{zone.name}</Text>
-                 <Text style={styles.zoneCity}>{zone.city}</Text>
-               </View>
-               <View style={[styles.riskBadge, { backgroundColor: risk.bg }]}>
-                 <Text style={[styles.riskText, { color: risk.color }]}>{risk.label} ({zone.risk_score})</Text>
-               </View>
-             </TouchableOpacity>
-           )
-         })}
-      </ScrollView>
+          <ScrollView contentContainerStyle={styles.list}>
+            {filteredZones.map((zone) => {
+              const risk = getRiskColor(zone.risk_score || 0);
+              const isSelected = selectedZone?.id === zone.id;
+
+              return (
+                <TouchableOpacity
+                  key={zone.id}
+                  style={[styles.card, isSelected && styles.cardActive]}
+                  onPress={() => setSelectedZone(zone)}
+                >
+                  <View>
+                    <Text style={[styles.zoneName, isSelected && { color: '#38bdf8' }]}>{zone.name}</Text>
+                    <Text style={styles.zoneCity}>{zone.city}</Text>
+                  </View>
+                  <View style={[styles.riskBadge, { backgroundColor: risk.bg }]}>
+                    <Text style={[styles.riskText, { color: risk.color }]}>{risk.label} ({zone.risk_score})</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </>
+      ) : (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No delivery zones available</Text>
+          <Text style={styles.emptyText}>
+            {error || 'The backend did not return any zones yet. Seed the demo zones and reload this screen.'}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.footer}>
          <TouchableOpacity 
-           style={[styles.button, !selectedZone && styles.buttonDisabled]} 
+          style={[styles.button, !selectedZone && styles.buttonDisabled]} 
            onPress={handleNext}
            disabled={!selectedZone}
          >
@@ -130,6 +146,9 @@ const styles = StyleSheet.create({
   zoneCity: { fontSize: 13, color: '#94a3b8' },
   riskBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   riskText: { fontSize: 11, fontWeight: 'bold' },
+  emptyState: { margin: 20, padding: 20, borderRadius: 14, backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155', gap: 8 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#f8fafc' },
+  emptyText: { fontSize: 14, lineHeight: 20, color: '#94a3b8' },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: '#0f172a', borderTopWidth: 1, borderTopColor: '#1e293b' },
   button: { backgroundColor: '#2563eb', padding: 16, borderRadius: 12, alignItems: 'center' },
   buttonDisabled: { opacity: 0.4 },

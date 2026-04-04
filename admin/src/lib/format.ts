@@ -1,5 +1,15 @@
 import { TRIGGER_EMOJI, TRIGGER_LABELS } from "@/lib/types";
 
+export function parseApiDate(input?: string | null) {
+  if (!input) return null;
+
+  const normalized =
+    /(?:Z|[+\-]\d{2}:\d{2})$/.test(input) ? input : `${input}Z`;
+
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -13,8 +23,8 @@ export function formatPercent(value: number) {
 }
 
 export function formatRelativeTime(input: string) {
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return "Unknown time";
+  const date = parseApiDate(input);
+  if (!date) return "Unknown time";
 
   const diffMs = date.getTime() - Date.now();
   const diffMinutes = Math.round(diffMs / 60000);
@@ -29,8 +39,8 @@ export function formatRelativeTime(input: string) {
 }
 
 export function formatDateTime(input: string) {
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  const date = parseApiDate(input);
+  if (!date) return "Unknown";
 
   return new Intl.DateTimeFormat("en-IN", {
     dateStyle: "medium",
@@ -53,8 +63,8 @@ export function shortId(value?: string | null) {
 }
 
 export function formatDurationSince(input: string) {
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  const date = parseApiDate(input);
+  if (!date) return "Unknown";
 
   const diffMs = Date.now() - date.getTime();
   const totalMinutes = Math.max(0, Math.floor(diffMs / 60000));

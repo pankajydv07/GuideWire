@@ -1,12 +1,16 @@
 """
 Trigger Service — core business logic.
 
-Evaluates 5 parametric triggers against live data snapshots:
+Evaluates public/mock automated parametric triggers against live data snapshots:
   1. Heavy Rain          rainfall_mm > 40
-  2. Traffic Congestion  congestion_index > 80 for 60+ min
-  3. Dark Store Closure  store_status = CLOSED
-  4. Platform Outage     platform_status = DOWN
-  5. Regulatory/Curfew  curfew_active = TRUE
+  2. Extreme Heat        heat index > threshold
+  3. Traffic Congestion  congestion_index > 80 for 60+ min
+  4. Dark Store Closure  store_status = CLOSED
+  5. Platform Outage     platform_status = DOWN
+  6. Regulatory Curfew   curfew_active = TRUE
+  7. GPS Shadowban       shadowban flag + duration anomaly
+  8. Dark Store Queue    pickup wait and queue SLA breach
+  9. Algorithmic Shock   allocation anomaly + order-rate collapse
 
 Three-Factor Validation Gate:
   A DisruptionEvent is created ONLY when ALL 3 conditions are met:
@@ -44,6 +48,10 @@ CONGESTION_THRESHOLD  = 80      # > 80/100
 CONGESTION_DURATION   = 55      # minutes sustained (rounds run every 5 min)
 COMMUNITY_PCT         = 0.70    # > 70% riders affected
 EARNINGS_DROP_PCT     = 20.0    # must drop ≥ 20% vs baseline
+SHADOWBAN_DURATION    = 30      # minutes
+QUEUE_WAIT_THRESHOLD  = 300     # 5 min pickup wait SLA breach
+QUEUE_DEPTH_THRESHOLD = 12
+ALGO_DROP_THRESHOLD   = 50.0
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -158,6 +166,54 @@ def eval_curfew(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
+def eval_gps_shadowban(snap: dict, zone: dict) -> Optional[dict]:
+    duration = snap.get("shadowban_duration_min", 0) or 0
+    if snap.get("shadowban_active") and (duration >= SHADOWBAN_DURATION or snap.get("allocation_anomaly")):
+        return {
+            "trigger_type": "gps_shadowban",
+            "severity":     "medium",
+            "threshold":    f"shadowban_active=TRUE duration={duration}min",
+            "data":         {
+                "shadowban_duration_min": duration,
+                "allocation_anomaly": snap.get("allocation_anomaly", False),
+            },
+        }
+    return None
+
+
+def eval_dark_store_queue(snap: dict, zone: dict) -> Optional[dict]:
+    wait_sec = snap.get("avg_pickup_wait_sec", 0) or 0
+    queue_depth = snap.get("pickup_queue_depth", 0) or 0
+    if wait_sec >= QUEUE_WAIT_THRESHOLD and queue_depth >= QUEUE_DEPTH_THRESHOLD:
+        return {
+            "trigger_type": "dark_store_queue",
+            "severity":     "low",
+            "threshold":    f"wait={wait_sec}s queue_depth={queue_depth}",
+            "data":         {
+                "avg_pickup_wait_sec": wait_sec,
+                "pickup_queue_depth": queue_depth,
+                "store_status": snap.get("store_status"),
+            },
+        }
+    return None
+
+
+def eval_algorithmic_shock(snap: dict, zone: dict) -> Optional[dict]:
+    drop_pct = snap.get("order_rate_drop_pct", 0) or 0
+    if snap.get("allocation_anomaly") and drop_pct >= ALGO_DROP_THRESHOLD:
+        return {
+            "trigger_type": "algorithmic_shock",
+            "severity":     "medium",
+            "threshold":    f"allocation_anomaly=TRUE order_drop={drop_pct:.1f}%",
+            "data":         {
+                "order_rate_drop_pct": drop_pct,
+                "orders_per_hour": snap.get("orders_per_hour"),
+                "dispatch_latency_sec": snap.get("dispatch_latency_sec"),
+            },
+        }
+    return None
+
+
 # ─── Community Signal ──────────────────────────────────────────────────────────
 def eval_community_signal(snapshots: list[dict], zone: dict) -> Optional[dict]:
     total = len(snapshots)
@@ -228,7 +284,15 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
         rider_trigger_counts: dict[str, int] = {}
 
         for snap in snaps:
-            for eval_fn in (eval_traffic, eval_store_closure, eval_platform_outage, eval_curfew):
+            for eval_fn in (
+                eval_traffic,
+                eval_store_closure,
+                eval_platform_outage,
+                eval_curfew,
+                eval_gps_shadowban,
+                eval_dark_store_queue,
+                eval_algorithmic_shock,
+            ):
                 result = eval_fn(snap, zone)
                 if result:
                     if _three_factor_valid(snap):

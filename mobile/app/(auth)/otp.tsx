@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../services/api';
 
 export default function OtpScreen() {
@@ -24,6 +25,7 @@ export default function OtpScreen() {
     try {
       const result = await api.riders.verifyOtp(phone!, otp);
       if (result.valid) {
+        await AsyncStorage.setItem('temp_token', result.temp_token);
         api.setToken(result.temp_token);
         router.push({ pathname: '/(auth)/register', params: { phone } });
       } else {

@@ -52,13 +52,19 @@ async def admin_login(
 async def list_manual_claims(
     sort: str = Query(default="spam_score"),
     order: str = Query(default="asc"),
+    status: str = Query(default="open"),
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns list of pending manual claims.
+    Returns list of manual claims for admin review.
     """
-    stmt = select(ManualClaim).where(ManualClaim.review_status == "pending")
+    stmt = select(ManualClaim)
+
+    if status == "open":
+        stmt = stmt.where(ManualClaim.review_status.in_(["pending", "under_review", "rejected"]))
+    elif status != "all":
+        stmt = stmt.where(ManualClaim.review_status == status)
     
     if sort == "spam_score":
         if order == "desc":
