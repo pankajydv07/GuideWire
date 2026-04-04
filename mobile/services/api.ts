@@ -6,11 +6,63 @@ const expoHost =
   Constants.manifest2?.extra?.expoClient?.hostUri?.split(':')[0] ||
   '';
 
-const fallbackHost =
-  expoHost ||
-  (Platform.OS === 'android' ? '10.0.2.2' : 'localhost');
+const configuredApiBase = process.env.EXPO_PUBLIC_API_URL?.trim() || '';
+const defaultCandidates = [
+  configuredApiBase,
+  expoHost ? `http://${expoHost}:8000` : '',
+  Platform.OS === 'android' ? 'http://10.0.2.2:8000' : '',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+].filter(Boolean);
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || `http://${fallbackHost}:8000`;
+const API_CANDIDATES = [...new Set(defaultCandidates)];
+const API_BASE = API_CANDIDATES[0] || 'http://localhost:8000';
+
+let resolvedApiBase: string | null = configuredApiBase || null;
+let resolvingApiBase: Promise<string> | null = null;
+
+async function probeApiBase(baseUrl: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const response = await fetch(`${baseUrl}/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolveApiBase() {
+  if (resolvedApiBase) {
+    return resolvedApiBase;
+  }
+
+  if (!resolvingApiBase) {
+    resolvingApiBase = (async () => {
+      for (const candidate of API_CANDIDATES) {
+        if (await probeApiBase(candidate)) {
+          resolvedApiBase = candidate;
+          return candidate;
+        }
+      }
+
+      throw new Error(
+        `Unable to reach backend. Tried: ${API_CANDIDATES.join(', ')}. ` +
+          `Set EXPO_PUBLIC_API_URL to your machine's reachable backend URL if needed.`
+      );
+    })().finally(() => {
+      resolvingApiBase = null;
+    });
+  }
+
+  return resolvingApiBase;
+}
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -137,6 +189,22 @@ export interface PayoutListItem {
   created_at: string;
 }
 
+export interface ManualClaimSubmitResponse {
+  claim_id?: string;
+  manual_claim_id?: string;
+  status: string;
+  spam_score: number;
+  message: string;
+  rejection_reasons: string[];
+}
+
+export interface OtpVerifyResponse {
+  valid: boolean;
+  temp_token?: string | null;
+  jwt_token?: string | null;
+  is_registered: boolean;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -155,6 +223,7 @@ class ApiClient {
     isFormData = false,
     extraHeaders?: Record<string, string>
   ): Promise<T> {
+    const apiBase = await resolveApiBase();
     const headers: Record<string, string> = { ...(extraHeaders || {}) };
 
     if (this.token) {
@@ -167,13 +236,17 @@ class ApiClient {
 
     let res: Response;
     try {
-      res = await fetch(`${API_BASE}${path}`, {
+      res = await fetch(`${apiBase}${path}`, {
         method,
         headers,
         body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
       });
     } catch {
-      throw new Error(`Unable to reach backend at ${API_BASE}`);
+      resolvedApiBase = null;
+      throw new Error(
+        `Unable to reach backend at ${apiBase}. ` +
+          `Set EXPO_PUBLIC_API_URL if your backend is running on a different host.`
+      );
     }
 
     if (!res.ok) {
@@ -194,7 +267,7 @@ class ApiClient {
       this.request<{ message: string; expires_in: number }>('POST', '/api/riders/send-otp', { phone }),
 
     verifyOtp: (phone: string, otp: string) =>
-      this.request<{ valid: boolean; temp_token: string }>('POST', '/api/riders/verify-otp', { phone, otp }),
+      this.request<OtpVerifyResponse>('POST', '/api/riders/verify-otp', { phone, otp }),
 
     register: (
       data: { name: string; platform: string; city: string; zone_id: string; slots: string[]; upi_id: string },
@@ -286,7 +359,7 @@ class ApiClient {
 
   manualClaims = {
     submit: (formData: FormData) =>
-      this.request<unknown>('POST', '/api/claims/manual', formData, true),
+      this.request<ManualClaimSubmitResponse>('POST', '/api/claims/manual', formData, true),
 
     getStatus: (claimId: string) =>
       this.request<unknown>('GET', `/api/claims/manual/${claimId}`),

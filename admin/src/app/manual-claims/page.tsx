@@ -13,10 +13,11 @@ import {
   Camera,
   Activity,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  ChevronRight
 } from "lucide-react";
 
-import { adminApi } from "@/lib/api";
+import { adminApi, API_BASE } from "@/lib/api";
 import { formatTriggerWithEmoji, shortId, formatApiDate } from "@/lib/format";
 import type { ManualClaimReview } from "@/lib/types";
 import { STATUS_STYLES } from "@/lib/types";
@@ -27,6 +28,8 @@ export default function ManualClaimsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedClaim, setSelectedClaim] = useState<ManualClaimReview | null>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectInput, setShowRejectInput] = useState(false);
 
   const loadClaims = async () => {
     try {
@@ -46,27 +49,35 @@ export default function ManualClaimsPage() {
     return () => window.clearInterval(interval);
   }, []);
 
+  const isReviewLocked = (claim: ManualClaimReview) => claim.review_status !== "pending" || claim.spam_score >= 70;
+
   const handleReview = async (claimId: string, status: "approved" | "rejected") => {
+    if (status === "rejected" && !rejectReason.trim()) {
+      alert("Provide a justification for the rejection protocol.");
+      return;
+    }
+
     setReviewing(claimId);
     try {
       if (status === "approved") {
         await adminApi.claims.approve(claimId);
       } else {
-        await adminApi.claims.reject(claimId, "Rejected by administrator review protocol.");
+        await adminApi.claims.reject(claimId, rejectReason);
       }
+      
       await loadClaims();
-      if (selectedClaim?.id === claimId) {
-        setSelectedClaim(null);
-      }
+      setSelectedClaim(null);
+      setRejectReason("");
+      setShowRejectInput(false);
     } catch (err) {
-      alert("Failed to propagate review decision.");
+      alert(err instanceof Error ? err.message : "Failed to propagate review decision.");
     } finally {
       setReviewing(null);
     }
   };
 
-  const pendingClaims = claims.filter((c) => c.review_status === "pending");
-  const processedClaims = claims.filter((c) => c.review_status !== "pending");
+  const pendingClaims = claims.filter((c) => c.review_status === "pending" && c.spam_score < 70);
+  const processedClaims = claims.filter((c) => c.review_status !== "pending" || c.spam_score >= 70);
 
   return (
     <div className="space-y-10">
@@ -74,7 +85,7 @@ export default function ManualClaimsPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Review Queue</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-white mb-2 uppercase italic">Review Queue</h1>
         <p className="text-slate-400 font-medium">Human-in-the-loop verification for community-signaled disruptions.</p>
       </motion.div>
 
@@ -91,10 +102,10 @@ export default function ManualClaimsPage() {
                 <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center ring-1 ring-indigo-500/20">
                    <Clock className="w-5 h-5 text-indigo-400" />
                 </div>
-                <h2 className="text-xl font-bold text-white tracking-tight">Pending Verification</h2>
+                <h2 className="text-xl font-bold text-white tracking-tight">Active Signals</h2>
              </div>
              <span className="rounded-full bg-indigo-500/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-400 ring-1 ring-indigo-500/20">
-                {pendingClaims.length} awaiting
+                {pendingClaims.length} active
              </span>
           </div>
 
@@ -123,7 +134,7 @@ export default function ManualClaimsPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.05 }}
                     className={`glass-card rounded-[2rem] p-6 group cursor-pointer transition-all duration-300 ${selectedClaim?.id === claim.id ? "ring-2 ring-indigo-500/50 bg-indigo-500/[0.05]" : "hover:bg-white/[0.02]"}`}
-                    onClick={() => setSelectedClaim(claim)}
+                    onClick={() => { setSelectedClaim(claim); setShowRejectInput(false); }}
                   >
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-5">
@@ -152,17 +163,20 @@ export default function ManualClaimsPage() {
           <div className="pt-12">
              <div className="flex items-center gap-3 mb-8 opacity-40">
                 <ClipboardList className="w-6 h-6" />
-                <h2 className="text-xl font-bold text-white tracking-tight">Decisional Archive</h2>
+                <h2 className="text-xl font-bold text-white tracking-tight italic">Processed Protocol</h2>
              </div>
              <div className="space-y-3">
-                {processedClaims.slice(0, 5).map((claim) => (
+                {processedClaims.slice(0, 10).map((claim) => (
                   <div key={claim.id} className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/10 group hover:bg-slate-900/20 transition-colors">
                      <div className="flex items-center gap-4">
                         <span className="text-xl opacity-40 group-hover:opacity-100 transition-opacity">{formatTriggerWithEmoji(claim.disruption_type)}</span>
-                        <span className="text-sm font-bold text-slate-400 group-hover:text-slate-200 transition-colors">{claim.rider_name || shortId(claim.rider_id)}</span>
+                        <div>
+                           <div className="text-sm font-bold text-slate-400 group-hover:text-slate-200 transition-colors">{claim.rider_name || shortId(claim.rider_id)}</div>
+                           {claim.reviewer_notes ? <div className="text-[10px] text-slate-600 font-medium mt-0.5">{claim.reviewer_notes}</div> : null}
+                        </div>
                      </div>
-                     <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] ${STATUS_STYLES[claim.review_status] || STATUS_STYLES.pending}`}>
-                        {claim.review_status}
+                     <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] ${STATUS_STYLES[claim.review_status] || (claim.spam_score >= 70 ? "bg-rose-500/10 text-rose-500 ring-rose-500/20" : STATUS_STYLES.pending)}`}>
+                        {claim.spam_score >= 70 ? "Spam Rejected" : claim.review_status}
                      </span>
                   </div>
                 ))}
@@ -196,8 +210,8 @@ export default function ManualClaimsPage() {
                 className="glass-card rounded-[2.5rem] p-8 overflow-hidden relative shadow-2xl"
               >
                 <div className="absolute top-0 right-0 p-8">
-                   <div className="px-3 py-1 rounded-full bg-indigo-500/10 text-[9px] font-bold text-indigo-400 tracking-widest ring-1 ring-indigo-500/20">
-                      SIGNAL #{shortId(selectedClaim.id).toUpperCase()}
+                   <div className="px-3 py-1 rounded-full bg-indigo-500/10 text-[9px] font-bold text-indigo-400 tracking-widest ring-1 ring-indigo-500/20 uppercase italic">
+                      Signal #{shortId(selectedClaim.id).toUpperCase()}
                    </div>
                 </div>
 
@@ -256,33 +270,70 @@ export default function ManualClaimsPage() {
                       </p>
                       {selectedClaim.photo_url && (
                         <div className="mt-4 rounded-2xl overflow-hidden ring-1 ring-white/10 opacity-60 hover:opacity-100 transition-opacity cursor-zoom-in">
-                           <img src={selectedClaim.photo_url} alt="Signal Evidence" className="w-full h-32 object-cover" />
+                           <img 
+                            src={selectedClaim.photo_url.startsWith("http") ? selectedClaim.photo_url : `${API_BASE}${selectedClaim.photo_url}`} 
+                            alt="Signal Evidence" 
+                            className="w-full h-32 object-cover" 
+                           />
                         </div>
                       )}
                    </div>
                 </div>
 
-                <div className="flex gap-4 p-1 rounded-3xl bg-slate-950/80 border border-white/5 shadow-2xl backdrop-blur-xl">
-                  <button
-                    disabled={reviewing !== null}
-                    onClick={() => handleReview(selectedClaim.id, "approved")}
-                    className="flex-1 flex items-center justify-center gap-3 py-5 rounded-2xl bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-500/20 hover:bg-emerald-500 hover:shadow-emerald-500/20 active:scale-95 transition-all duration-300 disabled:opacity-50"
-                  >
-                    {reviewing === selectedClaim.id ? (
-                       <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    ) : (
-                       <>
-                         <CheckCircle className="w-4 h-4" /> VERIFY
-                       </>
-                    )}
-                  </button>
-                  <button
-                    disabled={reviewing !== null}
-                    onClick={() => handleReview(selectedClaim.id, "rejected")}
-                    className="flex-1 flex items-center justify-center gap-3 py-5 rounded-2xl bg-white/[0.03] text-slate-500 font-bold text-sm hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition-all duration-300 border border-white/5 disabled:opacity-50"
-                  >
-                    <XCircle className="w-4 h-4" /> REJECT
-                  </button>
+                <div className="space-y-4">
+                  {!showRejectInput ? (
+                    <div className="flex gap-4 p-1 rounded-3xl bg-slate-950/80 border border-white/5 shadow-2xl backdrop-blur-xl">
+                      <button
+                        disabled={reviewing !== null || isReviewLocked(selectedClaim)}
+                        onClick={() => handleReview(selectedClaim.id, "approved")}
+                        className="flex-1 flex items-center justify-center gap-3 py-5 rounded-2xl bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-500/20 hover:bg-emerald-500 hover:shadow-emerald-500/20 active:scale-95 transition-all duration-300 disabled:opacity-50"
+                      >
+                        {reviewing === selectedClaim.id ? (
+                          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" /> VERIFY
+                          </>
+                        )}
+                      </button>
+                      <button
+                        disabled={reviewing !== null || isReviewLocked(selectedClaim)}
+                        onClick={() => setShowRejectInput(true)}
+                        className="flex-1 flex items-center justify-center gap-3 py-5 rounded-2xl bg-white/[0.03] text-slate-300 font-bold text-sm hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition-all duration-300 border border-white/5 disabled:opacity-50"
+                      >
+                        <XCircle className="w-4 h-4" /> REJECT
+                      </button>
+                    </div>
+                  ) : (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-4 p-6 rounded-3xl bg-rose-500/5 border border-rose-500/20 ring-1 ring-rose-500/40"
+                    >
+                      <div className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Rejection Justification</div>
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Detail the inconsistency detected..."
+                        className="w-full bg-slate-950/50 border border-white/10 rounded-2xl p-4 text-sm text-slate-200 outline-none focus:ring-1 focus:ring-rose-500/50 min-h-[100px]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          disabled={reviewing !== null}
+                          onClick={() => handleReview(selectedClaim.id, "rejected")}
+                          className="flex-1 py-3 rounded-xl bg-rose-500 text-white font-bold text-xs uppercase tracking-widest shadow-xl shadow-rose-500/20"
+                        >
+                          Confirm Rejection
+                        </button>
+                        <button
+                          onClick={() => { setShowRejectInput(false); setRejectReason(""); }}
+                          className="px-4 py-3 rounded-xl bg-white/5 text-slate-400 font-bold text-xs uppercase tracking-widest"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}

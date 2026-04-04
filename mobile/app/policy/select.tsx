@@ -1,16 +1,28 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type PolicyQuoteResponse } from '../../services/api';
+import Colors from '../../constants/Colors';
 
-const tierLabel = (tier: string) => tier.replace('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-const tierEmoji = (tier: string) => {
-  if (tier === 'essential') return '🔵';
-  if (tier === 'balanced') return '🟢';
-  return '🟡';
+const { width } = Dimensions.get('window');
+
+const tierLabel = (tier: string) => tier.replace('_', ' ').toUpperCase();
+const tierIcon = (tier: string) => {
+  if (tier === 'essential') return 'shield-outline';
+  if (tier === 'balanced') return 'shield-half';
+  return 'shield-checkmark';
+};
+
+const tierColor = (tier: string) => {
+  if (tier === 'essential') return '#94a3b8';
+  if (tier === 'balanced') return '#38bdf8';
+  return '#10b981';
 };
 
 export default function PolicySelectScreen() {
@@ -64,104 +76,130 @@ export default function PolicySelectScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
+      <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color="#38bdf8" />
-        <Text style={styles.loadingText}>Calculating your personalized weekly premium...</Text>
-      </SafeAreaView>
+        <Text style={styles.loadingText}>Calibrating parametric yield...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Choose Your Plan</Text>
-        <Text style={styles.subtitle}>Weekly cover personalized for your zone and working slots.</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInUp.duration(600).springify()}>
+          <Text style={styles.title}>Secure Your Income</Text>
+          <Text style={styles.subtitle}>Precision parametric coverage for your active perimeters.</Text>
+        </Animated.View>
 
         {quote ? (
           <>
-            <View style={styles.riskCard}>
+            <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.riskCard}>
+              <View style={styles.riskHeader}>
+                 <Ionicons name="location" size={16} color="#f59e0b" />
+                 <Text style={styles.riskTitle}>{quote.zone_name || rider?.zone || 'Selected Zone'} Alert</Text>
+              </View>
               <Text style={styles.riskText}>
-                Your zone ({quote.zone_name || rider?.zone || 'Selected Zone'}) has a risk score of {quote.zone_risk_score}/100.
+                Hazard Index: {quote.zone_risk_score}/100
               </Text>
               {quote.explanation ? <Text style={styles.riskSubtext}>{quote.explanation}</Text> : null}
-            </View>
+            </Animated.View>
 
             <View style={styles.tierContainer}>
-              {quote.quotes.map((tier) => (
-                <TouchableOpacity
-                  key={tier.tier}
-                  style={[
-                    styles.tierCard,
-                    selectedTier === tier.tier && styles.selectedCard,
-                    tier.tier === 'balanced' && styles.recommended,
-                  ]}
-                  onPress={() => setSelectedTier(tier.tier)}
-                >
-                  {tier.tier === 'balanced' ? <Text style={styles.recBadge}>RECOMMENDED</Text> : null}
-                  <Text style={styles.tierEmoji}>{tierEmoji(tier.tier)}</Text>
-                  <Text style={styles.tierName}>{tierLabel(tier.tier)}</Text>
-                  <Text style={styles.tierPrice}>₹{tier.weekly_premium}/week</Text>
-                  <Text style={styles.tierCoverage}>{tier.coverage_pct}% coverage of your baseline</Text>
-                  <Text style={styles.tierMax}>Max payout ₹{tier.coverage_limit}</Text>
-                </TouchableOpacity>
-              ))}
+              {quote.quotes.map((tier, index) => {
+                const color = tierColor(tier.tier);
+                const isSelected = selectedTier === tier.tier;
+                return (
+                  <Animated.View key={tier.tier} entering={FadeInDown.delay(400 + index * 100).springify()} layout={Layout.springify()}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={[
+                        styles.tierCard,
+                        isSelected && { borderColor: color, backgroundColor: 'rgba(255,255,255,0.03)' },
+                        tier.tier === 'balanced' && !isSelected && styles.recommendedBorder,
+                      ]}
+                      onPress={() => setSelectedTier(tier.tier)}
+                    >
+                      <View style={styles.tierHeader}>
+                        <View style={[styles.iconFrame, { backgroundColor: `${color}15` }]}>
+                          <Ionicons name={tierIcon(tier.tier) as any} size={24} color={color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.tierName, { color }]}>{tierLabel(tier.tier)}</Text>
+                          <Text style={styles.tierSub}>WEEKLY PROTECTION</Text>
+                        </View>
+                        <View style={styles.priceContainer}>
+                           <Text style={styles.currency}>₹</Text>
+                           <Text style={styles.price}>{tier.weekly_premium}</Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.divider} />
+                      
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+                        <Text style={styles.featureText}>{tier.coverage_pct}% Yield Recovery</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+                        <Text style={styles.featureText}>Max Recovery ₹{tier.coverage_limit}</Text>
+                      </View>
+
+                      {tier.tier === 'balanced' && (
+                        <View style={styles.recBadge}>
+                          <Text style={styles.recBadgeText}>PEER CHOICE</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })}
             </View>
 
-            {quote.slot_breakdown.length > 0 ? (
-              <View style={styles.breakdownCard}>
-                <Text style={styles.breakdownTitle}>Slot Breakdown</Text>
-                {quote.slot_breakdown.map((slot) => (
-                  <View key={slot.slot} style={styles.breakdownRow}>
-                    <Text style={styles.breakdownSlot}>{slot.slot}</Text>
-                    <Text style={styles.breakdownInfo}>
-                      Expected ₹{slot.expected_earnings} • Risk {slot.risk_score}/100
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
             <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} disabled={!selectedQuote}>
-              <Text style={styles.continueText}>Continue to Payment →</Text>
+              <Text style={styles.continueText}>Initiate Protocol →</Text>
             </TouchableOpacity>
           </>
         ) : (
           <View style={styles.errorCard}>
-            <Text style={styles.errorText}>Premium quote unavailable right now.</Text>
+             <Ionicons name="alert-circle" size={32} color="#f43f5e" />
+             <Text style={styles.errorText}>Parametric link unstable. Retrying telemetry...</Text>
           </View>
         )}
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  center: { justifyContent: 'center', alignItems: 'center', padding: 24 },
-  loadingText: { color: '#94a3b8', marginTop: 12, textAlign: 'center' },
-  scroll: { padding: 20, gap: 14 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc' },
-  subtitle: { fontSize: 14, color: '#94a3b8' },
-  riskCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#334155', gap: 6 },
-  riskText: { color: '#fbbf24', fontSize: 13, fontWeight: '600' },
-  riskSubtext: { color: '#cbd5e1', fontSize: 13, lineHeight: 18 },
-  tierContainer: { gap: 12 },
-  tierCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 16, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#334155' },
-  selectedCard: { borderColor: '#38bdf8', backgroundColor: '#111c35' },
-  recommended: { borderColor: '#22c55e', borderWidth: 2 },
-  recBadge: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
-  tierEmoji: { fontSize: 32 },
-  tierName: { fontSize: 20, fontWeight: 'bold', color: '#f8fafc' },
-  tierPrice: { fontSize: 22, fontWeight: 'bold', color: '#38bdf8' },
-  tierCoverage: { fontSize: 13, color: '#94a3b8' },
-  tierMax: { fontSize: 12, color: '#64748b' },
-  breakdownCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#334155' },
-  breakdownTitle: { color: '#f8fafc', fontSize: 16, fontWeight: '600', marginBottom: 10 },
-  breakdownRow: { marginBottom: 10 },
-  breakdownSlot: { color: '#e2e8f0', fontSize: 14, fontWeight: '600' },
-  breakdownInfo: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
-  continueBtn: { backgroundColor: '#2563eb', padding: 16, borderRadius: 12, alignItems: 'center' },
-  continueText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  errorCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#7f1d1d' },
-  errorText: { color: '#fca5a5', fontSize: 14 },
+  container: { flex: 1, backgroundColor: '#020617' },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  loadingText: { color: '#475569', marginTop: 16, fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+  scroll: { padding: 24, gap: 24 },
+  title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
+  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '700' },
+  riskCard: { backgroundColor: 'rgba(245, 158, 11, 0.05)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.15)' },
+  riskHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  riskTitle: { color: '#f59e0b', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  riskText: { color: '#f8fafc', fontSize: 18, fontWeight: '800', marginBottom: 6 },
+  riskSubtext: { color: '#94a3b8', fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  tierContainer: { gap: 16 },
+  tierCard: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' },
+  recommendedBorder: { borderColor: 'rgba(16, 185, 129, 0.2)' },
+  tierHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 },
+  iconFrame: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tierName: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
+  tierSub: { fontSize: 9, color: '#475569', fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+  priceContainer: { flexDirection: 'row', alignItems: 'baseline' },
+  currency: { color: '#475569', fontSize: 14, fontWeight: '900', marginRight: 2 },
+  price: { color: '#f8fafc', fontSize: 28, fontWeight: '900' },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginBottom: 20 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  featureText: { color: '#94a3b8', fontSize: 13, fontWeight: '700' },
+  recBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#10b981', paddingHorizontal: 12, paddingVertical: 6, borderBottomLeftRadius: 16 },
+  recBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  continueBtn: { backgroundColor: '#38bdf8', paddingVertical: 20, borderRadius: 24, alignItems: 'center', shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  continueText: { color: '#020617', fontSize: 17, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  errorCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 16 },
+  errorText: { color: '#fca5a5', fontSize: 14, fontWeight: '700', textAlign: 'center' },
 });

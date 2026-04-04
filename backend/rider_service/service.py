@@ -19,8 +19,8 @@ async def send_otp(phone: str) -> dict:
     return {"message": "OTP sent", "expires_in": 300}
 
 
-async def verify_otp(phone: str, otp: str) -> dict:
-    """Verify OTP from Redis. Return temp token for registration."""
+async def verify_otp(phone: str, otp: str, db: AsyncSession) -> dict:
+    """Verify OTP from Redis. Existing riders get a rider JWT, new phones get a temp registration token."""
     redis_client = await get_redis()
     stored_otp = await redis_client.get(f"otp:{phone}")
     
@@ -32,10 +32,25 @@ async def verify_otp(phone: str, otp: str) -> dict:
     
     # Delete OTP after successful verification
     await redis_client.delete(f"otp:{phone}")
-    
-    # Issue a short-lived token tied to this phone number
-    temp_token = create_temp_token(phone)
-    return {"valid": True, "temp_token": temp_token, "error": None}
+
+    rider_result = await db.execute(select(Rider).where(Rider.phone == phone))
+    rider = rider_result.scalar_one_or_none()
+    if rider:
+        return {
+            "valid": True,
+            "temp_token": None,
+            "jwt_token": create_access_token(data={"sub": str(rider.id), "role": "rider"}),
+            "is_registered": True,
+            "error": None,
+        }
+
+    return {
+        "valid": True,
+        "temp_token": create_temp_token(phone),
+        "jwt_token": None,
+        "is_registered": False,
+        "error": None,
+    }
 
 
 

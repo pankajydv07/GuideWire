@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +11,7 @@ import Colors from '../../constants/Colors';
 
 export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { login } = useAuth();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -21,12 +23,23 @@ export default function OtpScreen() {
 
     setLoading(true);
     try {
-      const response = await api.riders.verifyOtp(phone!, otp);
-      if (response.valid) {
-        await AsyncStorage.setItem('temp_token', response.temp_token);
-        api.setToken(response.temp_token);
-        // Assuming the app logic is to proceed to registration/profile setup
-        router.push({ pathname: '/(auth)/register', params: { phone } });
+      const result = await api.riders.verifyOtp(phone!, otp);
+      if (result.valid) {
+        if (result.is_registered && result.jwt_token) {
+          await AsyncStorage.removeItem('temp_token');
+          await login(result.jwt_token);
+          router.replace('/(tabs)');
+          return;
+        }
+
+        if (result.temp_token) {
+          await AsyncStorage.setItem('temp_token', result.temp_token);
+          api.setToken(result.temp_token);
+          router.push({ pathname: '/(auth)/register', params: { phone } });
+          return;
+        }
+
+        Alert.alert('System Mismatch', 'Unable to continue. Please retry transmission.');
       } else {
         Alert.alert('Verification Failed', 'Invalid sequence detected.');
       }

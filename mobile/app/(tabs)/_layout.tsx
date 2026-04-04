@@ -1,14 +1,13 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Tabs } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Tabs } from 'expo-router';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 
 import Colors from '../../constants/Colors';
-import { useColorScheme } from '../../components/useColorScheme';
+import { useAuth } from '../../contexts/AuthContext';
 import { useClientOnlyValue } from '../../components/useClientOnlyValue';
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
@@ -17,7 +16,19 @@ function TabBarIcon(props: {
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { isAuthenticated, isReady } = useAuth();
+
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617' }}>
+        <ActivityIndicator color={Colors.dark.tint} size="large" />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <Tabs
@@ -64,7 +75,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="profile"
         options={{
           title: 'Node',
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,

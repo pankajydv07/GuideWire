@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import Animated, { FadeInUp, FadeInRight, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -45,6 +46,8 @@ export default function DashboardScreen() {
   const [payouts, setPayouts] = useState<PayoutListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const loadDashboardData = async () => {
     const [policyData, triggerData, payoutData] = await Promise.all([
@@ -52,14 +55,17 @@ export default function DashboardScreen() {
       api.triggers.getStatus().catch(() => null),
       api.payouts.list().catch(() => ({ payouts: [] })),
     ]);
+
     setPolicy(policyData);
     setTriggers(triggerData);
     setPayouts(payoutData.payouts || []);
+    setLastUpdated(new Date());
+    setRefreshError(null);
   };
 
   useEffect(() => {
     loadDashboardData()
-      .catch(console.error)
+      .catch((error) => setRefreshError(error instanceof Error ? error.message : 'Unable to load dashboard.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -67,6 +73,8 @@ export default function DashboardScreen() {
     setRefreshing(true);
     try {
       await loadDashboardData();
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : 'Unable to refresh dashboard right now.');
     } finally {
       setRefreshing(false);
     }
@@ -80,20 +88,20 @@ export default function DashboardScreen() {
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
+      <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color="#38bdf8" />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#38bdf8" />}
       >
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Animated.Text entering={FadeInRight.duration(600)} style={styles.greeting}>
               Hey, {rider?.name || 'Rider'} 👋
             </Animated.Text>
@@ -103,11 +111,23 @@ export default function DashboardScreen() {
                 {hasActivePolicy ? 'Coverage Shield Active' : 'Shield Offline'}
               </Text>
             </View>
+            <Text style={styles.refreshMeta}>
+              {lastUpdated ? `Sync: ${formatApiDateTime(lastUpdated.toISOString())}` : 'Synchronizing...'}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.profileIcon} onPress={() => router.push('/(tabs)/profile')}>
+          <TouchableOpacity 
+            style={styles.profileIcon} 
+            onPress={() => router.push('/(tabs)/profile')}
+          >
              <Ionicons name="person-circle-outline" size={32} color="#94a3b8" />
           </TouchableOpacity>
         </View>
+
+        {refreshError ? (
+          <View style={styles.errorAlert}>
+            <Text style={styles.errorText}>{refreshError}</Text>
+          </View>
+        ) : null}
 
         {hasActivePolicy && policy ? (
           <AnimatedCard delay={100} style={styles.activePolicyCard}>
@@ -129,7 +149,7 @@ export default function DashboardScreen() {
               <View style={styles.divider} />
               <View style={styles.statBox}>
                 <Text style={styles.statLabel}>TIME LEFT</Text>
-                <Text style={styles.statValue}>{policy.hours_remaining ?? 0}h</Text>
+                <Text style={styles.statValue}>{policy.hours_remaining ?? 0}H</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.statBox}>
@@ -140,8 +160,8 @@ export default function DashboardScreen() {
 
             <View style={styles.policyFooter}>
                <Ionicons name="time-outline" size={14} color="#64748b" />
-               <Text style={styles.cardFooter}>
-                  Week {policy.coverage_week} • Exp. {policy.expires_at ? formatApiDateTime(policy.expires_at) : 'Soon'}
+               <Text style={styles.cardFooterText}>
+                  Week {policy.coverage_week} • Exp. {policy.expires_at ? formatApiDateTime(policy.expires_at) : 'End of period'}
                </Text>
             </View>
           </AnimatedCard>
@@ -225,6 +245,7 @@ export default function DashboardScreen() {
             <Text style={styles.ctaDangerText}>Report Issue</Text>
           </TouchableOpacity>
         </View>
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -237,12 +258,13 @@ function ShieldCheckIcon({ size, color }: { size: number, color: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020617' },
   center: { justifyContent: 'center', alignItems: 'center' },
-  scroll: { padding: 20, paddingBottom: 40, gap: 20 },
+  scroll: { padding: 20, gap: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   greeting: { fontSize: 28, fontWeight: '800', color: '#f8fafc', letterSpacing: -0.5 },
   statusIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   subtext: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  refreshMeta: { fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: '600' },
   profileIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
   card: { backgroundColor: '#0f172a', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#1e293b' },
   activePolicyCard: { backgroundColor: '#0f172a', borderColor: '#1e293b', borderTopWidth: 4, borderTopColor: '#38bdf8' },
@@ -261,7 +283,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: '800', color: '#f8fafc' },
   divider: { width: 1, height: 30, backgroundColor: '#1e293b' },
   policyFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 20, gap: 6 },
-  cardFooter: { fontSize: 12, color: '#64748b', fontWeight: '500' },
+  cardFooterText: { fontSize: 12, color: '#64748b', fontWeight: '500' },
   alertRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
   alertIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
   alertText: { color: '#f8fafc', fontSize: 16, fontWeight: '700' },
@@ -281,4 +303,6 @@ const styles = StyleSheet.create({
   ctaSecondaryText: { color: '#f8fafc', fontSize: 15, fontWeight: '700' },
   ctaDanger: { backgroundColor: '#450a0a', borderRadius: 18, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', borderWidth: 1, borderColor: '#7f1d1d' },
   ctaDangerText: { color: '#fecaca', fontSize: 15, fontWeight: '700' },
+  errorAlert: { backgroundColor: '#450a0a20', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#ef444440' },
+  errorText: { color: '#fca5a5', fontSize: 12, textAlign: 'center', fontWeight: '600' },
 });

@@ -1,10 +1,11 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '../components/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -64,31 +65,34 @@ function RootLayoutNav() {
   };
 
   return (
-    <AuthProvider>
-      <ThemeProvider value={customDarkTheme}>
-        <Stack screenOptions={{ 
-            headerStyle: { backgroundColor: Colors.dark.background },
-            headerTitleStyle: { fontWeight: '800', color: Colors.dark.text },
-            headerTintColor: Colors.dark.tint,
-            headerShadowVisible: false,
-         }}>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)/otp" options={{ title: 'Verify OTP' }} />
-          <Stack.Screen name="(auth)/register" options={{ title: 'Sign Up' }} />
-          <Stack.Screen name="(auth)/zone-select" options={{ title: 'Select Zone' }} />
-          <Stack.Screen name="(auth)/slot-select" options={{ title: 'Select Slots' }} />
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ThemeProvider value={customDarkTheme}>
+          <StatusBar style="light" />
+          <Stack screenOptions={{ 
+              headerStyle: { backgroundColor: Colors.dark.background },
+              headerTitleStyle: { fontWeight: '800', color: Colors.dark.text },
+              headerTintColor: Colors.dark.tint,
+              headerShadowVisible: false,
+           }}>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)/otp" options={{ title: 'Verify OTP' }} />
+            <Stack.Screen name="(auth)/register" options={{ title: 'Sign Up' }} />
+            <Stack.Screen name="(auth)/zone-select" options={{ title: 'Select Zone' }} />
+            <Stack.Screen name="(auth)/slot-select" options={{ title: 'Select Slots' }} />
 
-          {/* Main App (tabs) */}
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Main App (tabs) */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-          {/* Dev 2: Policy Flow */}
-          <Stack.Screen name="policy/select" options={{ title: 'Choose Plan' }} />
-          <Stack.Screen name="policy/payment" options={{ title: 'Payment' }} />
+            {/* Dev 2: Policy Flow */}
+            <Stack.Screen name="policy/select" options={{ title: 'Choose Plan' }} />
+            <Stack.Screen name="policy/payment" options={{ title: 'Payment' }} />
 
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-      </ThemeProvider>
-    </AuthProvider>
+            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        </ThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

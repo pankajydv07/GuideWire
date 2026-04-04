@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Dimensions, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
+
+const { width } = Dimensions.get('window');
 
 const currentCoverageWeek = () => {
   const now = new Date();
@@ -45,7 +50,7 @@ export default function PaymentScreen() {
         if (parsed.length > 0) slots = parsed;
       }
 
-      const result = await api.policies.create({
+      await api.policies.create({
         plan_tier: params.tier || 'balanced',
         payment_method: 'upi',
         upi_id: displayUpi,
@@ -56,8 +61,7 @@ export default function PaymentScreen() {
       await refreshProfile();
       setTimeout(() => {
         router.replace('/(tabs)');
-      }, 1500);
-      return result;
+      }, 2000);
     } catch (error) {
       Alert.alert('Payment failed', error instanceof Error ? error.message : 'Unable to activate policy.');
     } finally {
@@ -67,58 +71,124 @@ export default function PaymentScreen() {
 
   if (success) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
-        <Text style={styles.successEmoji}>✅</Text>
-        <Text style={styles.successTitle}>Payment Successful</Text>
-        <Text style={styles.successText}>Your policy is now active.</Text>
-      </SafeAreaView>
+      <View style={[styles.container, styles.center]}>
+        <Animated.View entering={ZoomIn.duration(800).springify()} style={styles.successIcon}>
+           <Ionicons name="shield-checkmark" size={64} color="#10b981" />
+        </Animated.View>
+        <Animated.View entering={FadeInUp.delay(300)}>
+          <Text style={styles.successTitle}>Shield Activated</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInUp.delay(500)}>
+          <Text style={styles.successText}>Your parametric coverage is now live.</Text>
+        </Animated.View>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Confirm Payment</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInUp.duration(600).springify()}>
+          <Text style={styles.title}>Confirm Protocol</Text>
+          <Text style={styles.subtitle}>Finalize your weekly parametric protection commitment.</Text>
+        </Animated.View>
 
-      <View style={styles.card}>
-        <Text style={styles.row}>Plan: <Text style={styles.bold}>{(params.tier || 'balanced').replace('_', ' ').toUpperCase()}</Text></Text>
-        <Text style={styles.row}>Coverage Week: <Text style={styles.bold}>{currentCoverageWeek()}</Text></Text>
-        <Text style={styles.row}>Zone: <Text style={styles.bold}>{params.zone_name || rider?.zone || rider?.city || 'Selected Zone'}</Text></Text>
-        <Text style={styles.row}>Coverage: <Text style={styles.bold}>{params.coverage_pct || '80'}% of baseline</Text></Text>
-        <Text style={styles.row}>Slots Covered: <Text style={styles.bold}>{params.slots_covered || '1'}</Text></Text>
-        <View style={styles.divider} />
-        <Text style={styles.total}>₹{params.price || '180'}</Text>
-        <Text style={styles.totalLabel}>Weekly premium</Text>
-      </View>
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.glassCard}>
+           <View style={styles.headerRow}>
+              <View>
+                 <Text style={styles.tierName}>{(params.tier || 'balanced').replace('_', ' ').toUpperCase()}</Text>
+                 <Text style={styles.tierSub}>ACTIVE TIER</Text>
+              </View>
+              <View style={styles.priceContainer}>
+                 <Text style={styles.currency}>₹</Text>
+                 <Text style={styles.price}>{params.price || '180'}</Text>
+              </View>
+           </View>
 
-      <View style={styles.upiCard}>
-        <Text style={styles.upiLabel}>Pay via demo UPI</Text>
-        <Text style={styles.upiValue}>{displayUpi}</Text>
-      </View>
+           <View style={styles.divider} />
 
-      <TouchableOpacity style={[styles.payButton, processing && styles.payButtonDisabled]} onPress={handlePay} disabled={processing}>
-        {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.payText}>💳 Pay via UPI</Text>}
-      </TouchableOpacity>
+           <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                 <Text style={styles.infoLabel}>PERIOD</Text>
+                 <Text style={styles.infoValue}>{currentCoverageWeek()}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                 <Text style={styles.infoLabel}>ZONE</Text>
+                 <Text style={styles.infoValue}>{params.zone_name || rider?.zone || 'Primary'}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                 <Text style={styles.infoLabel}>SYNERGY</Text>
+                 <Text style={styles.infoValue}>{params.coverage_pct || '80'}%</Text>
+              </View>
+              <View style={styles.infoItem}>
+                 <Text style={styles.infoLabel}>CAP</Text>
+                 <Text style={styles.infoValue}>₹{params.max_payout || '2500'}</Text>
+              </View>
+           </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(400).springify()} style={styles.upiContainer}>
+           <Text style={styles.sectionTitle}>FUNDING BRIDGE</Text>
+           <View style={styles.upiCard}>
+              <View style={styles.upiIcon}>
+                 <Ionicons name="card" size={20} color="#38bdf8" />
+              </View>
+              <View style={{ flex: 1 }}>
+                 <Text style={styles.upiLabel}>Linked UPI Identifier</Text>
+                 <Text style={styles.upiValue}>{displayUpi}</Text>
+              </View>
+              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+           </View>
+        </Animated.View>
+
+        <TouchableOpacity 
+          style={[styles.payButton, processing && styles.payButtonDisabled]} 
+          onPress={handlePay} 
+          disabled={processing}
+        >
+          {processing ? (
+            <ActivityIndicator color="#020617" />
+          ) : (
+            <>
+              <Ionicons name="lock-closed" size={18} color="#020617" style={{ marginRight: 8 }} />
+              <Text style={styles.payText}>Authorize Payment</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 20 },
-  center: { justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc', marginBottom: 20 },
-  card: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, gap: 8, borderWidth: 1, borderColor: '#334155' },
-  row: { color: '#94a3b8', fontSize: 15 },
-  bold: { color: '#f8fafc', fontWeight: '700' },
-  divider: { height: 1, backgroundColor: '#334155', marginVertical: 8 },
-  total: { fontSize: 36, fontWeight: 'bold', color: '#38bdf8', textAlign: 'center' },
-  totalLabel: { fontSize: 13, color: '#64748b', textAlign: 'center' },
-  upiCard: { backgroundColor: '#1e293b', borderRadius: 14, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#334155' },
-  upiLabel: { color: '#94a3b8', fontSize: 13, marginBottom: 4 },
-  upiValue: { color: '#f8fafc', fontSize: 18, fontWeight: '700' },
-  payButton: { backgroundColor: '#22c55e', borderRadius: 14, padding: 18, alignItems: 'center', marginTop: 24, justifyContent: 'center' },
-  payButtonDisabled: { opacity: 0.7 },
-  payText: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  successEmoji: { fontSize: 64, marginBottom: 16 },
-  successTitle: { fontSize: 24, fontWeight: 'bold', color: '#22c55e', marginBottom: 8 },
-  successText: { fontSize: 16, color: '#f8fafc' },
+  container: { flex: 1, backgroundColor: '#020617' },
+  center: { justifyContent: 'center', alignItems: 'center', padding: 40 },
+  scroll: { padding: 24, gap: 24 },
+  title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
+  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '700' },
+  glassCard: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  tierName: { fontSize: 22, fontWeight: '900', color: '#38bdf8', letterSpacing: 1 },
+  tierSub: { fontSize: 9, color: '#475569', fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+  priceContainer: { flexDirection: 'row', alignItems: 'baseline' },
+  currency: { color: '#475569', fontSize: 14, fontWeight: '900', marginRight: 2 },
+  price: { color: '#f8fafc', fontSize: 36, fontWeight: '900' },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginBottom: 24 },
+  infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20 },
+  infoItem: { width: '45%' },
+  infoLabel: { fontSize: 9, color: '#475569', fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  infoValue: { fontSize: 16, color: '#f8fafc', fontWeight: '700' },
+  upiContainer: { gap: 12 },
+  sectionTitle: { color: '#334155', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginLeft: 4 },
+  upiCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(56, 189, 248, 0.05)', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.1)' },
+  upiIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(56, 189, 248, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  upiLabel: { color: '#475569', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  upiValue: { color: '#f8fafc', fontSize: 16, fontWeight: '800' },
+  payButton: { backgroundColor: '#38bdf8', borderRadius: 24, paddingVertical: 20, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  payButtonDisabled: { opacity: 0.5 },
+  payText: { color: '#020617', fontSize: 17, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  successIcon: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
+  successTitle: { fontSize: 32, fontWeight: '900', color: '#10b981', marginBottom: 16, textAlign: 'center' },
+  successText: { fontSize: 16, color: '#94a3b8', textAlign: 'center', fontWeight: '600' },
 });

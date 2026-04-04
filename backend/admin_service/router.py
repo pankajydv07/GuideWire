@@ -62,7 +62,7 @@ async def list_manual_claims(
     stmt = select(ManualClaim)
 
     if status == "open":
-        stmt = stmt.where(ManualClaim.review_status.in_(["pending", "under_review", "rejected"]))
+        stmt = stmt.where(ManualClaim.review_status.in_(["pending", "rejected"]))
     elif status != "all":
         stmt = stmt.where(ManualClaim.review_status == status)
     
@@ -113,6 +113,7 @@ async def list_manual_claims(
                 "weather_match": claim.weather_match,
                 "traffic_match": claim.traffic_match,
                 "review_status": claim.review_status,
+                "reviewer_notes": claim.reviewer_notes,
                 "created_at": claim.created_at.isoformat() if claim.created_at else None,
             }
         )

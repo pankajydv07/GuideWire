@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator, Alert, StatusBar as RNStatusBar } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { 
   FadeInDown, 
   FadeInUp, 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withSequence, 
-  withTiming, 
-  withDelay 
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -18,16 +12,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 
 export default function WelcomeScreen() {
-  const { isAuthenticated, isRestoring } = useAuth();
+  const { isAuthenticated, isReady } = useAuth();
   const [phone, setPhone] = useState('+91');
   const [showLogin, setShowLogin] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!isRestoring && isAuthenticated) {
+    if (isReady && isAuthenticated) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isRestoring]);
+  }, [isAuthenticated, isReady]);
 
   const handleSendOtp = async () => {
     if (phone.length < 13) {
@@ -46,7 +40,7 @@ export default function WelcomeScreen() {
     }
   };
 
-  if (isRestoring) return null;
+  if (!isReady) return null;
 
   return (
     <View style={styles.container}>
@@ -63,7 +57,7 @@ export default function WelcomeScreen() {
           <View style={styles.content}>
             <Animated.View entering={FadeInUp.delay(300).duration(1000).springify()}>
               <Text style={styles.brand}>RIDER<Text style={{ color: '#38bdf8' }}>SHIELD</Text></Text>
-              <View style={styles.taglineBorder} />
+              <View style={{ width: 40, height: 4, backgroundColor: '#38bdf8', marginTop: 8, borderRadius: 2 }} />
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(500).duration(1000).springify()}>
@@ -137,7 +131,6 @@ const styles = StyleSheet.create({
   gradient: { flex: 1, justifyContent: 'flex-end', paddingBottom: 60, paddingHorizontal: 30 },
   content: { gap: 32 },
   brand: { fontSize: 28, fontWeight: '900', color: '#f8fafc', letterSpacing: 2 },
-  taglineBorder: { width: 40, height: 4, backgroundColor: '#38bdf8', marginTop: 8, borderRadius: 2 },
   title: { fontSize: 44, fontWeight: '800', color: '#f8fafc', lineHeight: 54, letterSpacing: -1 },
   subtitle: { fontSize: 16, color: '#94a3b8', lineHeight: 24, fontWeight: '500', opacity: 0.9, marginBottom: 10 },
   formContainer: { gap: 20 },
