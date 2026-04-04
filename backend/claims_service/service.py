@@ -144,7 +144,6 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
 
         # Trigger Payout
         await process_upi_payout(claim.id, rider_id, payout_amount, db)
-        policy.coverage_used += payout_amount
         claims_created += 1
 
     await db.commit()
