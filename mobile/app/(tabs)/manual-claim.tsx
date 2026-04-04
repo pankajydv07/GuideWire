@@ -105,8 +105,9 @@ export default function ManualClaimScreen() {
       }
       const response = await api.manualClaims.submit(formData);
       setResult(response);
-    } catch (error) {
-      setErrors((prev) => ({ ...prev, description: 'Sync failure' }));
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : 'Sync failure';
+      setErrors((prev) => ({ ...prev, description: msg }));
     } finally {
       setSubmitting(false);
     }
