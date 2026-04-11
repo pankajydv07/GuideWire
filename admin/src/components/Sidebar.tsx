@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileText, Camera, Zap, ShieldCheck, Activity } from "lucide-react";
-
+import { LayoutDashboard, FileText, Camera, Zap, ShieldCheck, Activity, Menu, X, Map as MapIcon } from "lucide-react";
 import { adminApi } from "@/lib/api";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/map", label: "Map", icon: MapIcon },
   { href: "/claims", label: "Auto Claims", icon: FileText },
   { href: "/manual-claims", label: "Manual Claims", icon: Camera },
   { href: "/triggers", label: "Triggers", icon: Zap },
@@ -16,7 +16,8 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpenMobile, setIsOpenMobile] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [systemHealthy, setSystemHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -31,67 +32,130 @@ export function Sidebar() {
     };
     void loadHealth();
     const interval = window.setInterval(() => void loadHealth(), 30000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
 
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+  useEffect(() => { setIsOpenMobile(false); }, [pathname]);
 
   return (
     <>
       {/* Mobile Toggle */}
       <button
         type="button"
-        className="fixed left-4 top-4 z-50 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 shadow-xl backdrop-blur-md md:hidden"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => setIsOpenMobile((o) => !o)}
+        className="fixed left-4 top-4 z-50 md:hidden rounded-xl px-3 py-2 text-xs font-bold flex items-center justify-center"
+        style={{
+          background: "var(--bg-elevated)",
+          color: "var(--text-secondary)",
+        }}
       >
-        {isOpen ? "Close" : "Menu"}
+        {isOpenMobile ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
 
       {/* Overlay */}
-      <div
-        className={`fixed inset-0 z-30 bg-slate-950/60 transition-opacity duration-300 md:hidden ${
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
-        onClick={() => setIsOpen(false)}
-      />
+      {isOpenMobile && (
+        <div
+          className="fixed inset-0 z-30 md:hidden"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={() => setIsOpenMobile(false)}
+        />
+      )}
 
+      {/* Desktop Toggle (only shows when sidebar is not collapsed, or shows inside it)
+          Actually, let's put it at the very top of the sidebar. */}
+
+      {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-800/50 bg-slate-950/40 backdrop-blur-xl transition-transform duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0 ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 flex flex-col md:sticky md:top-0 md:h-screen md:translate-x-0 transition-all duration-300 ${isOpenMobile ? "translate-x-0" : "-translate-x-full"
+          }`}
+        style={{
+          width: isCollapsed ? "80px" : "260px",
+          background: "var(--bg-surface)",
+        }}
       >
-        <div className="flex flex-col h-full px-6 py-10">
-          <div className="mb-12 flex items-center gap-3 group">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20 group-hover:scale-110 transition-transform duration-300">
-               <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-sky-400 bg-clip-text text-transparent">Zylo</div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">Admin Command</div>
-            </div>
-          </div>
+        <div className={`flex flex-col h-full py-8 ${isCollapsed ? "px-3" : "px-5"}`}>
 
-          <div className="mb-8 overflow-hidden rounded-2xl bg-slate-900/40 ring-1 ring-slate-800/50 p-4 relative group">
-             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-             <div className="relative flex items-center justify-between">
+          {/* Header Row: Logo & Hamburger */}
+          <div className={`flex items-center ${isCollapsed ? "flex-col gap-6" : "justify-between"} mb-10 px-2`}>
+            {/* Logo */}
+            <div className="flex items-center gap-4">
+              <img
+                src="/Zylo.png"
+                alt="Zylo Logo"
+                className="w-14 h-14 object-contain drop-shadow-[0_0_12px_rgba(168,85,247,0.4)]"
+              />
+              {!isCollapsed && (
                 <div>
-                   <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Status</div>
-                   <div className="text-sm font-medium text-slate-200">
-                      {systemHealthy === null ? "Diagnosing..." : systemHealthy ? "System Ready" : "Critical Issue"}
-                   </div>
+                  <div
+                    className="text-2xl font-black tracking-wide"
+                    style={{
+                      background: "linear-gradient(135deg, #a855f7, #7c3aed)",
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                      color: "transparent",
+                    }}
+                  >
+                    Zylo
+                  </div>
                 </div>
-                <div className={`h-3 w-3 rounded-full ${
-                    systemHealthy === null ? "bg-slate-500" : systemHealthy ? "bg-emerald-400 shadow-[0_0_12px_rgba(74,222,128,0.5)]" : "bg-rose-400 animate-pulse shadow-[0_0_12px_rgba(244,63,94,0.5)]"
-                }`} />
-             </div>
+              )}
+            </div>
+
+            {/* Desktop Hamburger */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-white/5 text-gray-500 hover:text-gray-300 flex-shrink-0"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
           </div>
 
-          <nav className="flex-1 space-y-1.5">
+          {/* System Health */}
+          {!isCollapsed && (
+            <div
+              className="mb-6 mx-2 rounded-2xl p-3.5 flex items-center justify-between"
+              style={{
+                background: "var(--bg-elevated)",
+              }}
+            >
+              <div>
+                <div className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+                  System Status
+                </div>
+                <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                  {systemHealthy === null ? "Checking..." : systemHealthy ? "Operational" : "Degraded"}
+                </div>
+              </div>
+              <div className="relative flex items-center justify-center">
+                {systemHealthy === true && (
+                  <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping" style={{ background: "#10b981" }} />
+                )}
+                <span
+                  className="relative h-2.5 w-2.5 rounded-full"
+                  style={{
+                    background:
+                      systemHealthy === null ? "#4a4a6a" :
+                        systemHealthy ? "#10b981" : "#f43f5e",
+                    boxShadow:
+                      systemHealthy === true ? "0 0 8px rgba(16,185,129,0.6)" :
+                        systemHealthy === false ? "0 0 8px rgba(244,63,94,0.6)" : "none",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Nav Label */}
+          {!isCollapsed && (
+            <div className="px-3 mb-2">
+              <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                Navigation
+              </span>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <nav className="flex-1 flex flex-col gap-1">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;
               const Icon = item.icon;
@@ -99,33 +163,64 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`group relative flex items-center gap-3.5 rounded-xl px-4 py-3.5 text-sm font-medium transition-all duration-300 ${
-                    active
-                      ? "bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20"
-                      : "text-slate-400 hover:bg-slate-800/40 hover:text-slate-100"
-                  }`}
+                  title={isCollapsed ? item.label : undefined}
+                  className={`relative flex items-center ${isCollapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"} rounded-xl text-sm font-semibold transition-all duration-200`}
+                  style={{
+                    background: active ? "rgba(124,58,237,0.12)" : "transparent",
+                    color: active ? "#a855f7" : "var(--text-secondary)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) {
+                      (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)";
+                      (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) {
+                      (e.currentTarget as HTMLElement).style.background = "transparent";
+                      (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
+                    }
+                  }}
                 >
-                  <Icon className={`w-5 h-5 transition-transform duration-300 ${active ? "scale-110" : "group-hover:scale-110"}`} />
-                  {item.label}
-                  {active && (
-                     <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 h-8 w-1 bg-indigo-500 rounded-full blur-[2px]" />
+                  {active && !isCollapsed && <div className="nav-active-indicator" />}
+                  <Icon className="w-5 h-5 flex-shrink-0" style={{ marginLeft: active && !isCollapsed ? "8px" : 0 }} />
+                  {!isCollapsed && item.label}
+                  {active && !isCollapsed && (
+                    <span
+                      className="ml-auto text-[9px] font-black uppercase tracking-wider rounded-full px-2 py-0.5"
+                      style={{ background: "rgba(124,58,237,0.2)", color: "#a855f7" }}
+                    >
+                      live
+                    </span>
                   )}
                 </Link>
               );
             })}
           </nav>
 
-          <div className="mt-auto pt-6 border-t border-slate-800/50">
-             <div className="rounded-xl bg-slate-900/40 p-3 ring-1 ring-slate-800/50">
-                <div className="flex items-center gap-2 mb-2">
-                   <Activity className="w-4 h-4 text-sky-400" />
-                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Live Traffic</span>
-                </div>
-                <div className="text-[11px] text-slate-500 leading-relaxed">
-                   Monitoring real-time claim streams & zone disruptions.
-                </div>
-             </div>
-          </div>
+          {/* Live Traffic Footer */}
+          {!isCollapsed && (
+            <div
+              className="mt-6 rounded-2xl p-4"
+              style={{
+                background: "rgba(124,58,237,0.05)",
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="w-3.5 h-3.5" style={{ color: "#a855f7" }} />
+                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: "#a855f7" }}>
+                  Live Monitor
+                </span>
+                <span
+                  className="ml-auto h-1.5 w-1.5 rounded-full animate-pulse"
+                  style={{ background: "#a855f7", boxShadow: "0 0 6px rgba(168,85,247,0.6)" }}
+                />
+              </div>
+              <div className="text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                Real-time claim streams &amp; zone anomaly detection active.
+              </div>
+            </div>
+          )}
         </div>
       </aside>
     </>

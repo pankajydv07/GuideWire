@@ -59,4 +59,5 @@ def get_week_expiry() -> datetime:
     now = datetime.now(timezone.utc)
     days_until_sunday = (6 - now.weekday()) % 7
     expiry = now + timedelta(days=days_until_sunday)
+    # Return as naive datetime to match created_at field (TIMESTAMP WITHOUT TIME ZONE)
     return expiry.replace(hour=23, minute=59, second=59, microsecond=0, tzinfo=None)

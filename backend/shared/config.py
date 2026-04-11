@@ -1,11 +1,13 @@
-﻿"""
+"""
 Application configuration loaded from the .env file.
 All services import settings from here:
     from shared.config import settings
 """
 
 from functools import lru_cache
+from typing import Any
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -40,12 +42,32 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     APP_NAME: str = "Zylo"
     APP_VERSION: str = "1.0.0"
+    CORS_ALLOWED_ORIGINS: str = ""
 
     ML_SERVICE_URL: str = "http://ml:8001"
 
     UPLOAD_DIR: str = "./uploads"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+                return False
+
+        return False
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 @lru_cache()

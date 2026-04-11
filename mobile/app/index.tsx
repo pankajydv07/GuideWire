@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator, Image } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -64,9 +64,16 @@ export default function WelcomeScreen() {
           style={styles.gradient}
         >
           <View style={styles.content}>
-            <Animated.View entering={FadeInUp.delay(300).duration(1000).springify()}>
-              <Text style={styles.brand}>RIDER<Text style={{ color: '#38bdf8' }}>SHIELD</Text></Text>
-              <View style={{ width: 40, height: 4, backgroundColor: '#38bdf8', marginTop: 8, borderRadius: 2 }} />
+            <Animated.View entering={FadeInUp.delay(300).duration(1000).springify()} style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Image 
+                source={require('../assets/images/Zylo.png')} 
+                style={{ width: 44, height: 44 }} 
+                resizeMode="contain"
+              />
+              <View>
+                <Text style={styles.brand}>ZYLO</Text>
+                <View style={{ width: 40, height: 4, backgroundColor: '#38bdf8', marginTop: 4, borderRadius: 2 }} />
+              </View>
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(500).duration(1000).springify()}>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from uuid import UUID
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -8,6 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from policy_service.models import Policy
+
+
+def _as_uuid(value: str | UUID) -> UUID:
+    return value if isinstance(value, UUID) else UUID(str(value))
+
+
+def _week_sort_key(week_value: str) -> tuple[int, int]:
+    try:
+        year, week = week_value.split("-W")
+        return int(year), int(week)
+    except Exception:
+        return (0, 0)
 
 
 async def get_policy_quote(
@@ -102,7 +115,8 @@ async def get_rider(rider_id: str, db: AsyncSession):
     except ImportError:
         from rider_service.models import Rider
 
-    result = await db.execute(select(Rider).where(Rider.id == rider_id))
+    rider_uuid = _as_uuid(rider_id)
+    result = await db.execute(select(Rider).where(Rider.id == rider_uuid))
     rider = result.scalar_one_or_none()
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
@@ -131,14 +145,14 @@ async def get_rider_weekly_baseline(rider_id: str, db: AsyncSession) -> int:
         except ImportError:
             from rider_service.models import RiderZoneBaseline
 
+        rider_uuid = _as_uuid(rider_id)
         result = await db.execute(
-            select(RiderZoneBaseline)
-            .where(RiderZoneBaseline.rider_id == rider_id)
-            .limit(1)
+            select(RiderZoneBaseline).where(RiderZoneBaseline.rider_id == rider_uuid)
         )
-        baseline = result.scalar_one_or_none()
-        if baseline and hasattr(baseline, "weekly_earnings"):
-            return int(baseline.weekly_earnings)
+        baselines = result.scalars().all()
+        if baselines:
+            latest_week = max((baseline.week for baseline in baselines), key=_week_sort_key)
+            return int(sum(b.avg_earnings for b in baselines if b.week == latest_week))
     except Exception:
         pass
     return 3600
@@ -166,11 +180,12 @@ async def create_policy(
     except ImportError:
         from premium_service.service import calculate_premium
 
+    rider_uuid = _as_uuid(rider_id)
     current_week = get_current_iso_week()
 
     existing = await db.execute(
         select(Policy).where(
-            Policy.rider_id == rider_id,
+            Policy.rider_id == rider_uuid,
             Policy.week == current_week,
             Policy.status == "active"
         )
@@ -227,7 +242,7 @@ async def create_policy(
         )
 
     policy = Policy(
-        rider_id=rider_id,
+        rider_id=rider_uuid,
         plan_tier=plan_tier,
         week=current_week,
         premium=premium_data["premium"][plan_tier],
@@ -247,19 +262,18 @@ async def create_policy(
 
 async def get_active_policy(rider_id: str, db: AsyncSession) -> Optional[Policy]:
     try:
-        from backend.policy_service.models import Policy
+        from backend.policy_service.models import Policy, get_current_iso_week
     except ImportError:
-        from policy_service.models import Policy
+        from policy_service.models import Policy, get_current_iso_week
 
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    rider_uuid = _as_uuid(rider_id)
+    current_week = get_current_iso_week()
 
     result = await db.execute(
         select(Policy).where(
-            Policy.rider_id == rider_id,
+            Policy.rider_id == rider_uuid,
             Policy.status == "active",
-            Policy.expires_at > now
+            Policy.week == current_week,
         ).order_by(Policy.created_at.desc())
     )
     return result.scalar_one_or_none()
@@ -284,10 +298,12 @@ async def get_policy_by_id(policy_id: str, rider_id: str, db: AsyncSession) -> P
     except ImportError:
         from policy_service.models import Policy
 
+    policy_uuid = _as_uuid(policy_id)
+    rider_uuid = _as_uuid(rider_id)
     result = await db.execute(
         select(Policy).where(
-            Policy.id == policy_id,
-            Policy.rider_id == rider_id
+            Policy.id == policy_uuid,
+            Policy.rider_id == rider_uuid
         )
     )
     policy = result.scalar_one_or_none()
@@ -326,6 +342,7 @@ async def renew_policy(
     from datetime import datetime, timezone, timedelta
 
     current_policy = await get_policy_by_id(policy_id, rider_id, db)
+    rider_uuid = _as_uuid(rider_id)
 
     if current_policy.status == "cancelled":
         raise HTTPException(
@@ -344,21 +361,60 @@ async def renew_policy(
         next_year += 1
     next_week = f"{next_year}-W{next_week_num:02d}"
 
-    existing = await db.execute(
+    # Check if policy for next week already exists
+    existing_result = await db.execute(
         select(Policy).where(
-            Policy.rider_id == rider_id,
+            Policy.rider_id == rider_uuid,
             Policy.week == next_week,
             Policy.status == "active"
         )
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error_code": "DUPLICATE_POLICY",
-                "message": f"Active policy already exists for {next_week}"
-            }
+    existing_policy = existing_result.scalar_one_or_none()
+
+    # If exists, update it with new tier instead of rejecting
+    if existing_policy:
+        tier = new_tier or existing_policy.plan_tier
+        rider = await get_rider(rider_id, db)
+        zone_name = await get_rider_zone_name(rider, db, "bengaluru")
+        tenure_days = 90
+        if hasattr(rider, "created_at") and rider.created_at:
+            created_at = rider.created_at
+            if getattr(created_at, "tzinfo", None) is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            tenure_days = max((datetime.now(timezone.utc) - created_at).days, 0)
+
+        premium_data = await calculate_premium(
+            zone=zone_name,
+            slots=existing_policy.slots_covered or [],
+            plan_tier=tier,
+            rider_tenure_days=tenure_days,
+            db=db,
+            rider_avg_earnings=max(await get_rider_weekly_baseline(rider_id, db) / max(len(existing_policy.slots_covered or []), 1), 1),
         )
+
+        weekly_baseline = await get_rider_weekly_baseline(rider_id, db)
+        coverage_pct = {"essential": 70, "balanced": 80, "max_protect": 90}[tier]
+        coverage_limit = int(weekly_baseline * coverage_pct / 100)
+
+        # Update existing policy
+        existing_policy.plan_tier = tier
+        existing_policy.premium = premium_data["premium"][tier]
+        existing_policy.coverage_limit = coverage_limit
+        existing_policy.coverage_pct = coverage_pct
+
+        db.add(existing_policy)
+        await db.commit()
+        await db.refresh(existing_policy)
+
+        return {
+            "policy_id": str(existing_policy.id),
+            "previous_policy_id": policy_id,
+            "week": next_week,
+            "new_premium": existing_policy.premium,
+            "status": existing_policy.status,
+            "updated": True,
+            "message": "Policy for next week updated with new tier"
+        }
 
     tier = new_tier or current_policy.plan_tier
 
@@ -387,10 +443,10 @@ async def renew_policy(
     now = datetime.now(timezone.utc)
     days_to_next_sunday = (6 - now.weekday() + 7) % 7 + 7
     next_sunday = now + timedelta(days=days_to_next_sunday)
-    next_expiry = next_sunday.replace(hour=23, minute=59, second=59, microsecond=0)
+    next_expiry = next_sunday.replace(hour=23, minute=59, second=59, microsecond=0, tzinfo=None)
 
     new_policy = Policy(
-        rider_id=rider_id,
+        rider_id=rider_uuid,
         plan_tier=tier,
         week=next_week,
         premium=premium_data["premium"][tier],

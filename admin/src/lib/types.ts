@@ -2,6 +2,7 @@ export type ClaimStatus = "pending" | "approved" | "rejected" | "paid" | "under_
 
 export type TriggerType =
   | "heavy_rain"
+  | "extreme_heat"
   | "traffic_congestion"
   | "store_closure"
   | "platform_outage"
@@ -108,6 +109,7 @@ export interface OverviewData {
 
 export const TRIGGER_LABELS: Record<string, string> = {
   heavy_rain: "Heavy Rain",
+  extreme_heat: "Extreme Heat",
   traffic_congestion: "Traffic Congestion",
   store_closure: "Store Closure",
   platform_outage: "Platform Outage",
@@ -119,21 +121,22 @@ export const TRIGGER_LABELS: Record<string, string> = {
 };
 
 export const TRIGGER_EMOJI: Record<string, string> = {
-  heavy_rain: "🌧️",
-  traffic_congestion: "🚗",
-  store_closure: "🏪",
-  platform_outage: "📱",
-  regulatory_curfew: "🚫",
-  gps_shadowban: "📍",
-  dark_store_queue: "🛒",
-  algorithmic_shock: "⚡",
-  community_signal: "📣",
+  heavy_rain: "\u{1F327}\uFE0F",
+  extreme_heat: "\u{1F321}\uFE0F",
+  traffic_congestion: "\u{1F697}",
+  store_closure: "\u{1F3EA}",
+  platform_outage: "\u{1F4F1}",
+  regulatory_curfew: "\u{1F6AB}",
+  gps_shadowban: "\u{1F4CD}",
+  dark_store_queue: "\u{1F6D2}",
+  algorithmic_shock: "\u26A1",
+  community_signal: "\u{1F4E3}",
 };
 
 export const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400 border border-amber-500/20 backdrop-blur-sm",
-  under_review: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 backdrop-blur-sm",
-  approved: "bg-sky-500/10 text-sky-400 border border-sky-500/20 backdrop-blur-sm",
-  paid: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 backdrop-blur-sm",
-  rejected: "bg-rose-500/10 text-rose-400 border border-rose-500/20 backdrop-blur-sm",
+  pending:      "badge badge-amber",
+  under_review: "badge badge-purple",
+  approved:     "badge badge-cyan",
+  paid:         "badge badge-emerald",
+  rejected:     "badge badge-rose",
 };

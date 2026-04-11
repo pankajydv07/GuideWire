@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from shared.database import get_db
 from shared.auth import get_current_rider
-from policy_service.models import Policy
+from policy_service.models import Policy, get_current_iso_week
 from manual_claims.models import ManualClaim
 from manual_claims.photo_handler import extract_exif_data
 from manual_claims.geo_validation import (
@@ -43,9 +43,11 @@ async def submit_manual_claim(
     Rider-facing manual claim submission with automated trust verification.
     """
     # 1. Validate Active Policy
+    current_week = get_current_iso_week()
     policy_stmt = select(Policy).where(
         Policy.rider_id == rider.id,
-        Policy.status == "active"
+        Policy.status == "active",
+        Policy.week == current_week,
     ).order_by(Policy.created_at.desc())
     policy_result = await db.execute(policy_stmt)
     policy = policy_result.scalar_one_or_none()

@@ -2,37 +2,36 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Zap, 
-  MapPin, 
-  Users, 
-  Clock, 
-  BarChart, 
+import {
+  Zap,
+  Users,
+  Clock,
+  BarChart,
   AlertTriangle,
   PlayCircle,
   Activity,
   History,
-  Info
+  CheckCircle2,
 } from "lucide-react";
 
 import { adminApi } from "@/lib/api";
-import { 
-  formatDurationSince, 
-  getTriggerEmoji, 
-  formatTriggerLabel, 
-  formatApiDate 
-} from "@/lib/format";
+import { formatDurationSince, getTriggerEmoji, formatTriggerLabel, formatApiDate } from "@/lib/format";
+import BorderGlow from "@/components/ui/BorderGlow";
 import type { TriggerStatusResponse, ActiveTrigger, DisruptionEvent, Zone } from "@/lib/types";
+import { PageContainer } from "@/components/PageContainer";
 
-const PROTOCOL_THEME: Record<string, { color: string, bg: string, ring: string, text: string }> = {
-  heavy_rain: { color: "blue", bg: "bg-blue-500/10", ring: "ring-blue-500/20", text: "text-blue-400" },
-  traffic_congestion: { color: "amber", bg: "bg-amber-500/10", ring: "ring-amber-500/20", text: "text-amber-400" },
-  store_closure: { color: "rose", bg: "bg-rose-500/10", ring: "ring-rose-500/20", text: "text-rose-400" },
-  platform_outage: { color: "purple", bg: "bg-purple-500/10", ring: "ring-purple-500/20", text: "text-purple-400" },
-  extreme_heat: { color: "orange", bg: "bg-orange-500/10", ring: "ring-orange-500/20", text: "text-orange-400" },
-  regulatory_curfew: { color: "red", bg: "bg-red-500/10", ring: "ring-red-500/20", text: "text-red-400" },
-  community_signal: { color: "indigo", bg: "bg-indigo-500/10", ring: "ring-indigo-500/20", text: "text-indigo-400" },
-  default: { color: "slate", bg: "bg-slate-500/10", ring: "ring-slate-500/20", text: "text-slate-400" },
+const TRIGGER_COLORS: Record<string, { border: string; bg: string; text: string; glow: string }> = {
+  heavy_rain: { bg: "rgba(59,130,246,0.07)", border: "rgba(59,130,246,0.2)", text: "#93c5fd", glow: "rgba(59,130,246,0.15)" },
+  traffic_congestion: { bg: "rgba(245,158,11,0.07)", border: "rgba(245,158,11,0.2)", text: "#fcd34d", glow: "rgba(245,158,11,0.12)" },
+  store_closure: { bg: "rgba(244,63,94,0.07)", border: "rgba(244,63,94,0.2)", text: "#fca5a5", glow: "rgba(244,63,94,0.12)" },
+  platform_outage: { bg: "rgba(124,58,237,0.07)", border: "rgba(124,58,237,0.2)", text: "#a78bfa", glow: "rgba(124,58,237,0.15)" },
+  extreme_heat: { bg: "rgba(249,115,22,0.07)", border: "rgba(249,115,22,0.2)", text: "#fdba74", glow: "rgba(249,115,22,0.12)" },
+  regulatory_curfew: { bg: "rgba(239,68,68,0.07)", border: "rgba(239,68,68,0.2)", text: "#fca5a5", glow: "rgba(239,68,68,0.12)" },
+  gps_shadowban: { bg: "rgba(6,182,212,0.07)", border: "rgba(6,182,212,0.2)", text: "#67e8f9", glow: "rgba(6,182,212,0.12)" },
+  dark_store_queue: { bg: "rgba(132,204,22,0.07)", border: "rgba(132,204,22,0.2)", text: "#bef264", glow: "rgba(132,204,22,0.1)" },
+  algorithmic_shock: { bg: "rgba(234,179,8,0.07)", border: "rgba(234,179,8,0.2)", text: "#fde047", glow: "rgba(234,179,8,0.10)" },
+  community_signal: { bg: "rgba(99,102,241,0.07)", border: "rgba(99,102,241,0.2)", text: "#a5b4fc", glow: "rgba(99,102,241,0.12)" },
+  default: { bg: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.08)", text: "#9ca3af", glow: "rgba(255,255,255,0.04)" },
 };
 
 export default function TriggersPage() {
@@ -44,9 +43,6 @@ export default function TriggersPage() {
   const [triggering, setTriggering] = useState<string | null>(null);
   const [selectedZone, setSelectedZone] = useState("");
 
-  const getTheme = (type: string) => PROTOCOL_THEME[type] || PROTOCOL_THEME.default;
-
-  // Group zones by city for the dropdown
   const zonesByCity = useMemo(() => {
     const groups: Record<string, Zone[]> = {};
     for (const zone of zones) {
@@ -66,23 +62,19 @@ export default function TriggersPage() {
       setStatus(statusRes);
       setEvents(eventsRes.events);
     } catch (err) {
-      console.error("Failed to sync network triggers:", err);
+      console.error("Failed to sync triggers:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Load zones & trigger types from DB (same source as mobile app)
   useEffect(() => {
     adminApi.zones.list()
       .then((res) => {
         setZones(res.zones);
-        if (res.zones.length > 0) {
-          setSelectedZone(res.zones[0].name);
-        }
+        if (res.zones.length > 0) setSelectedZone(res.zones[0].name);
       })
       .catch(() => console.error("Failed to load zones"));
-
     adminApi.config.get()
       .then((cfg) => setTriggerTypes(cfg.trigger_types))
       .catch(() => console.error("Failed to load trigger types"));
@@ -97,229 +89,271 @@ export default function TriggersPage() {
   const simulateTrigger = async (type: string) => {
     setTriggering(type);
     try {
-      await adminApi.triggers.inject({
-        trigger_type: type,
-        zone: selectedZone,
-      });
+      await adminApi.triggers.inject({ trigger_type: type, zone: selectedZone });
       await loadData();
-    } catch (err) {
-      alert("Simulation sequence failed to initiate.");
+    } catch {
+      alert("Simulation failed.");
     } finally {
       setTriggering(null);
     }
   };
 
-  // Trigger descriptions — display-only, not business logic
-  const TRIGGER_DESC: Record<string, string> = {
-    heavy_rain: "Flood detection in urban zones",
-    traffic_congestion: "Major arterial route blockage",
-    platform_outage: "Digital infrastructure failure",
-    regulatory: "Emergency movement restrictions",
-    store_closed: "Dark store closure detected",
-    community_signal: "Community anomaly threshold breached",
-  };
+  const getColor = (type: string) => TRIGGER_COLORS[type] || TRIGGER_COLORS.default;
 
   return (
-    <div className="space-y-12">
-      <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between"
-      >
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Network Surveillance</h1>
-          <p className="text-slate-400 font-medium">Monitoring parametric anomalies and disruption sequences.</p>
-        </div>
-        
-        <div className="flex items-center gap-3 glass px-5 py-2.5 rounded-2xl ring-1 ring-white/5">
-           <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Scanning Zones</span>
-        </div>
-      </motion.div>
+    <PageContainer>
+      <div className="space-y-8">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
+        >
+          <div>
+            <div className="text-[9px] font-black uppercase tracking-[0.25em] mb-2.5" style={{ color: "var(--text-muted)" }}>
+              Network Intelligence
+            </div>
+            <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: "var(--text-primary)" }}>
+              Network Surveillance
+            </h1>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Parametric anomaly detection &amp; disruption monitoring
+            </p>
+          </div>
+          <div
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl"
+            style={{ background: "rgba(16,185,129,0.07)" }}
+          >
+            <Activity className="w-3.5 h-3.5 animate-pulse" style={{ color: "#10b981" }} />
+            <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: "#10b981" }}>
+              Scanning Zones
+            </span>
+          </div>
+        </motion.div>
 
-      <section>
-        <div className="flex items-center gap-2 mb-8">
-           <Zap className="w-5 h-5 text-indigo-400" />
-           <h2 className="text-xl font-bold text-white tracking-tight">Active Anomalies</h2>
-        </div>
+        {/* Active Anomalies */}
+        <section>
+          <div className="flex items-center gap-2.5 mb-5">
+            <Zap className="w-4 h-4" style={{ color: "#a855f7" }} />
+            <h2 className="text-base font-black" style={{ color: "var(--text-primary)" }}>Active Anomalies</h2>
+          </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence mode="popLayout">
             {!status || status.active_triggers.length === 0 ? (
-              <motion.div 
-                key="empty-active"
+              <motion.div
+                key="no-triggers"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="col-span-full rounded-[2.5rem] border border-dashed border-slate-800 bg-slate-900/10 py-20 text-center"
+                className="rounded-2xl py-14 text-center"
+                style={{ background: "var(--bg-surface)" }}
               >
-                 <div className="text-slate-600 font-bold uppercase tracking-[0.2em] text-xs">No active disruptions detected.</div>
+                <CheckCircle2 className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--text-muted)", opacity: 0.4 }} />
+                <div className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                  No active disruptions detected
+                </div>
               </motion.div>
             ) : (
-                status.active_triggers.map((trigger: ActiveTrigger, idx: number) => {
-                  const theme = getTheme(trigger.type);
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 max-h-[300px] overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
+                {status.active_triggers.map((trigger: ActiveTrigger, idx: number) => {
+                  const col = getColor(trigger.type);
                   return (
-                    <motion.div
-                      key={trigger.trigger_id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="glass-card rounded-[2.5rem] p-8 relative overflow-hidden group shadow-2xl"
-                    >
-                      <div className="absolute top-0 right-0 p-8">
-                         <span className={`flex items-center gap-1.5 rounded-full ${theme.bg} px-3 py-1 text-[10px] font-bold uppercase tracking-widest ${theme.text} ${theme.ring} ring-1 backdrop-blur-sm`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${theme.text.replace("text-", "bg-")} animate-pulse shadow-[0_0_8px]`} /> Live
-                         </span>
-                      </div>
-
-                      <div className="mb-8 flex items-center gap-5">
-                        <div className={`h-16 w-16 rounded-3xl ${theme.bg} flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500 shadow-2xl ${theme.ring} ring-1 backdrop-blur-md`}>
-                            {getTriggerEmoji(trigger.type)}
-                        </div>
-                        <div>
-                          <div className={`text-xl font-bold text-white mb-0.5 group-hover:text-white transition-colors`}>
-                             {formatTriggerLabel(trigger.type)}
+                    <BorderGlow key={trigger.trigger_id} animated={false} backgroundColor="#000000" colors={[col.text, "#000000", col.text]}>
+                      <motion.div
+                        layout
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: idx * 0.08 }}
+                        className="rounded-2xl p-5 relative overflow-hidden bg-transparent border-none"
+                      >
+                        <div
+                          className="absolute -right-4 -top-4 w-24 h-24 rounded-full blur-2xl opacity-40"
+                          style={{ background: col.glow }}
+                        />
+                        <div className="relative">
+                          <div className="flex items-start justify-between mb-4">
+                            <span className="text-2xl">{getTriggerEmoji(trigger.type)}</span>
+                            <span
+                              className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
+                              style={{ background: col.border, color: col.text }}
+                            >
+                              {trigger.severity}
+                            </span>
                           </div>
-                          <div className={`flex items-center gap-2 text-[10px] ${theme.text} font-black uppercase tracking-[0.2em] italic opacity-80`}>
-                             {trigger.severity} INTENSITY PROTOCOL
+                          <div className="text-sm font-black mb-1" style={{ color: "var(--text-primary)" }}>
+                            {formatTriggerLabel(trigger.type)}
+                          </div>
+                          <div className="text-[10px] font-medium mb-4" style={{ color: "var(--text-muted)" }}>
+                            {trigger.zone}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Users className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
+                              <span className="text-[10px] font-bold" style={{ color: "var(--text-secondary)" }}>
+                                {trigger.affected_riders} riders
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3 h-3" style={{ color: col.text }} />
+                              <span className="text-[10px] font-bold" style={{ color: col.text }}>
+                                {formatDurationSince(trigger.active_since)}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                       <MapPin className="w-4 h-4 text-slate-600" />
-                       <span className="text-sm font-bold text-slate-300">{trigger.zone}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                       <Users className="w-4 h-4 text-slate-600" />
-                       <span className="text-sm font-bold text-slate-300">{trigger.affected_riders} impacted</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                       <Clock className="w-4 h-4 text-slate-600" />
-                       <span className="text-sm font-bold text-indigo-400">{formatDurationSince(trigger.active_since)} active</span>
-                    </div>
-                  </div>
-                    </motion.div>
+                      </motion.div>
+                    </BorderGlow>
                   );
-                })
+                })}
+              </div>
             )}
           </AnimatePresence>
-        </div>
-      </section>
-
-      <div className="grid gap-10 xl:grid-cols-[1fr_0.4fr]">
-        <section className="glass-card rounded-[3rem] p-10">
-          <div className="flex items-center justify-between mb-10">
-             <div className="flex items-center gap-3">
-                <History className="w-6 h-6 text-slate-400" />
-                <h2 className="text-2xl font-bold text-white tracking-tight">Disruption History</h2>
-             </div>
-             <BarChart className="w-5 h-5 text-slate-700" />
-          </div>
-
-          <div className="space-y-4">
-            {loading ? (
-               Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-20 rounded-[1.5rem] bg-white/5 animate-pulse" />
-               ))
-            ) : events.length === 0 ? (
-               <div className="text-center py-10 text-slate-600 uppercase tracking-widest text-xs font-bold">Archive Empty</div>
-            ) : (
-               events.slice(0, 10).map((event: DisruptionEvent, idx: number) => {
-                  const theme = getTheme(event.trigger_type);
-                  return (
-                    <motion.div 
-                      key={event.event_id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="flex items-center justify-between p-6 rounded-[1.5rem] border border-slate-800/40 bg-slate-900/20 hover:bg-slate-900/40 group transition-all duration-300"
-                    >
-                      <div className="flex items-center gap-6">
-                         <div className={`h-12 w-12 rounded-2xl ${theme.bg} flex items-center justify-center text-2xl ${theme.ring} ring-1 group-hover:scale-105 transition-transform shadow-xl`}>
-                            {getTriggerEmoji(event.trigger_type)}
-                         </div>
-                         <div>
-                            <div className={`text-sm font-bold text-slate-100 group-hover:text-white transition-colors`}>{formatTriggerLabel(event.trigger_type)}</div>
-                            <div className="text-[10px] text-slate-600 font-black uppercase tracking-widest mt-1 group-hover:text-slate-500 transition-colors">{event.zone} • {event.severity} SEVERITY</div>
-                         </div>
-                      </div>
-                      <div className="text-right">
-                         <div className="text-[9px] font-black text-slate-600 mb-1 tracking-widest">LOGGED AT</div>
-                         <div className="text-[11px] font-bold text-slate-400 group-hover:text-slate-300 transition-colors uppercase font-mono">{formatApiDate(event.created_at)}</div>
-                      </div>
-                    </motion.div>
-                  );
-                })
-            )}
-          </div>
         </section>
 
-        <section className="glass-card rounded-[3rem] p-10 h-fit sticky top-8">
-          <div className="flex items-center gap-3 mb-10">
-             <PlayCircle className="w-6 h-6 text-emerald-400" />
-             <h2 className="text-2xl font-bold text-white tracking-tight">Simulator</h2>
-          </div>
-          
-          <div className="space-y-6">
-            <div>
-               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 block px-2">Target Zone</label>
-               <select 
-                 value={selectedZone}
-                 onChange={(e) => setSelectedZone(e.target.value)}
-                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-bold appearance-none"
-               >
+        {/* Simulator Compact Panel */}
+        <BorderGlow animated={false} backgroundColor="#000000">
+          <section
+            className="rounded-2xl p-6 relative overflow-hidden bg-transparent border-none"
+          >
+            <div className="flex items-center gap-2.5 mb-6">
+              <PlayCircle className="w-4 h-4" style={{ color: "#10b981" }} />
+              <h2 className="text-base font-black" style={{ color: "var(--text-primary)" }}>Simulator Command Deck</h2>
+            </div>
+
+            <div className="flex flex-col xl:flex-row gap-6 mb-6">
+              <div className="xl:w-64 flex-shrink-0">
+                <label
+                  className="block text-[9px] font-black uppercase tracking-widest mb-2"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Target Zone
+                </label>
+                <select
+                  value={selectedZone}
+                  onChange={(e) => setSelectedZone(e.target.value)}
+                  className="w-full rounded-xl px-4 py-2.5 text-xs font-bold outline-none appearance-none transition-all cursor-pointer"
+                  style={{
+                    background: "var(--bg-elevated)",
+                    color: "var(--text-primary)",
+                  }}
+                >
                   {zones.length === 0 ? (
                     <option disabled>Loading zones...</option>
                   ) : (
                     Object.entries(zonesByCity).map(([city, cityZones]) => (
                       <optgroup key={city} label={city.charAt(0).toUpperCase() + city.slice(1)}>
                         {cityZones.map((z) => (
-                          <option key={z.id} value={z.name}>
+                          <option key={z.id} value={z.name} style={{ background: "#111", color: "#fff" }}>
                             {z.name.replace(/_/g, " ")}
                           </option>
                         ))}
                       </optgroup>
                     ))
                   )}
-               </select>
+                </select>
+              </div>
+
+              <div
+                className="flex-1 rounded-xl p-4 flex flex-col justify-center"
+                style={{ background: "rgba(245,158,11,0.05)" }}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#f59e0b" }} />
+                  <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: "#f59e0b" }}>
+                    Simulation Alert
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: "rgba(252,211,77,0.6)" }}>
+                  Injecting triggers will generate <b>real automated payouts</b> for active network nodes in the target zone. Use caution.
+                </p>
+              </div>
             </div>
 
-            <div className="p-6 rounded-[2rem] bg-amber-500/5 border border-amber-500/10">
-               <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="w-3 h-3 text-amber-500" />
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-amber-200">Simulation Alert</span>
-               </div>
-               <p className="text-[10px] text-amber-200/60 leading-relaxed font-medium">Injected triggers generate real automated payout sequences for active riders in the target zone.</p>
-            </div>
-
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {triggerTypes.map((opt) => (
                 <button
                   key={opt.type}
                   disabled={triggering !== null}
                   onClick={() => simulateTrigger(opt.type)}
-                  className={`w-full flex items-center justify-between p-5 rounded-3xl border border-slate-800/60 bg-slate-900/60 transition-all hover:scale-[1.02] active:scale-[0.98] group ${triggering === opt.type ? "opacity-50" : "hover:border-emerald-500/30 hover:bg-emerald-500/[0.02]"}`}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group disabled:opacity-40"
+                  style={{
+                    background: "var(--bg-elevated)",
+                  }}
                 >
-                  <div className="flex items-center gap-4">
-                     <span className="text-2xl group-hover:scale-110 transition-transform">{opt.icon}</span>
-                     <div className="text-left">
-                        <div className="text-sm font-bold text-slate-200">{opt.label}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{TRIGGER_DESC[opt.type] || "Network anomaly simulation"}</div>
-                     </div>
+                  <span className="text-xl flex-shrink-0">{opt.icon}</span>
+                  <div className="text-left min-w-0">
+                    <div className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                      {opt.label}
+                    </div>
                   </div>
-                  {triggering === opt.type ? (
-                     <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                  ) : (
-                     <PlayCircle className="w-4 h-4 text-slate-700 group-hover:text-emerald-500" />
+                  {triggering === opt.type && (
+                    <div className="ml-auto w-3 h-3 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin flex-shrink-0" />
                   )}
                 </button>
               ))}
             </div>
+          </section>
+        </BorderGlow>
+
+        {/* Disruption History */}
+        <section
+          className="rounded-2xl p-6 mt-8"
+          style={{ background: "var(--bg-surface)" }}
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2.5">
+              <History className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+              <h2 className="text-base font-black" style={{ color: "var(--text-primary)" }}>Disruption History Log</h2>
+            </div>
+            <BarChart className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+          </div>
+
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 flex flex-col" style={{ scrollbarWidth: "thin" }}>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="skeleton h-14 rounded-xl flex-shrink-0" style={{ opacity: 0.7 - i * 0.1 }} />
+              ))
+            ) : events.length === 0 ? (
+              <div className="text-center py-10 text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                Archive Empty
+              </div>
+            ) : (
+              events.map((event: DisruptionEvent, idx: number) => {
+                const col = getColor(event.trigger_type);
+                return (
+                  <motion.div
+                    key={event.event_id}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.04 }}
+                    className="flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-200 group flex-shrink-0"
+                    style={{ background: "var(--bg-elevated)" }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="text-2xl">{getTriggerEmoji(event.trigger_type)}</span>
+                      <div>
+                        <div className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                          {formatTriggerLabel(event.trigger_type)}
+                        </div>
+                        <div className="text-[10px] font-black uppercase tracking-widest mt-0.5" style={{ color: "var(--text-muted)" }}>
+                          {event.zone} · {event.severity}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[9px] uppercase tracking-widest font-black" style={{ color: "var(--text-muted)" }}>
+                        Event Logged
+                      </div>
+                      <div className="text-[11px] font-mono font-bold mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                        {formatApiDate(event.created_at)}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
           </div>
         </section>
       </div>
-    </div>
+    </PageContainer>
   );
 }

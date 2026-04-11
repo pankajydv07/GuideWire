@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type PolicyResponse, type TriggerStatus, type PayoutListItem } from '../../services/api';
@@ -44,21 +45,33 @@ export default function DashboardScreen() {
   const [policy, setPolicy] = useState<PolicyResponse | null>(null);
   const [triggers, setTriggers] = useState<TriggerStatus | null>(null);
   const [payouts, setPayouts] = useState<PayoutListItem[]>([]);
+  const [zoneRisk, setZoneRisk] = useState<{ weather: number; traffic: number; store: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const loadDashboardData = async () => {
-    const [policyData, triggerData, payoutData] = await Promise.all([
+    let slots = '18:00-21:00,21:00-23:00';
+    try {
+      const stored = await AsyncStorage.getItem('rider_slots');
+      if (stored) {
+        const parsed: string[] = JSON.parse(stored);
+        if (parsed.length > 0) slots = parsed.join(',');
+      }
+    } catch {}
+
+    const [policyData, triggerData, payoutData, quoteData] = await Promise.all([
       api.policies.getActive().catch(() => null),
       api.triggers.getStatus().catch(() => null),
       api.payouts.list().catch(() => ({ payouts: [] })),
+      api.policies.getQuote(slots, rider?.city ?? '').catch(() => null),
     ]);
 
     setPolicy(policyData);
     setTriggers(triggerData);
     setPayouts(payoutData.payouts || []);
+    setZoneRisk(quoteData?.quotes?.[0]?.risk_breakdown ?? null);
     setLastUpdated(new Date());
     setRefreshError(null);
   };
@@ -123,21 +136,21 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {rider?.zone && (
+        {rider?.zone && zoneRisk && (
           <Animated.View entering={FadeInUp.delay(50).springify()} style={styles.zoneHealthBar}>
             <View style={styles.zoneHealthItem}>
                <Text style={styles.zoneHealthIcon}>🌧️</Text>
-               <Text style={styles.zoneHealthValue}>24%</Text>
+               <Text style={styles.zoneHealthValue}>{zoneRisk.weather}%</Text>
             </View>
             <View style={styles.zoneHealthDivider} />
             <View style={styles.zoneHealthItem}>
                <Text style={styles.zoneHealthIcon}>🚗</Text>
-               <Text style={styles.zoneHealthValue}>68%</Text>
+               <Text style={styles.zoneHealthValue}>{zoneRisk.traffic}%</Text>
             </View>
             <View style={styles.zoneHealthDivider} />
             <View style={styles.zoneHealthItem}>
                <Text style={styles.zoneHealthIcon}>🏪</Text>
-               <Text style={styles.zoneHealthValue}>12%</Text>
+               <Text style={styles.zoneHealthValue}>{zoneRisk.store}%</Text>
             </View>
           </Animated.View>
         )}

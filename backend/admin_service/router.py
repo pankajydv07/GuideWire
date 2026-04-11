@@ -62,7 +62,7 @@ async def list_manual_claims(
     stmt = select(ManualClaim)
 
     if status == "open":
-        stmt = stmt.where(ManualClaim.review_status.in_(["pending", "rejected"]))
+        stmt = stmt.where(ManualClaim.review_status.in_(["pending", "under_review"]))
     elif status != "all":
         stmt = stmt.where(ManualClaim.review_status == status)
     

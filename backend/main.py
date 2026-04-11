@@ -211,10 +211,14 @@ async def get_config():
     PLATFORM_META = {"zepto": "⚡", "blinkit": "📦", "swiggy": "🛵"}
     TRIGGER_META = {
         "heavy_rain": "🌧️",
+        "extreme_heat": "🌡️",
         "traffic_congestion": "🚗",
-        "store_closed": "🏪",
+        "store_closure": "🏪",
         "platform_outage": "📱",
-        "regulatory": "🚫",
+        "regulatory_curfew": "🚫",
+        "gps_shadowban": "📍",
+        "dark_store_queue": "🛒",
+        "algorithmic_shock": "⚡",
         "community_signal": "📣",
     }
 
