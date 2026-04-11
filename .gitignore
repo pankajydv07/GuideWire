@@ -55,3 +55,13 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# User uploads and testing artefacts
+uploads/
+*.sqlite3
+smoke_test_results.json
+TESTING_SUMMARY.txt
+TEST_RESULTS.md
+DEMO_CHECKLIST.md
+FINAL_SMOKE_TEST_REPORT.md
+
