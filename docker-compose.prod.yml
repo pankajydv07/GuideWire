@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ankush
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  setup:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: "no"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python -m scripts.setup
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+      ML_SERVICE_URL: http://ml:8001
+      UPLOAD_DIR: /app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - upload_data:/app/uploads
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+      ML_SERVICE_URL: http://ml:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    command: python -m trigger_service.scheduler
+
+  ml:
+    build:
+      context: ./backend
+      dockerfile: ./ml/Dockerfile
+    restart: unless-stopped
+    command: uvicorn ml.serve:app --host 0.0.0.0 --port 8001
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - ./admin/.env
+    environment:
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_started
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./ops/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - upload_data:/var/www/uploads:ro
+    depends_on:
+      admin:
+        condition: service_started
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
+  upload_data:

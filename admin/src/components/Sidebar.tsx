@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileText, Camera, Zap, ShieldCheck, Activity, Menu, X, Map as MapIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon } from "lucide-react";
 import { adminApi } from "@/lib/api";
 
 const NAV_ITEMS = [
@@ -69,25 +69,26 @@ export function Sidebar() {
         className={`fixed inset-y-0 left-0 z-40 flex flex-col md:sticky md:top-0 md:h-screen md:translate-x-0 transition-all duration-300 ${isOpenMobile ? "translate-x-0" : "-translate-x-full"
           }`}
         style={{
-          width: isCollapsed ? "80px" : "260px",
+          width: isCollapsed ? "84px" : "236px",
           background: "var(--bg-surface)",
+          borderRight: "1px solid var(--border-subtle)",
         }}
       >
-        <div className={`flex flex-col h-full py-8 ${isCollapsed ? "px-3" : "px-5"}`}>
+        <div className={`flex flex-col h-full py-7 ${isCollapsed ? "px-3" : "px-4"}`}>
 
           {/* Header Row: Logo & Hamburger */}
-          <div className={`flex items-center ${isCollapsed ? "flex-col gap-6" : "justify-between"} mb-10 px-2`}>
+          <div className={`flex items-center ${isCollapsed ? "flex-col gap-5" : "justify-between"} mb-8 px-2`}>
             {/* Logo */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <img
                 src="/Zylo.png"
                 alt="Zylo Logo"
-                className="w-14 h-14 object-contain drop-shadow-[0_0_12px_rgba(168,85,247,0.4)]"
+                className="w-12 h-12 object-contain drop-shadow-[0_0_12px_rgba(168,85,247,0.35)]"
               />
               {!isCollapsed && (
                 <div>
                   <div
-                    className="text-2xl font-black tracking-wide"
+                    className="text-[2rem] font-black tracking-tight"
                     style={{
                       background: "linear-gradient(135deg, #a855f7, #7c3aed)",
                       WebkitBackgroundClip: "text",
@@ -113,9 +114,10 @@ export function Sidebar() {
           {/* System Health */}
           {!isCollapsed && (
             <div
-              className="mb-6 mx-2 rounded-2xl p-3.5 flex items-center justify-between"
+              className="mb-6 mx-1 rounded-2xl p-3.5 flex items-center justify-between border"
               style={{
                 background: "var(--bg-elevated)",
+                borderColor: "var(--border-subtle)",
               }}
             >
               <div>
@@ -155,7 +157,7 @@ export function Sidebar() {
           )}
 
           {/* Navigation */}
-          <nav className="flex-1 flex flex-col gap-1">
+          <nav className="flex-1 flex flex-col gap-1.5">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;
               const Icon = item.icon;
@@ -164,10 +166,11 @@ export function Sidebar() {
                   key={item.href}
                   href={item.href}
                   title={isCollapsed ? item.label : undefined}
-                  className={`relative flex items-center ${isCollapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"} rounded-xl text-sm font-semibold transition-all duration-200`}
+                  className={`relative flex items-center ${isCollapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-3"} rounded-2xl text-sm font-semibold transition-all duration-200`}
                   style={{
-                    background: active ? "rgba(124,58,237,0.12)" : "transparent",
+                    background: active ? "rgba(124,58,237,0.16)" : "transparent",
                     color: active ? "#a855f7" : "var(--text-secondary)",
+                    border: active ? "1px solid rgba(168,85,247,0.08)" : "1px solid transparent",
                   }}
                   onMouseEnter={(e) => {
                     if (!active) {
@@ -188,7 +191,7 @@ export function Sidebar() {
                   {active && !isCollapsed && (
                     <span
                       className="ml-auto text-[9px] font-black uppercase tracking-wider rounded-full px-2 py-0.5"
-                      style={{ background: "rgba(124,58,237,0.2)", color: "#a855f7" }}
+                      style={{ background: "rgba(124,58,237,0.22)", color: "#c084fc" }}
                     >
                       live
                     </span>
@@ -201,9 +204,10 @@ export function Sidebar() {
           {/* Live Traffic Footer */}
           {!isCollapsed && (
             <div
-              className="mt-6 rounded-2xl p-4"
+              className="mt-6 rounded-2xl p-4 border"
               style={{
-                background: "rgba(124,58,237,0.05)",
+                background: "rgba(76,29,149,0.14)",
+                borderColor: "rgba(168,85,247,0.1)",
               }}
             >
               <div className="flex items-center gap-2 mb-2">

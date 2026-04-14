@@ -76,12 +76,18 @@ export default function AdminOverview() {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Connection lost.");
       } finally {
-        if (active) { setLoading(false); setIsRefreshing(false); }
+        if (active) {
+          setLoading(false);
+          setIsRefreshing(false);
+        }
       }
     };
     void load();
     const interval = window.setInterval(() => void load(false), 30000);
-    return () => { active = false; window.clearInterval(interval); };
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   const recentActivity = useMemo<ActivityItem[]>(() => {
@@ -109,63 +115,58 @@ export default function AdminOverview() {
 
   const statsCards = data
     ? [
-      {
-        label: "Total Claims",
-        value: data.stats.total_claims.toString(),
-        sub: "all time processed",
-        icon: TrendingUp,
-        color: "#7c3aed",
-        glow: "rgba(124,58,237,0.25)",
-        bg: "rgba(124,58,237,0.08)",
-        hsl: "268 100 76",
-      },
-      {
-        label: "Pending Review",
-        value: data.stats.pending_review.toString(),
-        sub: "awaiting action",
-        icon: Clock,
-        color: "#f59e0b",
-        glow: "rgba(245,158,11,0.2)",
-        bg: "rgba(245,158,11,0.07)",
-        hsl: "38 92 50",
-      },
-      {
-        label: "Active Triggers",
-        value: data.stats.active_triggers.toString(),
-        sub: "live disruptions",
-        icon: Zap,
-        color: "#f43f5e",
-        glow: "rgba(244,63,94,0.2)",
-        bg: "rgba(244,63,94,0.07)",
-        hsl: "349 89 60",
-      },
-      {
-        label: "Loss Ratio",
-        value: formatPercent(data.stats.loss_ratio),
-        sub: "payout efficiency",
-        icon: BarChart3,
-        color: "#10b981",
-        glow: "rgba(16,185,129,0.2)",
-        bg: "rgba(16,185,129,0.07)",
-        hsl: "160 84 39",
-      },
-    ]
+        {
+          label: "Total Claims",
+          value: data.stats.total_claims.toString(),
+          sub: "all time processed",
+          icon: TrendingUp,
+          color: "#7c3aed",
+          bg: "rgba(124,58,237,0.08)",
+          hsl: "268 100 76",
+        },
+        {
+          label: "Pending Review",
+          value: data.stats.pending_review.toString(),
+          sub: "awaiting action",
+          icon: Clock,
+          color: "#f59e0b",
+          bg: "rgba(245,158,11,0.08)",
+          hsl: "38 92 50",
+        },
+        {
+          label: "Active Triggers",
+          value: data.stats.active_triggers.toString(),
+          sub: "live disruptions",
+          icon: Zap,
+          color: "#f43f5e",
+          bg: "rgba(244,63,94,0.08)",
+          hsl: "349 89 60",
+        },
+        {
+          label: "Loss Ratio",
+          value: formatPercent(data.stats.loss_ratio),
+          sub: "payout efficiency",
+          icon: BarChart3,
+          color: "#10b981",
+          bg: "rgba(16,185,129,0.08)",
+          hsl: "160 84 39",
+        },
+      ]
     : [];
 
   return (
-    <PageContainer>
-      <div className="space-y-10">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <PageContainer className="max-w-[1380px] px-6 md:px-10">
+      <div className="space-y-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}>
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] mb-3" style={{ color: "var(--text-muted)" }}>
+            <div className="text-[10px] font-black uppercase tracking-[0.28em] mb-3" style={{ color: "var(--text-muted)" }}>
               Admin Dashboard
             </div>
-            <h1 className="text-4xl font-black tracking-tight mb-1.5" style={{ color: "var(--text-primary)" }}>
+            <h1 className="text-4xl md:text-[3rem] font-black tracking-tight mb-2" style={{ color: "var(--text-primary)" }}>
               Command Center
             </h1>
             <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-              Real-time surveillance · automated claim flows · disruption monitoring
+              Real-time surveillance • automated claim flows • disruption monitoring
             </p>
           </motion.div>
 
@@ -173,8 +174,8 @@ export default function AdminOverview() {
             initial={{ opacity: 0, x: 16 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4 }}
-            className="flex items-center gap-2.5 rounded-2xl px-4 py-2.5"
-            style={{ background: "rgba(124,58,237,0.07)" }}
+            className="flex items-center gap-2.5 rounded-full px-4 py-2.5 border"
+            style={{ background: "rgba(76,29,149,0.24)", borderColor: "rgba(168,85,247,0.12)" }}
           >
             <RefreshCw
               className="w-3.5 h-3.5"
@@ -190,14 +191,14 @@ export default function AdminOverview() {
           </motion.div>
         </div>
 
-        {/* Error Banner */}
         {error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl p-4 flex items-center gap-3"
+            className="rounded-2xl p-4 flex items-center gap-3 border"
             style={{
               background: "rgba(244,63,94,0.07)",
+              borderColor: "rgba(244,63,94,0.14)",
             }}
           >
             <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: "#f43f5e" }} />
@@ -213,7 +214,6 @@ export default function AdminOverview() {
           </motion.div>
         )}
 
-        {/* Stats Grid */}
         {loading && !data ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <StatSkeleton key={i} />)}
@@ -228,25 +228,24 @@ export default function AdminOverview() {
             {statsCards.map((stat) => {
               const Icon = stat.icon;
               return (
-                <motion.div
-                  key={stat.label}
-                  variants={fadeUp}
-                  className="flex"
-                >
+                <motion.div key={stat.label} variants={fadeUp} className="flex">
                   <BorderGlow
                     className="flex-1 w-full"
                     glowColor={stat.hsl}
                     colors={[stat.color, "#000000", stat.color]}
-                    backgroundColor="#000000"
+                    backgroundColor="rgba(14,14,20,0.98)"
                     animated={false}
+                    borderRadius={24}
+                    glowRadius={34}
+                    fillOpacity={0.28}
                   >
-                    <div className="card p-6 relative overflow-hidden group h-full bg-transparent border-none">
+                    <div className="card p-6 relative overflow-hidden group h-full bg-transparent">
                       <div className="relative flex justify-between items-start">
                         <div>
-                          <div className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: "var(--text-muted)" }}>
+                          <div className="text-[10px] font-black uppercase tracking-[0.24em] mb-3" style={{ color: "var(--text-muted)" }}>
                             {stat.label}
                           </div>
-                          <div className="text-4xl font-black tracking-tight mb-1" style={{ color: stat.color }}>
+                          <div className="text-4xl font-black tracking-tight mb-2" style={{ color: stat.color }}>
                             {stat.value}
                           </div>
                           <div className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
@@ -273,19 +272,17 @@ export default function AdminOverview() {
           </motion.div>
         )}
 
-        {/* Main Content Row */}
-        <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-          {/* Recent Activity */}
+        <div className="grid gap-6 xl:grid-cols-[1.42fr_0.58fr]">
           <section
-            className="rounded-2xl p-7"
-            style={{ background: "var(--bg-surface)" }}
+            className="rounded-[28px] p-7 border"
+            style={{ background: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}
           >
             <div className="flex items-center justify-between mb-7">
               <div>
                 <div className="text-[9px] font-black uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
                   Audit Stream
                 </div>
-                <h2 className="text-xl font-black" style={{ color: "var(--text-primary)" }}>Recent Activity</h2>
+                <h2 className="text-[2rem] leading-none font-black" style={{ color: "var(--text-primary)" }}>Recent Activity</h2>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "#a855f7" }} />
@@ -295,7 +292,7 @@ export default function AdminOverview() {
               </div>
             </div>
 
-            <div className="space-y-2 h-[300px] overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
+            <div className="space-y-3 h-[300px] overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
               <AnimatePresence mode="popLayout">
                 {recentActivity.length === 0 ? (
                   <motion.div
@@ -320,6 +317,7 @@ export default function AdminOverview() {
                       className="group flex items-center justify-between gap-4 rounded-xl px-4 py-3.5 transition-all duration-200"
                       style={{
                         background: "var(--bg-elevated)",
+                        border: "1px solid var(--border-subtle)",
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -372,17 +370,20 @@ export default function AdminOverview() {
             </button>
           </section>
 
-          {/* Live Disruptions */}
-          <BorderGlow backgroundColor="#000000" animated={false}>
-            <section
-              className="rounded-2xl p-7 bg-transparent border-none"
-            >
+          <BorderGlow
+            backgroundColor="rgba(12,12,18,0.98)"
+            animated={false}
+            borderRadius={28}
+            glowRadius={34}
+            fillOpacity={0.2}
+          >
+            <section className="rounded-[28px] p-7 bg-transparent border" style={{ borderColor: "var(--border-subtle)" }}>
               <div className="flex items-center justify-between mb-7">
                 <div>
                   <div className="text-[9px] font-black uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
                     Network
                   </div>
-                  <h2 className="text-xl font-black" style={{ color: "var(--text-primary)" }}>Live Disruptions</h2>
+                  <h2 className="text-[2rem] leading-none font-black" style={{ color: "var(--text-primary)" }}>Live Disruptions</h2>
                 </div>
                 <div
                   className="flex items-center justify-center rounded-xl"
@@ -402,6 +403,7 @@ export default function AdminOverview() {
                     className="rounded-xl py-14 text-center"
                     style={{
                       background: "var(--bg-elevated)",
+                      border: "1px solid var(--border-subtle)",
                     }}
                   >
                     <CheckCircle2 className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
@@ -422,6 +424,7 @@ export default function AdminOverview() {
                       className="rounded-xl p-5 relative overflow-hidden"
                       style={{
                         background: "rgba(244,63,94,0.05)",
+                        border: "1px solid rgba(244,63,94,0.08)",
                       }}
                     >
                       <div className="flex items-start justify-between mb-3">
