@@ -8,7 +8,7 @@
 
 ## 1. Ownership Summary
 
-You own the **parametric engine** — the heart of RiderShield. Your triggers automatically detect disruptions without rider action. This is the "zero-touch" magic.
+You own the **parametric engine** — the heart of Zylo. Your triggers automatically detect disruptions without rider action. This is the "zero-touch" magic.
 
 **You are responsible for:**
 - External API polling (weather, traffic, platform status)

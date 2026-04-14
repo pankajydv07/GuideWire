@@ -53,10 +53,14 @@ class PayoutStatus(str, Enum):
 
 class TriggerType(str, Enum):
     HEAVY_RAIN = "heavy_rain"
+    EXTREME_HEAT = "extreme_heat"
     TRAFFIC_CONGESTION = "traffic_congestion"
-    STORE_CLOSED = "store_closed"
+    STORE_CLOSURE = "store_closure"
     PLATFORM_OUTAGE = "platform_outage"
-    REGULATORY = "regulatory"
+    REGULATORY_CURFEW = "regulatory_curfew"
+    GPS_SHADOWBAN = "gps_shadowban"
+    DARK_STORE_QUEUE = "dark_store_queue"
+    ALGORITHMIC_SHOCK = "algorithmic_shock"
     COMMUNITY_SIGNAL = "community_signal"
 
 

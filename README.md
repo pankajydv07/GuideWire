@@ -1,8 +1,8 @@
-# RiderShield — Parametric Income Protection for Q-Commerce Riders
+# Zylo — Parametric Income Protection for Q-Commerce Riders
 
 > **Automatic income protection for delivery riders.**  
 > When rain, gridlock, GPS glitches, or platform failures kill your earnings —  
-> RiderShield detects it and pays you. No claims. No paperwork. No waiting.  
+> Zylo detects it and pays you. No claims. No paperwork. No waiting.  
 > And when a disruption slips through undetected, riders can submit a geo-tagged manual claim —
 > evaluated against real weather, traffic, and location data in minutes, not weeks.
 
@@ -23,7 +23,8 @@
 9. [Tech Stack](#9-tech-stack)  
 10. [Platform Data Simulation](#10-platform-data-simulation)  
 11. [Development Plan](#11-development-plan)  
-12. [Adversarial Defense & Anti-Spoofing Strategy](#12-adversarial-defense--anti-spoofing-strategy)  
+12. [Phase 2 — What's Built](#12-phase-2--whats-built)  
+13. [Adversarial Defense & Anti-Spoofing Strategy](#13-adversarial-defense--anti-spoofing-strategy)  
 
 ---
 
@@ -93,7 +94,7 @@ Rohit gets a push notification with a full breakdown. He did nothing except stay
 **Context:** Ankush is delivering in DLF Cyber Hub, Gurugram — a dense urban canyon of
 high-rises that causes GPS multipath interference. His location drifts on the Zepto map;
 the platform algorithm interprets this as route deviation and shadowbans him for 2 hours.
-He loses ₹400 in that shift. Traditional insurance: useless. RiderShield:
+He loses ₹400 in that shift. Traditional insurance: useless. Zylo:
 
 | Step | Action |
 |---|---|
@@ -789,24 +790,24 @@ Pydantic model) remains identical.
 
 ## 11. Development Plan
 
-### Phase 1 — Foundation 
+### Phase 1 — Foundation ✅
 
 **Goal:** Working skeleton — riders onboard, buy policies, data flows in.
 
-| Deliverable | Details |
-|---|---|
-| Rider onboarding + KYC flow | Name, phone, platform, zone, slot preferences |
-| Policy service | Weekly plan selection, premium calculation (rule-based v0), UPI mock payment |
-| Weather data pipeline | OpenWeatherMap polling every 5 min into TimescaleDB |
-| Basic trigger rules | Rain > threshold, congestion > threshold — rule-based, no ML yet |
-| Database schema | Riders, zones, micro-slots, policies, disruption events, claims |
-| Mobile app shell | Onboarding, plan selection, policy status view |
+| Deliverable | Status | Details |
+|---|---|---|
+| Rider onboarding + KYC flow | ✅ Done | Name, phone, platform, zone, slot preferences |
+| Policy service | ✅ Done | Weekly plan selection, premium calculation (rule-based v0), UPI mock payment |
+| Weather data pipeline | ✅ Done | OpenWeatherMap polling every 5 min into TimescaleDB |
+| Basic trigger rules | ✅ Done | Rain > threshold, congestion > threshold — rule-based, no ML yet |
+| Database schema | ✅ Done | Riders, zones, micro-slots, policies, disruption events, claims |
+| Mobile app shell | ✅ Done | Onboarding, plan selection, policy status view |
 
-**Exit criterion:** Rider can sign up, buy cover, and the system ingests live weather data.
+**Exit criterion:** ✅ Rider can sign up, buy cover, and the system ingests live weather data.
 
 ---
 
-### Phase 2 — Automation & Protection [March 21 – April 4] (Weeks 3–4)
+### Phase 2 — Automation & Protection [March 21 – April 4] (Weeks 3–4) ✅
 
 > **Theme:** "Protect Your Worker"
 
@@ -821,24 +822,27 @@ Pydantic model) remains identical.
   - **Dynamic Premium Calculation**
   - **Claims Management**
 
-#### Our Implementation Plan
+#### Implementation — Completed
 
-| Deliverable | Details |
-|---|---|
-| Registration process (polish) | End-to-end onboarding: name, phone, KYC, platform link, zone, slot preferences — fully functional and demo-ready |
-| Insurance policy management | Plan selection (Essential / Balanced / Max Protect), policy lifecycle (activate, view, renew, cancel), coverage status tracking |
-| Dynamic premium engine | LightGBM risk model on synthetic data, zone-level scoring, hyper-local risk factors, explainable premium per slot |
-| 5 automated triggers | Heavy rain, congestion, dark-store closure, platform outage, regulatory event — using OpenWeatherMap + mocked APIs |
-| Community Signal agent | Detects mass order collapse across zone riders (>70% affected) |
-| Claims automation | Trigger → income gap calc → basic fraud check → payout (zero-touch) |
-| **Manual claim submission** | Rider-facing "Request Manual Claim" flow with geo-tagged photo upload, disruption type selection, and description |
-| **Geo-validation service** | Extracts EXIF GPS from photo; compares to rider's live telemetry GPS; flags location mismatches > 500 m |
-| **Weather & traffic corroboration** | OpenWeatherMap + Google Maps queried for the photo's location/time to verify the claimed disruption type |
-| **Spam detection pipeline** | Composite spam score from location mismatch, time anomaly, weather/traffic cross-check; auto-rejects score ≥ 70 |
-| **Admin manual-claim review queue** | Ranked by spam score; one-click approve/reject with corroboration summary |
-| 2-minute demo video | Registration → policy management → dynamic premium → simulated disruption → auto-payout + manual-claim fallback, uploaded publicly |
+| Deliverable | Status | Details |
+|---|---|---|
+| Registration process (polish) | ✅ Done | End-to-end onboarding: name, phone OTP, platform link, zone, slot preferences — fully functional and demo-ready (`backend/rider_service/`) |
+| Insurance policy management | ✅ Done | Plan selection (Essential / Balanced / Max Protect), policy lifecycle (activate, view, renew, cancel), coverage status tracking (`backend/policy_service/`) |
+| Dynamic premium engine | ✅ Done | LightGBM risk model on synthetic data, zone-level scoring, hyper-local risk factors, explainable premium per slot (`backend/premium_service/`, `backend/ml/`) |
+| 9 automated triggers | ✅ Done | Heavy rain, extreme heat, congestion (sustained), dark-store closure, platform outage, regulatory curfew, GPS shadowban, dark-store queue SLA breach, algorithmic shock — Three-Factor Validation Gate ensures a payout fires only when trigger is true, rider is online, and earnings have genuinely dropped (`backend/trigger_service/`) |
+| Community Signal agent | ✅ Done | Detects mass order collapse across zone riders (>70% affected) — runs inside the scheduler cycle alongside other trigger evaluations (`backend/trigger_service/scheduler.py`) |
+| Claims automation | ✅ Done | Trigger → income gap calc → Isolation Forest fraud check → payout (zero-touch) (`backend/claims_service/`) |
+| Manual claim submission | ✅ Done | Rider-facing "Request Manual Claim" flow with geo-tagged photo upload, disruption type selection, and description (`backend/manual_claims/`, mobile `manual-claim.tsx`) |
+| Geo-validation service | ✅ Done | Extracts EXIF GPS from photo; compares to rider's live telemetry GPS; flags location mismatches > 500 m (`backend/manual_claims/geo_validation.py`) |
+| Weather & traffic corroboration | ✅ Done | OpenWeatherMap + Google Maps queried for the photo's location/time to verify the claimed disruption type (`backend/data_collectors/weather_client.py`, `traffic_mock.py`) |
+| Spam detection pipeline | ✅ Done | Composite spam score from location mismatch, time anomaly, weather/traffic cross-check; auto-rejects score ≥ 70 (`backend/manual_claims/`) |
+| Admin manual-claim review queue | ✅ Done | Ranked by spam score; one-click approve/reject with corroboration summary (`admin/src/app/manual-claims/`, `backend/admin_service/`) |
+| Payout service | ✅ Done | Simulated UPI wallet credit, payout history (`backend/payout_service/`) |
+| Admin dashboard | ✅ Done | Overview metrics, disruption heatmap by zone, live claims feed, triggers panel, manual-claim review — built with Next.js + Tailwind (`admin/src/app/`) |
+| Mobile app | ✅ Done | Full Expo/React Native app: registration, OTP, zone/slot selection, home dashboard, policy select + payment, claims history, manual claim, profile (`mobile/app/`) |
+| Docker Compose | ✅ Done | Single `docker-compose up` spins up PostgreSQL/TimescaleDB, Redis, backend API, ML service, and admin dashboard (`docker-compose.yml`) |
 
-**Exit criterion:** A 2-minute demo shows the complete registration → policy management → dynamic premium → zero-touch claim payout flow.
+**Exit criterion:** ✅ End-to-end flow works — registration → policy management → dynamic premium → zero-touch claim payout → manual claim fallback → admin review.
 
 ---
 
@@ -869,7 +873,128 @@ Pydantic model) remains identical.
 | Final submission package | Demo + pitch deck + full repo with Docker Compose |
 
 
-## 12. Adversarial Defense & Anti-Spoofing Strategy
+## 12. Phase 2 — What's Built
+
+> **Status: Complete** — All Phase 2 deliverables are shipped and running end-to-end.
+
+This section is a quick reference for developers, contributors, and demo reviewers: exactly
+what code was produced in Phase 2, where it lives, and how to run it.
+
+---
+
+### Repository Layout
+
+```
+GuideWire/
+├── backend/                     # FastAPI backend — all services
+│   ├── rider_service/           # Registration, OTP auth, JWT, rider profiles
+│   ├── policy_service/          # Policy lifecycle (buy, view, renew, cancel)
+│   ├── premium_service/         # LightGBM dynamic premium engine
+│   ├── trigger_service/         # Parametric trigger evaluation + scheduler
+│   ├── claims_service/          # Auto-claim pipeline + Isolation Forest fraud
+│   ├── payout_service/          # Simulated UPI wallet payouts
+│   ├── manual_claims/           # Manual claim submission + geo-validation
+│   ├── admin_service/           # Admin API (overview, manual-claim review)
+│   ├── data_collectors/         # OpenWeatherMap, traffic mock, platform simulator
+│   ├── ml/                      # LightGBM model training + serving (port 8001)
+│   ├── shared/                  # Auth middleware, DB, Redis, config, zones
+│   ├── seeds/                   # Demo seed data (riders, zones, policies, baselines)
+│   ├── migrations/init.sql      # Full DB schema (PostgreSQL/TimescaleDB)
+│   └── main.py                  # FastAPI app entry point (port 8000)
+├── admin/                       # Next.js admin dashboard (port 3000)
+│   └── src/app/
+│       ├── page.tsx             # Overview: KPIs, live activity feed
+│       ├── claims/              # Auto-claims list + status
+│       ├── triggers/            # Live trigger panel + disruption heatmap
+│       └── manual-claims/       # Manual claim review queue (approve / reject)
+├── mobile/                      # Expo / React Native rider app
+│   └── app/
+│       ├── (auth)/              # register.tsx, otp.tsx, zone-select.tsx, slot-select.tsx
+│       ├── (tabs)/              # index.tsx (home), claims.tsx, manual-claim.tsx, profile.tsx
+│       └── policy/              # select.tsx (plan picker), payment.tsx
+└── docker-compose.yml           # One-command full-stack local setup
+```
+
+---
+
+### Running Locally
+
+**Prerequisites:** Docker + Docker Compose, Node.js 18+, Expo CLI
+
+```bash
+# 1. Start infrastructure + backend
+docker-compose up --build
+
+# 2. Run admin dashboard
+cd admin && npm install && npm run dev   # http://localhost:3000
+
+# 3. Run mobile app (Expo)
+cd mobile && npm install && npx expo start
+```
+
+The backend API is available at **http://localhost:8000** with auto-generated docs at
+`/docs` (Swagger) and `/redoc`.
+
+---
+
+### Phase 2 Feature Highlights
+
+#### Rider Mobile App (Expo / React Native)
+- **Onboarding:** Phone registration → SMS OTP verification → zone + shift-slot selection
+- **Policy:** Plan picker (Essential / Balanced / Max Protect) → simulated UPI payment → active policy view
+- **Home Dashboard:** Active policy badge, current zone, earnings-at-risk, recent payouts
+- **Claims History:** All auto and manual claims with status and payout amounts
+- **Manual Claim:** Disruption type selection, description, geo-tagged photo upload, live submission status
+
+#### Backend Services (FastAPI / Python)
+- **Rider Service:** Phone/OTP auth with Redis OTP cache, JWT tokens, rider CRUD, zone assignment
+- **Policy Service:** Policy lifecycle management, micro-slot risk scoring, coverage status
+- **Premium Service:** LightGBM model trained on synthetic zone/slot/weather data; returns per-slot premium breakdown with feature explanations
+- **Trigger Service:** 9 parametric triggers evaluated every 5 minutes via APScheduler; Three-Factor Validation Gate (trigger true + rider online + earnings drop ≥ 20%); Community Signal (>70% zone-rider order collapse)
+- **Claims Service:** Auto-claim pipeline on disruption events; income gap estimator; Isolation Forest fraud scoring; auto-approve below threshold
+- **Payout Service:** Wallet credit simulation; payout history API
+- **Manual Claims Service:** Photo upload with EXIF GPS extraction; geo-validation (rider GPS vs photo GPS, tolerance 500 m); spam score (0–100); auto-reject ≥ 70; admin queue routing
+- **Admin Service:** Overview metrics, live disruption events, manual-claim review (approve / reject with reason)
+- **Data Collectors:** OpenWeatherMap client, traffic mock, platform simulator (rider/order/store/platform signals)
+
+#### Admin Dashboard (Next.js + Tailwind)
+- **Overview:** Total payouts, active policies, active disruptions, recent claim activity feed
+- **Claims:** Full auto-claim list with trigger type, rider, amount, and status
+- **Triggers:** Live trigger evaluation results per zone, active disruption events
+- **Manual Claims:** Review queue ranked by spam score; expandable corroboration evidence; one-click approve/reject
+
+#### ML Service (LightGBM)
+- Synthetic training data generated for Indian metro zones across time-of-day profiles
+- Features: zone risk score, rainfall, congestion index, time-of-day, rider history, platform signals
+- Serves premium predictions at `http://localhost:8001/predict`
+- Falls back to rule-based pricing if ML service is unavailable
+
+---
+
+### Key API Endpoints (Phase 2)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/riders/register` | Register rider (phone + name) |
+| `POST` | `/api/riders/verify-otp` | Verify OTP → issue JWT |
+| `GET` | `/api/riders/me` | Authenticated rider profile |
+| `GET` | `/api/zones` | All available zones |
+| `POST` | `/api/policies/buy` | Purchase weekly policy |
+| `GET` | `/api/policies/me` | Active policy for logged-in rider |
+| `GET` | `/api/risk/premium` | Dynamic premium quote (ML) |
+| `POST` | `/api/triggers/evaluate` | Manually trigger evaluation (demo) |
+| `GET` | `/api/triggers/active` | Currently active disruption triggers |
+| `GET` | `/api/claims/` | Claims for logged-in rider |
+| `POST` | `/api/claims/manual` | Submit manual claim with photo |
+| `GET` | `/api/payouts/` | Payout history for logged-in rider |
+| `GET` | `/api/admin/overview` | Admin: platform-wide KPIs |
+| `GET` | `/api/admin/manual-claims` | Admin: pending manual claim queue |
+| `POST` | `/api/admin/manual-claims/{id}/approve` | Admin: approve manual claim |
+| `POST` | `/api/admin/manual-claims/{id}/reject` | Admin: reject manual claim |
+
+---
+
+## 13. Adversarial Defense & Anti-Spoofing Strategy
 
 > **Context:** A coordinated syndicate of 500 delivery workers organized via Telegram used
 > GPS-spoofing apps to fake their presence inside a red-alert weather zone — triggering
@@ -884,7 +1009,7 @@ drop from a prior baseline, and a zone-wide peer impact pattern.
 
 ---
 
-### 12.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
+### 13.1 The Differentiation — Genuine Stranded Rider vs. GPS Spoofer
 
 Every automatic payout requires multi-modal corroboration across the following signal stack.
 No single signal can approve or reject a claim on its own.
@@ -919,7 +1044,7 @@ observed traffic conditions.
 
 ---
 
-### 12.2 The Data — What Catches a Coordinated Fraud Ring
+### 13.2 The Data — What Catches a Coordinated Fraud Ring
 
 Individual fraud detection fails at scale. A ring of 500 acting in concert leaves a
 **graph-level and behavioral signature** that is statistically unmistakable in aggregate.
@@ -947,7 +1072,7 @@ The fraud engine organizes evidence into four layers:
 
 #### Layer 3 — Graph / Ring Detection
 
-RiderShield's Neo4j-based collusion graph ingests four edge types:
+Zylo's Neo4j-based collusion graph ingests four edge types:
 
 - **Rider → Zone** (weighted by shift frequency — zone affinity)
 - **Rider → Device** (hardware fingerprint per login session)
@@ -980,11 +1105,11 @@ Three graph queries execute on every disruption event:
 
 ---
 
-### 12.3 The UX Balance — Tiered Response Without Punishing Honest Workers
+### 13.3 The UX Balance — Tiered Response Without Punishing Honest Workers
 
 A real rider experiencing a genuine network drop in bad weather will look superficially
 similar to a spoofer: degraded GPS, weak cell signal, intermittent platform activity. The
-system must not punish them. RiderShield uses a **four-tier numeric fraud score system**,
+system must not punish them. Zylo uses a **four-tier numeric fraud score system**,
 not a binary approve/reject — with time-bounded SLAs on every tier.
 
 > **Design principle:** The system fails safely. Hard on spoofers; forgiving to genuinely
@@ -1065,7 +1190,7 @@ When a zone-level burst event triggers a hold, the system operates in three rank
 
 ---
 
-### 12.4 Ring-Level Escalation Protocol
+### 13.4 Ring-Level Escalation Protocol
 
 When a coordinated ring is detected — a graph cluster of ≥ 10 accounts showing synchronized
 suspicious behavior — the following protocol activates automatically:
@@ -1093,7 +1218,7 @@ suspicious behavior — the following protocol activates automatically:
 
 ---
 
-### 12.5 Policy Safeguards & Architecture Summary
+### 13.5 Policy Safeguards & Architecture Summary
 
 **Policy safeguards that protect honest riders:**
 - Claims are **never** rejected on a single GPS signal alone — auto-reject (score 86–100)
@@ -1106,7 +1231,7 @@ suspicious behavior — the following protocol activates automatically:
   every event.
 
 **Architecture summary:**
-RiderShield's anti-spoofing defense is a five-layer system: (1) a device-signal layer using
+Zylo's anti-spoofing defense is a five-layer system: (1) a device-signal layer using
 the OS Mock Location API as a heavy-weight corroborating input (never standalone) alongside IMU
 fingerprinting, device clustering, and battery anomaly detection; (2) a multi-modal signal
 fusion layer across GPS quality, cell towers, platform logs, earnings trajectory, and app

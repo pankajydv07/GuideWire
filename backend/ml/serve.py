@@ -28,7 +28,7 @@ class PredictRequest(BaseModel):
     forecast_aqi: int
 
 
-app = FastAPI(title="RiderShield ML Service", version="1.0.0")
+app = FastAPI(title="Zylo ML Service", version="1.0.0")
 
 model = None
 metadata = {}

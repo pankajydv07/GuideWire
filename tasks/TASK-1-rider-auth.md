@@ -9,7 +9,7 @@
 
 ## 1. Ownership Summary
 
-You own the **identity layer** of RiderShield. Every other service depends on your JWT tokens and rider profiles. Your module is the first thing that runs in the demo and the first thing judges see.
+You own the **identity layer** of Zylo. Every other service depends on your JWT tokens and rider profiles. Your module is the first thing that runs in the demo and the first thing judges see.
 
 **You are responsible for:**
 - OTP generation/verification (Redis-backed)

@@ -1,21 +1,23 @@
-﻿"""
+"""
 Application configuration loaded from the .env file.
 All services import settings from here:
     from shared.config import settings
 """
 
 from functools import lru_cache
+from typing import Any
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://ridershield:password@localhost:5432/ridershield"
-    DATABASE_URL_SYNC: str = "postgresql://ridershield:password@localhost:5432/ridershield"
+    DATABASE_URL: str = "postgresql+asyncpg://zylo:password@localhost:5432/zylo"
+    DATABASE_URL_SYNC: str = "postgresql://zylo:password@localhost:5432/zylo"
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    JWT_SECRET_KEY: str = "ridershield-dev-secret-change-in-production"
+    JWT_SECRET_KEY: str = "zylo-dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
@@ -38,14 +40,34 @@ class Settings(BaseSettings):
 
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
-    APP_NAME: str = "RiderShield"
+    APP_NAME: str = "Zylo"
     APP_VERSION: str = "1.0.0"
+    CORS_ALLOWED_ORIGINS: str = ""
 
     ML_SERVICE_URL: str = "http://ml:8001"
 
     UPLOAD_DIR: str = "./uploads"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+                return False
+
+        return False
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 @lru_cache()

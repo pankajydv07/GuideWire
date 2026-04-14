@@ -1,5 +1,5 @@
 """
-RiderShield — Main FastAPI Application
+Zylo — Main FastAPI Application
 
 This is the single entry point. Each developer's router is mounted here.
 Run with: uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -44,14 +44,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=getattr(logging, settings.LOG_LEVEL),
 )
-logger = logging.getLogger("ridershield")
+logger = logging.getLogger("zylo")
 
 
 # ─── Lifespan ────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    logger.info("🚀 Starting RiderShield API...")
+    logger.info("🚀 Starting Zylo API...")
     await init_db()
     logger.info("✅ Database initialized")
     
@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     # Dev 3: Stop trigger scheduler
     stop_scheduler()
     
-    logger.info("🛑 Shutting down RiderShield API...")
+    logger.info("🛑 Shutting down Zylo API...")
     await close_db()
     await close_redis()
     logger.info("✅ Connections closed")
@@ -211,10 +211,14 @@ async def get_config():
     PLATFORM_META = {"zepto": "⚡", "blinkit": "📦", "swiggy": "🛵"}
     TRIGGER_META = {
         "heavy_rain": "🌧️",
+        "extreme_heat": "🌡️",
         "traffic_congestion": "🚗",
-        "store_closed": "🏪",
+        "store_closure": "🏪",
         "platform_outage": "📱",
-        "regulatory": "🚫",
+        "regulatory_curfew": "🚫",
+        "gps_shadowban": "📍",
+        "dark_store_queue": "🛒",
+        "algorithmic_shock": "⚡",
         "community_signal": "📣",
     }
 

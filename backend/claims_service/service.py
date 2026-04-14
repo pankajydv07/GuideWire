@@ -7,9 +7,10 @@ Handles the core claims engine for both auto and manual tracks.
 from uuid import UUID
 import logging
 from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 
 from claims_service.models import Claim
 from trigger_service.models import DisruptionEvent, PlatformSnapshot
@@ -18,10 +19,28 @@ from policy_service.models import Policy
 from claims_service.fraud import run_fraud_check, check_duplicate_claim
 from payout_service.service import process_upi_payout
 
-logger = logging.getLogger("ridershield.claims")
+logger = logging.getLogger("zylo.claims")
 
-# We use 180 as a realistic fallback hourly rate for delivery riders if no baseline exists
 FALLBACK_HOURLY_RATE = 180
+
+
+def _slot_bucket(slot_start: datetime) -> str:
+    hour = slot_start.hour
+    if 18 <= hour < 21:
+        return "18:00-21:00"
+    if 21 <= hour < 23:
+        return "21:00-23:00"
+    return f"{hour:02d}:00-{min(hour + 3, 23):02d}:00"
+
+
+def _slot_window(value: datetime) -> tuple[str, datetime, datetime]:
+    slot_time_str = _slot_bucket(value)
+    start_raw, end_raw = slot_time_str.split("-")
+    start_hour = int(start_raw.split(":")[0])
+    end_hour = int(end_raw.split(":")[0])
+    slot_start = value.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    slot_end = value.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+    return slot_time_str, slot_start, slot_end
 
 
 async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> int:
@@ -32,7 +51,6 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
     logger.info(f"Processing auto-claims for event {disruption_event_id}")
     claims_created = 0
 
-    # 1. Fetch Disruption Event details
     event_result = await db.execute(select(DisruptionEvent).where(DisruptionEvent.id == disruption_event_id))
     event = event_result.scalar_one_or_none()
     if not event:
@@ -41,22 +59,9 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
 
     zone_id = event.zone_id
     slot_start = event.slot_start
-
-    # Determine slot string (e.g. '18:00-21:00') from the datetime
-    # We simplify this by checking the hour of slot_start to find the appropriate slot bucket
-    hour = slot_start.hour
-    if 18 <= hour < 21:
-        slot_time_str = "18:00-21:00"
-    elif 21 <= hour < 23:
-        slot_time_str = "21:00-23:00"
-    else:
-        # Generic fallback
-        slot_time_str = f"{hour:02d}:00-{(hour+3):02d}:00"
-
+    slot_time_str = _slot_bucket(slot_start)
     current_week = slot_start.strftime("%Y-W%V")
 
-    # 2. Find riders with active policies in the affected zone
-    # We join Policy and Rider to get riders in this zone who are actively insured
     policy_query = (
         select(Policy)
         .join(Rider, Rider.id == Policy.rider_id)
@@ -71,15 +76,12 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
 
     logger.info(f"Found {len(active_policies)} active policies in zone {zone_id} for week {current_week}")
 
-    # 3. Process each rider
     for policy in active_policies:
         rider_id = policy.rider_id
 
-        # Skip if duplicate claim already exists
         if await check_duplicate_claim(rider_id, disruption_event_id, db):
             continue
 
-        # Get Baseline (Expected Earnings)
         baseline_result = await db.execute(
             select(RiderZoneBaseline).where(
                 RiderZoneBaseline.rider_id == rider_id,
@@ -91,7 +93,6 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
         baseline = baseline_result.scalar_one_or_none()
         expected_earnings = baseline.avg_earnings if baseline else FALLBACK_HOURLY_RATE * 3
 
-        # Get Actual Earnings from Snapshot
         snapshot_result = await db.execute(
             select(PlatformSnapshot).where(
                 PlatformSnapshot.rider_id == rider_id,
@@ -101,12 +102,10 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
         snapshot = snapshot_result.scalar_one_or_none()
         actual_earnings = snapshot.earnings_current_slot if snapshot else 0
 
-        # Calculate Income Gap
         income_loss = expected_earnings - actual_earnings
         if income_loss <= 0:
-            continue  # No loss, no claim
+            continue
 
-        # Fraud Check
         fraud_score = await run_fraud_check(
             rider_id=rider_id,
             zone_id=zone_id,
@@ -116,14 +115,11 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
             db=db
         )
 
-        # Calculate Payout
         coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
         payout_amount = min(income_loss, coverage_remaining)
-
         if payout_amount <= 0:
-            continue  # Coverage exhausted
+            continue
 
-        # Create Claim
         claim = Claim(
             rider_id=rider_id,
             policy_id=policy.id,
@@ -140,11 +136,9 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
             processed_at=datetime.utcnow()
         )
         db.add(claim)
-        await db.flush()  # to get claim.id
+        await db.flush()
 
-        # Trigger Payout
         await process_upi_payout(claim.id, rider_id, payout_amount, db)
-        policy.coverage_used += payout_amount
         claims_created += 1
 
     await db.commit()
@@ -155,37 +149,61 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
 async def process_manual_claim(claim_data: dict, db: AsyncSession) -> dict:
     """
     Called by Dev 5's router when a manual claim passes initial spam check (< 70).
-    Expects schema from ManualClaimInput.
     """
     rider_id = claim_data["rider_id"]
     policy_id = claim_data["policy_id"]
     incident_time = claim_data["incident_time"]
-    
+
     logger.info(f"Processing manual claim for rider {rider_id}")
 
-    # Fetch policy to get coverage logic
     policy_result = await db.execute(select(Policy).where(Policy.id == policy_id))
     policy = policy_result.scalar_one_or_none()
-    
     if not policy:
         raise HTTPException(status_code=400, detail="Policy not found")
 
-    # In manual claims, without strict `PlatformSnapshot` guarantees, we rely on the 
-    # estimated 3-hour loss window average (e.g., ₹540 total)
+    rider_result = await db.execute(select(Rider).where(Rider.id == rider_id))
+    rider = rider_result.scalar_one_or_none()
+
+    claim_week = incident_time.strftime("%Y-W%V")
+    slot_time_str, slot_start, slot_end = _slot_window(incident_time)
+
     expected_earnings = FALLBACK_HOURLY_RATE * 3
-    actual_earnings = 0
+    if rider:
+        baseline_result = await db.execute(
+            select(RiderZoneBaseline).where(
+                RiderZoneBaseline.rider_id == rider_id,
+                RiderZoneBaseline.zone_id == rider.zone_id,
+                RiderZoneBaseline.week == claim_week,
+                RiderZoneBaseline.slot_time == slot_time_str
+            )
+        )
+        baseline = baseline_result.scalar_one_or_none()
+        if baseline:
+            expected_earnings = baseline.avg_earnings
+
+    snapshot_result = await db.execute(
+        select(PlatformSnapshot)
+        .where(
+            PlatformSnapshot.rider_id == rider_id,
+            PlatformSnapshot.time >= slot_start,
+            PlatformSnapshot.time <= slot_end
+        )
+        .order_by(PlatformSnapshot.time.desc())
+        .limit(1)
+    )
+    snapshot = snapshot_result.scalar_one_or_none()
+    actual_earnings = snapshot.earnings_current_slot if snapshot else 0
+
     income_loss = expected_earnings - actual_earnings
-    
     coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
-    payout_amount = min(income_loss, coverage_remaining)
-    
-    # Create Claim in 'under_review' mode
+    payout_amount = min(max(income_loss, 0), coverage_remaining)
+
     claim = Claim(
         rider_id=rider_id,
         policy_id=policy_id,
         type="manual",
         disruption_type=claim_data.get("disruption_type"),
-        income_loss=income_loss,
+        income_loss=max(income_loss, 0),
         expected_earnings=expected_earnings,
         actual_earnings=actual_earnings,
         payout_amount=payout_amount,
@@ -195,8 +213,7 @@ async def process_manual_claim(claim_data: dict, db: AsyncSession) -> dict:
     )
     db.add(claim)
     await db.flush()
-    # Let calling function (Dev 5) do the commit.
-    
+
     return {"claim_id": str(claim.id), "status": "under_review", "payout_amount": payout_amount}
 
 
@@ -205,35 +222,25 @@ async def approve_manual_claim(claim_id: UUID, db: AsyncSession) -> dict:
     Called by Dev 5 when admin manually approves a claim.
     """
     logger.info(f"Approving manual claim {claim_id}")
-    
+
     claim_result = await db.execute(select(Claim).where(Claim.id == claim_id))
     claim = claim_result.scalar_one_or_none()
-    
     if not claim:
-         raise HTTPException(status_code=404, detail="Claim not found")
-         
+        raise HTTPException(status_code=404, detail="Claim not found")
     if claim.status in ("approved", "paid", "rejected"):
-         raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
-         
-    # Update Status
+        raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
+
     claim.status = "paid"
     claim.processed_at = datetime.utcnow()
-    
-    # Update coverage used
-    try:
-        from policy_service.models import Policy
-    except ImportError:
-        pass
-    policy_result = await db.execute(select(Policy).where(Policy.id == claim.policy_id))
-    policy = policy_result.scalar_one_or_none()
-    if policy:
-        policy.coverage_used += claim.payout_amount
 
-    # Process Payout
     payout = await process_upi_payout(claim.id, claim.rider_id, claim.payout_amount, db)
-    
-    # Let calling function commit.
-    return {"claim_id": str(claim.id), "status": "approved", "payout_id": str(payout.id), "payout_amount": claim.payout_amount}
+
+    return {
+        "claim_id": str(claim.id),
+        "status": "approved",
+        "payout_id": str(payout.id),
+        "payout_amount": claim.payout_amount
+    }
 
 
 async def reject_manual_claim(claim_id: UUID, reason: str, db: AsyncSession) -> dict:
@@ -241,18 +248,15 @@ async def reject_manual_claim(claim_id: UUID, reason: str, db: AsyncSession) -> 
     Called by Dev 5 when admin manually rejects a claim.
     """
     logger.info(f"Rejecting manual claim {claim_id}: {reason}")
-    
+
     claim_result = await db.execute(select(Claim).where(Claim.id == claim_id))
     claim = claim_result.scalar_one_or_none()
-    
     if not claim:
-         raise HTTPException(status_code=404, detail="Claim not found")
-         
+        raise HTTPException(status_code=404, detail="Claim not found")
     if claim.status in ("approved", "paid", "rejected"):
-         raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
-         
+        raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
+
     claim.status = "rejected"
     claim.processed_at = datetime.utcnow()
-    # (Dev 5 handles saving the `reviewer_notes` reason in the manual_claims table)
-    
+
     return {"claim_id": str(claim.id), "status": "rejected", "reason": reason}

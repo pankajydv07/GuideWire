@@ -14,9 +14,9 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TYPE_UI_META: Record<string, { icon: any, color: string, desc: string }> = {
   heavy_rain: { icon: 'rainy', color: '#10b981', desc: 'Flood detection in urban zones' },
   traffic_congestion: { icon: 'car', color: '#ef4444', desc: 'Major arterial route blockage' },
-  store_closed: { icon: 'storefront', color: '#6366f1', desc: 'Dark store closure detected' },
+  store_closure: { icon: 'storefront', color: '#6366f1', desc: 'Dark store closure detected' },
   platform_outage: { icon: 'phone-portrait', color: '#a855f7', desc: 'Digital infrastructure failure' },
-  regulatory: { icon: 'ban', color: '#f43f5e', desc: 'Emergency movement restrictions' },
+  regulatory_curfew: { icon: 'ban', color: '#f43f5e', desc: 'Emergency movement restrictions' },
   community_signal: { icon: 'megaphone', color: '#f59e0b', desc: 'Community anomaly threshold breached' },
   default: { icon: 'ellipsis-horizontal-circle', color: '#94a3b8', desc: 'Context-specific telemetry' },
 };

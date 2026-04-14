@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  TrendingUp, 
-  Clock, 
-  Zap, 
-  BarChart3, 
-  ArrowRight, 
+import {
+  TrendingUp,
+  Clock,
+  Zap,
+  BarChart3,
+  ArrowRight,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 
+import BorderGlow from "@/components/ui/BorderGlow";
 import { adminApi } from "@/lib/api";
 import {
   formatCurrency,
@@ -23,6 +25,7 @@ import {
 } from "@/lib/format";
 import type { OverviewData } from "@/lib/types";
 import { STATUS_STYLES } from "@/lib/types";
+import { PageContainer } from "@/components/PageContainer";
 
 type ActivityItem = {
   id: string;
@@ -33,31 +36,22 @@ type ActivityItem = {
   status: string;
 };
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0 },
+};
+
 const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
 };
 
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 }
-};
-
-function StatsSkeleton() {
+function StatSkeleton() {
   return (
-    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="glass-card rounded-[2rem] p-8 animate-pulse">
-          <div className="mb-4 h-4 w-24 rounded bg-white/5" />
-          <div className="mb-3 h-10 w-20 rounded bg-white/5" />
-          <div className="h-3 w-32 rounded bg-white/5" />
-        </div>
-      ))}
+    <div className="card p-7 animate-pulse">
+      <div className="skeleton h-3 w-20 mb-5 rounded" />
+      <div className="skeleton h-10 w-24 mb-3 rounded" />
+      <div className="skeleton h-2.5 w-16 rounded" />
     </div>
   );
 }
@@ -70,11 +64,9 @@ export default function AdminOverview() {
 
   useEffect(() => {
     let active = true;
-
     const load = async (showLoading = true) => {
       if (showLoading) setLoading(true);
       else setIsRefreshing(true);
-      
       try {
         const overview = await adminApi.stats.overview();
         if (!active) return;
@@ -82,259 +74,392 @@ export default function AdminOverview() {
         setError(null);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : "The command center lost connection.");
+        setError(err instanceof Error ? err.message : "Connection lost.");
       } finally {
-        if (active) {
-          setLoading(false);
-          setIsRefreshing(false);
-        }
+        if (active) { setLoading(false); setIsRefreshing(false); }
       }
     };
-
     void load();
     const interval = window.setInterval(() => void load(false), 30000);
-
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
 
   const recentActivity = useMemo<ActivityItem[]>(() => {
     if (!data) return [];
-
-    const autoItems = data.autoClaims.map((claim) => ({
-      id: claim.id,
-      rider: claim.rider_name || claim.rider_id.slice(0, 8),
-      trigger: formatTriggerWithEmoji(claim.disruption_type),
-      amountLabel: formatCurrency(claim.payout_amount),
-      created_at: claim.created_at,
-      status: claim.status,
+    const autoItems = data.autoClaims.map((c) => ({
+      id: c.id,
+      rider: c.rider_name || c.rider_id.slice(0, 8),
+      trigger: formatTriggerWithEmoji(c.disruption_type),
+      amountLabel: formatCurrency(c.payout_amount),
+      created_at: c.created_at,
+      status: c.status,
     }));
-
-    const manualItems = data.manualClaims.map((claim) => ({
-      id: claim.id,
-      rider: claim.rider_name || claim.rider_id.slice(0, 8),
-      trigger: formatTriggerWithEmoji(claim.disruption_type),
+    const manualItems = data.manualClaims.map((c) => ({
+      id: c.id,
+      rider: c.rider_name || c.rider_id.slice(0, 8),
+      trigger: formatTriggerWithEmoji(c.disruption_type),
       amountLabel: "Awaiting review",
-      created_at: claim.created_at,
-      status: claim.review_status,
+      created_at: c.created_at,
+      status: c.review_status,
     }));
-
     return [...autoItems, ...manualItems]
-      .sort(
-        (left, right) =>
-          (parseApiDate(right.created_at)?.getTime() || 0) - (parseApiDate(left.created_at)?.getTime() || 0)
-      )
-      .slice(0, 5);
+      .sort((a, b) => (parseApiDate(b.created_at)?.getTime() || 0) - (parseApiDate(a.created_at)?.getTime() || 0))
+      .slice(0, 6);
   }, [data]);
 
   const statsCards = data
     ? [
-        { label: "Total Claims", value: data.stats.total_claims.toString(), color: "from-sky-500 to-indigo-500", icon: TrendingUp },
-        { label: "Pending Review", value: data.stats.pending_review.toString(), color: "from-amber-500 to-orange-500", icon: Clock },
-        { label: "Active Triggers", value: data.stats.active_triggers.toString(), color: "from-rose-500 to-red-500", icon: Zap },
-        { label: "Loss Ratio", value: formatPercent(data.stats.loss_ratio), color: "from-emerald-500 to-teal-500", icon: BarChart3 },
-      ]
+      {
+        label: "Total Claims",
+        value: data.stats.total_claims.toString(),
+        sub: "all time processed",
+        icon: TrendingUp,
+        color: "#7c3aed",
+        glow: "rgba(124,58,237,0.25)",
+        bg: "rgba(124,58,237,0.08)",
+        hsl: "268 100 76",
+      },
+      {
+        label: "Pending Review",
+        value: data.stats.pending_review.toString(),
+        sub: "awaiting action",
+        icon: Clock,
+        color: "#f59e0b",
+        glow: "rgba(245,158,11,0.2)",
+        bg: "rgba(245,158,11,0.07)",
+        hsl: "38 92 50",
+      },
+      {
+        label: "Active Triggers",
+        value: data.stats.active_triggers.toString(),
+        sub: "live disruptions",
+        icon: Zap,
+        color: "#f43f5e",
+        glow: "rgba(244,63,94,0.2)",
+        bg: "rgba(244,63,94,0.07)",
+        hsl: "349 89 60",
+      },
+      {
+        label: "Loss Ratio",
+        value: formatPercent(data.stats.loss_ratio),
+        sub: "payout efficiency",
+        icon: BarChart3,
+        color: "#10b981",
+        glow: "rgba(16,185,129,0.2)",
+        bg: "rgba(16,185,129,0.07)",
+        hsl: "160 84 39",
+      },
+    ]
     : [];
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Command Center</h1>
-          <p className="text-slate-400 font-medium">Real-time surveillance of network disruptions and automated claim flows.</p>
-        </motion.div>
-        
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-3 glass px-4 py-2 rounded-2xl ring-1 ring-white/5"
-        >
-          <RefreshCw className={`w-4 h-4 text-indigo-400 ${isRefreshing ? "animate-spin" : ""}`} />
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Live Sync Active</span>
-        </motion.div>
-      </div>
+    <PageContainer>
+      <div className="space-y-10">
+        {/* Header */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] mb-3" style={{ color: "var(--text-muted)" }}>
+              Admin Dashboard
+            </div>
+            <h1 className="text-4xl font-black tracking-tight mb-1.5" style={{ color: "var(--text-primary)" }}>
+              Command Center
+            </h1>
+            <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+              Real-time surveillance · automated claim flows · disruption monitoring
+            </p>
+          </motion.div>
 
-      {error ? (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="rounded-[2rem] border border-rose-500/20 bg-rose-500/10 p-6 flex items-start gap-4"
-        >
-          <div className="h-10 w-10 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
-             <AlertCircle className="w-5 h-5 text-rose-400" />
-          </div>
-          <div>
-            <div className="text-lg font-bold text-rose-100">Operation Interrupted</div>
-            <div className="mt-1 text-sm text-rose-300/80">{error}</div>
+          <motion.div
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex items-center gap-2.5 rounded-2xl px-4 py-2.5"
+            style={{ background: "rgba(124,58,237,0.07)" }}
+          >
+            <RefreshCw
+              className="w-3.5 h-3.5"
+              style={{ color: "#a855f7", animation: isRefreshing ? "spin 1s linear infinite" : "none" }}
+            />
+            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: "#a855f7" }}>
+              Live Sync
+            </span>
+            <span
+              className="h-1.5 w-1.5 rounded-full animate-pulse"
+              style={{ background: "#a855f7", boxShadow: "0 0 6px rgba(168,85,247,0.7)" }}
+            />
+          </motion.div>
+        </div>
+
+        {/* Error Banner */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-2xl p-4 flex items-center gap-3"
+            style={{
+              background: "rgba(244,63,94,0.07)",
+            }}
+          >
+            <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: "#f43f5e" }} />
+            <span className="text-sm font-medium" style={{ color: "#fca5a5" }}>{error}</span>
             <button
               type="button"
-              className="mt-4 px-5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-rose-500 hover:bg-rose-400 rounded-full transition-colors"
+              className="ml-auto text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg"
+              style={{ background: "rgba(244,63,94,0.15)", color: "#f43f5e" }}
               onClick={() => window.location.reload()}
             >
-              Re-establish Connection
+              Retry
             </button>
-          </div>
-        </motion.div>
-      ) : null}
+          </motion.div>
+        )}
 
-      {loading && !data ? (
-        <StatsSkeleton />
-      ) : (
-        <motion.div 
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="grid gap-6 md:grid-cols-2 xl:grid-cols-4"
-        >
-          {statsCards.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <motion.div 
-                key={stat.label} 
-                variants={item}
-                className="glass-card rounded-[2rem] p-8 group overflow-hidden relative"
-              >
-                <div className={`absolute -right-4 -top-4 w-32 h-32 bg-gradient-to-br ${stat.color} opacity-5 blur-3xl group-hover:opacity-15 transition-opacity duration-500`} />
-                <div className="mb-6 flex items-center justify-between">
-                  <div className={`h-12 w-12 rounded-2xl bg-gradient-to-br ${stat.color} p-3 shadow-lg shadow-black/20 ring-1 ring-white/10 group-hover:scale-110 transition-transform duration-300`}>
-                    <Icon className="w-full h-full text-white" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{stat.label}</div>
-                  <div className="text-4xl font-bold tracking-tight text-white">{stat.value}</div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-      )}
-
-      <div className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="glass-card rounded-[2.5rem] p-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8">
-             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" /> Stream
-             </div>
+        {/* Stats Grid */}
+        {loading && !data ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <StatSkeleton key={i} />)}
           </div>
-          
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-white">Recent Activity</h2>
-            <p className="text-sm text-slate-500 mt-1">Audit log of system-generated and reviewed events.</p>
-          </div>
-
-          <div className="space-y-4">
-            <AnimatePresence mode="popLayout">
-              {recentActivity.length === 0 ? (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/20 px-4 py-12 text-center text-sm text-slate-500"
+        ) : (
+          <motion.div
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          >
+            {statsCards.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <motion.div
+                  key={stat.label}
+                  variants={fadeUp}
+                  className="flex"
                 >
-                  Silence on the network. No recent activity detected.
-                </motion.div>
-              ) : (
-                recentActivity.map((item, idx) => (
-                  <motion.div 
-                    key={item.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="group flex flex-col gap-4 rounded-3xl border border-slate-800/40 bg-slate-900/30 p-5 md:flex-row md:items-center md:justify-between hover:bg-slate-900/50 hover:border-slate-700/60 transition-all duration-300"
+                  <BorderGlow
+                    className="flex-1 w-full"
+                    glowColor={stat.hsl}
+                    colors={[stat.color, "#000000", stat.color]}
+                    backgroundColor="#000000"
+                    animated={false}
                   >
-                    <div className="flex items-center gap-4">
-                       <div className="h-10 w-10 rounded-full bg-slate-800/50 flex flex-col items-center justify-center text-[10px] font-bold text-slate-500 group-hover:scale-110 transition-transform">
-                          ID
-                       </div>
-                       <div>
-                          <div className="text-sm font-bold text-slate-100">{item.rider}</div>
-                          <div className="mt-1 text-xs text-slate-400 flex items-center gap-2">
-                             {item.trigger}
+                    <div className="card p-6 relative overflow-hidden group h-full bg-transparent border-none">
+                      <div className="relative flex justify-between items-start">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: "var(--text-muted)" }}>
+                            {stat.label}
                           </div>
-                       </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between md:justify-end gap-6">
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-white">{item.amountLabel}</div>
-                        <div className="text-[10px] font-medium text-slate-500 mt-0.5">{formatRelativeTime(item.created_at)}</div>
+                          <div className="text-4xl font-black tracking-tight mb-1" style={{ color: stat.color }}>
+                            {stat.value}
+                          </div>
+                          <div className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
+                            {stat.sub}
+                          </div>
+                        </div>
+                        <div
+                          className="flex flex-shrink-0 items-center justify-center rounded-2xl"
+                          style={{
+                            width: 48,
+                            height: 48,
+                            background: stat.bg,
+                            border: `1px solid ${stat.color}22`,
+                          }}
+                        >
+                          <Icon className="w-5 h-5" style={{ color: stat.color }} />
+                        </div>
                       </div>
-                      <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider ${STATUS_STYLES[item.status] || STATUS_STYLES.pending}`}>
-                        {item.status.replace(/_/g, " ")}
-                      </span>
                     </div>
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
-          </div>
-          
-          <button className="mt-8 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors group">
-             View Full Archive <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </section>
-
-        <section className="glass-card rounded-[2.5rem] p-8">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-white">Live Disruptions</h2>
-              <p className="text-sm text-slate-500 mt-1">Anomalies currently affecting network zones.</p>
-            </div>
-            <div className="h-10 w-10 rounded-2xl bg-rose-500/10 flex items-center justify-center ring-1 ring-rose-500/20">
-               <Zap className="w-5 h-5 text-rose-500" />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {!data || data.triggerStatus.active_triggers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/20 px-4 py-12 text-center text-sm text-slate-500">
-                Network status clear. No active disruptions.
-              </div>
-            ) : (
-              data.triggerStatus.active_triggers.map((trigger, idx) => (
-                <motion.div 
-                  key={trigger.trigger_id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="rounded-3xl border border-slate-800/40 bg-slate-950/40 p-6 relative overflow-hidden group"
-                >
-                  <div className="absolute top-0 right-0 p-6">
-                     <span className="rounded-full bg-rose-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-rose-400 ring-1 ring-rose-500/20">
-                        {trigger.severity}
-                     </span>
-                  </div>
-                  
-                  <div className="mb-6">
-                    <div className="text-lg font-bold text-white flex items-center gap-2">
-                       {formatTriggerWithEmoji(trigger.type)}
-                    </div>
-                    <div className="mt-1 text-xs font-medium text-slate-500">{trigger.zone}</div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                       <TrendingUp className="w-4 h-4 text-slate-600" />
-                       <span className="text-xs font-bold text-slate-300">{trigger.affected_riders}</span>
-                       <span className="text-xs text-slate-500 font-medium">riders affected</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-400">
-                       <Clock className="w-3 h-3" />
-                       {formatDurationSince(trigger.active_since)}
-                    </div>
-                  </div>
+                  </BorderGlow>
                 </motion.div>
-              ))
-            )}
-          </div>
-        </section>
+              );
+            })}
+          </motion.div>
+        )}
+
+        {/* Main Content Row */}
+        <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+          {/* Recent Activity */}
+          <section
+            className="rounded-2xl p-7"
+            style={{ background: "var(--bg-surface)" }}
+          >
+            <div className="flex items-center justify-between mb-7">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                  Audit Stream
+                </div>
+                <h2 className="text-xl font-black" style={{ color: "var(--text-primary)" }}>Recent Activity</h2>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "#a855f7" }} />
+                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                  Live
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 h-[300px] overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
+              <AnimatePresence mode="popLayout">
+                {recentActivity.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="rounded-xl py-14 text-center text-xs font-bold uppercase tracking-widest"
+                    style={{
+                      background: "var(--bg-elevated)",
+                      border: "1px dashed var(--border-subtle)",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    No recent activity
+                  </motion.div>
+                ) : (
+                  recentActivity.map((act, idx) => (
+                    <motion.div
+                      key={act.id}
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.04 }}
+                      className="group flex items-center justify-between gap-4 rounded-xl px-4 py-3.5 transition-all duration-200"
+                      style={{
+                        background: "var(--bg-elevated)",
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="flex-shrink-0 flex items-center justify-center rounded-full text-[9px] font-black"
+                          style={{
+                            width: 34,
+                            height: 34,
+                            background: "rgba(124,58,237,0.12)",
+                            color: "#a855f7",
+                          }}
+                        >
+                          {act.rider.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                            {act.rider}
+                          </div>
+                          <div className="text-[10px] font-medium mt-0.5" style={{ color: "var(--text-muted)" }}>
+                            {act.trigger}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="text-right">
+                          <div className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                            {act.amountLabel}
+                          </div>
+                          <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            {formatRelativeTime(act.created_at)}
+                          </div>
+                        </div>
+                        <span className={STATUS_STYLES[act.status] || STATUS_STYLES.pending}>
+                          {act.status.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button
+              className="mt-5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest transition-all group"
+              style={{ color: "#a855f7" }}
+            >
+              View Full Archive
+              <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </section>
+
+          {/* Live Disruptions */}
+          <BorderGlow backgroundColor="#000000" animated={false}>
+            <section
+              className="rounded-2xl p-7 bg-transparent border-none"
+            >
+              <div className="flex items-center justify-between mb-7">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-widest mb-1.5" style={{ color: "var(--text-muted)" }}>
+                    Network
+                  </div>
+                  <h2 className="text-xl font-black" style={{ color: "var(--text-primary)" }}>Live Disruptions</h2>
+                </div>
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    background: "rgba(244,63,94,0.08)",
+                  }}
+                >
+                  <Zap className="w-4 h-4" style={{ color: "#f43f5e" }} />
+                </div>
+              </div>
+
+              <div className="space-y-3 h-[300px] overflow-y-auto pr-2" style={{ scrollbarWidth: "thin" }}>
+                {!data || data.triggerStatus.active_triggers.length === 0 ? (
+                  <div
+                    className="rounded-xl py-14 text-center"
+                    style={{
+                      background: "var(--bg-elevated)",
+                    }}
+                  >
+                    <CheckCircle2 className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+                    <div className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                      All Clear
+                    </div>
+                    <div className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                      No active disruptions
+                    </div>
+                  </div>
+                ) : (
+                  data.triggerStatus.active_triggers.map((trigger, idx) => (
+                    <motion.div
+                      key={trigger.trigger_id}
+                      initial={{ opacity: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.08 }}
+                      className="rounded-xl p-5 relative overflow-hidden"
+                      style={{
+                        background: "rgba(244,63,94,0.05)",
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
+                          {formatTriggerWithEmoji(trigger.type)}
+                        </div>
+                        <span
+                          className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full"
+                          style={{ background: "rgba(244,63,94,0.12)", color: "#fca5a5" }}
+                        >
+                          {trigger.severity}
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-medium mb-3" style={{ color: "var(--text-muted)" }}>
+                        {trigger.zone}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <TrendingUp className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
+                          <span className="text-[10px] font-bold" style={{ color: "var(--text-secondary)" }}>
+                            {trigger.affected_riders} riders
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" style={{ color: "#a855f7" }} />
+                          <span className="text-[10px] font-bold" style={{ color: "#a855f7" }}>
+                            {formatDurationSince(trigger.active_since)}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </section>
+          </BorderGlow>
+        </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

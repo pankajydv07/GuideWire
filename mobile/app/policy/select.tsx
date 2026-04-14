@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { api, type PolicyQuoteResponse } from '../../services/api';
-import Colors from '../../constants/Colors';
-
-const { width } = Dimensions.get('window');
+import { api, type PolicyQuoteResponse, type PolicyResponse } from '../../services/api';
 
 const tierLabel = (tier: string) => tier.replace('_', ' ').toUpperCase();
+
 const tierIcon = (tier: string) => {
   if (tier === 'essential') return 'shield-outline';
   if (tier === 'balanced') return 'shield-half';
@@ -28,37 +27,52 @@ const tierColor = (tier: string) => {
 export default function PolicySelectScreen() {
   const { rider } = useAuth();
   const [quote, setQuote] = useState<PolicyQuoteResponse | null>(null);
+  const [activePolicy, setActivePolicy] = useState<PolicyResponse | null>(null);
   const [selectedTier, setSelectedTier] = useState('balanced');
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<'renew' | 'cancel' | null>(null);
+
+  const fetchPolicyData = useCallback(async () => {
+    let slots = '18:00-21:00,21:00-23:00';
+    try {
+      const stored = await AsyncStorage.getItem('rider_slots');
+      if (stored) {
+        const parsed: string[] = JSON.parse(stored);
+        if (parsed.length > 0) slots = parsed.join(',');
+      }
+    } catch {}
+
+    try {
+      const [quoteData, activePolicyData] = await Promise.all([
+        api.policies.getQuote(slots, rider?.city ?? ''),
+        api.policies.getActive().catch(() => null),
+      ]);
+      setQuote(quoteData);
+      setActivePolicy(activePolicyData);
+      if (activePolicyData?.plan_tier) {
+        setSelectedTier(activePolicyData.plan_tier);
+      }
+    } catch (error) {
+      console.error('Error fetching policy state:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [rider?.city]);
 
   useEffect(() => {
-    const fetchQuote = async () => {
-      let slots = '18:00-21:00,21:00-23:00';
-      try {
-        const stored = await AsyncStorage.getItem('rider_slots');
-        if (stored) {
-          const parsed: string[] = JSON.parse(stored);
-          if (parsed.length > 0) slots = parsed.join(',');
-        }
-      } catch (_error) {}
+    fetchPolicyData().catch(console.error);
+  }, [fetchPolicyData]);
 
-      try {
-        const data = await api.policies.getQuote(slots, rider?.city ?? '');
-        setQuote(data);
-      } catch (error) {
-        console.error('Error fetching quotes:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuote().catch(console.error);
-  }, [rider?.city]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchPolicyData().catch(console.error);
+    }, [fetchPolicyData])
+  );
 
   const selectedQuote = quote?.quotes.find((entry) => entry.tier === selectedTier) ?? quote?.quotes[0];
 
   const handleContinue = () => {
-    if (!selectedQuote || !quote) return;
+    if (!selectedQuote || !quote || activePolicy) return;
 
     router.push({
       pathname: '/policy/payment',
@@ -72,6 +86,52 @@ export default function PolicySelectScreen() {
         zone_name: quote.zone_name,
       },
     });
+  };
+
+  const handleRenew = async () => {
+    if (!activePolicy) return;
+    setActionLoading('renew');
+    try {
+      console.log('Renewing with tier:', selectedTier, 'Policy ID:', activePolicy.policy_id);
+      const response = await api.policies.renew(activePolicy.policy_id, selectedTier);
+      console.log('Renewal response:', response);
+      Alert.alert('Renewal scheduled', `Next week will use the ${tierLabel(selectedTier)} plan.`);
+      await fetchPolicyData();
+    } catch (error) {
+      console.error('Renewal error:', error);
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+      Alert.alert('Renewal failed', errorMsg);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancel = () => {
+    if (!activePolicy) return;
+    Alert.alert(
+      'Cancel current policy',
+      'This will deactivate your current weekly policy immediately.',
+      [
+        { text: 'Keep Policy', style: 'cancel' },
+        {
+          text: 'Cancel Policy',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading('cancel');
+            try {
+              await api.policies.cancel(activePolicy.policy_id);
+              setActivePolicy(null);
+              Alert.alert('Policy cancelled', 'Your active weekly cover has been cancelled.');
+              await fetchPolicyData();
+            } catch (error) {
+              Alert.alert('Cancellation failed', error instanceof Error ? error.message : 'Unable to cancel policy.');
+            } finally {
+              setActionLoading(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -93,14 +153,47 @@ export default function PolicySelectScreen() {
 
         {quote ? (
           <>
+            {activePolicy ? (
+              <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.activePolicyCard}>
+                <View style={styles.activePolicyHeader}>
+                  <Text style={styles.activePolicyTitle}>Active Weekly Policy</Text>
+                  <Text style={styles.activePolicyBadge}>{activePolicy.plan_tier.replace('_', ' ').toUpperCase()}</Text>
+                </View>
+                <Text style={styles.activePolicyMeta}>
+                  Current premium: ₹{activePolicy.premium} • Claimed: ₹{activePolicy.coverage_used ?? 0} / ₹{activePolicy.coverage_limit}
+                </Text>
+                <Text style={styles.activePolicyMeta}>
+                  Hours remaining: {activePolicy.hours_remaining ?? 0} • Week {activePolicy.coverage_week}
+                </Text>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.secondaryActionBtn, actionLoading !== null && styles.actionDisabled]}
+                    onPress={handleRenew}
+                    disabled={actionLoading !== null}
+                  >
+                    <Text style={styles.secondaryActionText}>
+                      {actionLoading === 'renew' ? 'Scheduling…' : `Renew Next Week (${tierLabel(selectedTier)})`}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dangerActionBtn, actionLoading !== null && styles.actionDisabled]}
+                    onPress={handleCancel}
+                    disabled={actionLoading !== null}
+                  >
+                    <Text style={styles.dangerActionText}>
+                      {actionLoading === 'cancel' ? 'Cancelling…' : 'Cancel Current'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            ) : null}
+
             <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.riskCard}>
               <View style={styles.riskHeader}>
-                 <Ionicons name="location" size={16} color="#f59e0b" />
-                 <Text style={styles.riskTitle}>{quote.zone_name || rider?.zone || 'Selected Zone'} Alert</Text>
+                <Ionicons name="location" size={16} color="#f59e0b" />
+                <Text style={styles.riskTitle}>{quote.zone_name || rider?.zone || 'Selected Zone'} Alert</Text>
               </View>
-              <Text style={styles.riskText}>
-                Hazard Index: {quote.zone_risk_score}/100
-              </Text>
+              <Text style={styles.riskText}>Hazard Index: {quote.zone_risk_score}/100</Text>
               {quote.explanation ? <Text style={styles.riskSubtext}>{quote.explanation}</Text> : null}
             </Animated.View>
 
@@ -128,13 +221,13 @@ export default function PolicySelectScreen() {
                           <Text style={styles.tierSub}>WEEKLY PROTECTION</Text>
                         </View>
                         <View style={styles.priceContainer}>
-                           <Text style={styles.currency}>₹</Text>
-                           <Text style={styles.price}>{tier.weekly_premium}</Text>
+                          <Text style={styles.currency}>₹</Text>
+                          <Text style={styles.price}>{tier.weekly_premium}</Text>
                         </View>
                       </View>
-                      
+
                       <View style={styles.divider} />
-                      
+
                       <View style={styles.featureRow}>
                         <Ionicons name="checkmark-circle" size={14} color="#10b981" />
                         <Text style={styles.featureText}>{tier.coverage_pct}% Yield Recovery</Text>
@@ -155,14 +248,14 @@ export default function PolicySelectScreen() {
               })}
             </View>
 
-            <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} disabled={!selectedQuote}>
-              <Text style={styles.continueText}>Initiate Protocol →</Text>
+            <TouchableOpacity style={[styles.continueBtn, activePolicy && styles.actionDisabled]} onPress={handleContinue} disabled={!selectedQuote || !!activePolicy}>
+              <Text style={styles.continueText}>{activePolicy ? 'Current Week Already Protected' : 'Initiate Protocol →'}</Text>
             </TouchableOpacity>
           </>
         ) : (
           <View style={styles.errorCard}>
-             <Ionicons name="alert-circle" size={32} color="#f43f5e" />
-             <Text style={styles.errorText}>Parametric link unstable. Retrying telemetry...</Text>
+            <Ionicons name="alert-circle" size={32} color="#f43f5e" />
+            <Text style={styles.errorText}>Parametric link unstable. Retrying telemetry...</Text>
           </View>
         )}
         <View style={{ height: 40 }} />
@@ -178,6 +271,17 @@ const styles = StyleSheet.create({
   scroll: { padding: 24, gap: 24 },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
   subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '700' },
+  activePolicyCard: { backgroundColor: 'rgba(56, 189, 248, 0.06)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.18)' },
+  activePolicyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  activePolicyTitle: { color: '#e0f2fe', fontSize: 15, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
+  activePolicyBadge: { color: '#38bdf8', fontSize: 11, fontWeight: '900' },
+  activePolicyMeta: { color: '#cbd5e1', fontSize: 13, lineHeight: 20, fontWeight: '600' },
+  actionRow: { gap: 12, marginTop: 18 },
+  secondaryActionBtn: { backgroundColor: 'rgba(56, 189, 248, 0.18)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
+  secondaryActionText: { color: '#e0f2fe', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
+  dangerActionBtn: { backgroundColor: 'rgba(244, 63, 94, 0.14)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
+  dangerActionText: { color: '#fecdd3', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
+  actionDisabled: { opacity: 0.6 },
   riskCard: { backgroundColor: 'rgba(245, 158, 11, 0.05)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.15)' },
   riskHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   riskTitle: { color: '#f59e0b', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },

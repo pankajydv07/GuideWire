@@ -15,6 +15,19 @@ from premium_service.service import calculate_premium as calculate_risk_premium
 router = APIRouter()
 
 
+def _slot_average_earnings(baselines, selected_slots: list[str]) -> float:
+    if not baselines:
+        return 600.0
+
+    baseline_map = {b.slot_time: b.avg_earnings for b in baselines}
+    matching = [baseline_map[slot] for slot in selected_slots if slot in baseline_map]
+    if matching:
+        return max(sum(matching) / len(matching), 1)
+
+    all_values = [b.avg_earnings for b in baselines]
+    return max(sum(all_values) / max(len(all_values), 1), 1)
+
+
 # ─── POST /send-otp ─────────────────────────────────
 @router.post("/send-otp", response_model=OTPResponse)
 async def send_otp(request: OTPRequest):
@@ -118,12 +131,23 @@ async def onboard(data: dict, rider=Depends(get_current_rider), db: AsyncSession
     baselines = bl_result.scalars().all()
 
     # 4. Call the real premium engine directly
+    from datetime import datetime, timezone
+
+    created_at = rider.created_at
+    if getattr(created_at, "tzinfo", None) is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    rider_tenure_days = max((datetime.now(timezone.utc) - created_at).days, 0)
+
+    selected_slots = data.get("typical_slots", ["18:00-21:00"])
+    rider_avg_earnings = _slot_average_earnings(baselines, selected_slots)
+
     premium_response = await calculate_risk_premium(
         zone=zone.name if zone else rider.city,
-        slots=data.get("typical_slots", ["18:00-21:00"]),
+        slots=selected_slots,
         plan_tier=data.get("plan_tier", "balanced"),
-        rider_tenure_days=90,
+        rider_tenure_days=rider_tenure_days,
         db=db,
+        rider_avg_earnings=rider_avg_earnings,
     )
 
     # 5. Build volatility label
