@@ -29,6 +29,12 @@ class ScenarioKey:
     DARK_STORE_QUEUE  = "DARK_STORE_QUEUE"
     ALGORITHMIC_SHOCK = "ALGORITHMIC_SHOCK"
     REGULATORY_CURFEW = "REGULATORY_CURFEW"
+    INVENTORY_STOCKOUT = "INVENTORY_STOCKOUT"
+    ROAD_CLOSURE       = "ROAD_CLOSURE"
+    RWA_FRICTION       = "RWA_FRICTION"
+    CIVIC_EVENT        = "CIVIC_EVENT"
+    GRAP_BAN           = "GRAP_BAN"
+    SUPPLY_CASCADE     = "SUPPLY_CASCADE"
 
 
 @dataclass
@@ -159,6 +165,7 @@ def get_rider_snapshot(rider_id: str, zone_id: str) -> dict:
     shadow_dur     = 0
     alloc_anomaly  = False
     curfew         = False
+    grap_vehicle_ban = False
     dispatch_lat   = int(_gamma_approx(rng, 2, 45))
     queue_depth    = _poisson(rng, 4)
     wait_sec       = max(30, int(_gamma_approx(rng, 2, 90)))
@@ -194,6 +201,7 @@ def get_rider_snapshot(rider_id: str, zone_id: str) -> dict:
         elif k == ScenarioKey.GPS_SHADOWBAN:
             shadowban     = True
             shadow_dur    = min(120, int((now - scenario.injected_at).total_seconds() // 60))
+            rider_status  = "OFFLINE"
             orders_hr     = 0
             current_earn  = 0
             alloc_anomaly = True
@@ -216,6 +224,53 @@ def get_rider_snapshot(rider_id: str, zone_id: str) -> dict:
             current_earn  = 0
             drop_pct      = 100.0
 
+        elif k == ScenarioKey.INVENTORY_STOCKOUT:
+            store         = "DEGRADED"
+            stock         = "CRITICAL"
+            drop_pct_     = rng.uniform(30, 50)
+            orders_hr     = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn  = orders_hr * earn_per_order
+            drop_pct      = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+
+        elif k == ScenarioKey.ROAD_CLOSURE:
+            road_blocked  = True
+            drop_pct_     = rng.uniform(50, 70)
+            orders_hr     = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn  = orders_hr * earn_per_order
+            drop_pct      = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+
+        elif k == ScenarioKey.RWA_FRICTION:
+            dispatch_lat  = rng.randint(320, 600)
+            drop_pct_     = rng.uniform(25, 40)
+            orders_hr     = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn  = orders_hr * earn_per_order
+            drop_pct      = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+
+        elif k == ScenarioKey.CIVIC_EVENT:
+            congestion    = rng.randint(90, 100)
+            road_blocked  = rng.random() < 0.20
+            drop_pct_     = rng.uniform(40, 60)
+            orders_hr     = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn  = orders_hr * earn_per_order
+            drop_pct      = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+
+        elif k == ScenarioKey.GRAP_BAN:
+            grap_vehicle_ban = True
+            curfew        = rng.random() < 0.60
+            if curfew:
+                rider_status = "OFFLINE"
+            drop_pct_     = rng.uniform(60, 80)
+            orders_hr     = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn  = orders_hr * earn_per_order
+            drop_pct      = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+
+        elif k == ScenarioKey.SUPPLY_CASCADE:
+            stock         = "CRITICAL"
+            drop_pct_     = rng.uniform(50, 70)
+            orders_hr     = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn  = orders_hr * earn_per_order
+            drop_pct      = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+
     return {
         "time":                    now,
         "rider_id":                rider_id,
@@ -234,6 +289,7 @@ def get_rider_snapshot(rider_id: str, zone_id: str) -> dict:
         "shadowban_duration_min":  shadow_dur,
         "allocation_anomaly":      alloc_anomaly,
         "curfew_active":           curfew,
+        "grap_vehicle_ban":        grap_vehicle_ban,
         "congestion_index":        congestion,
         "road_blocked":            road_blocked,
         "pickup_queue_depth":      queue_depth,

@@ -36,6 +36,7 @@ _trigger_active_since: dict[str, datetime] = {}   # key: "trigger_type:zone_id"
 _active_triggers_cache: list[dict] = []            # filled each scheduler cycle
 _community_signals_cache: list[dict] = []
 _last_evaluation: Optional[datetime] = None
+_civic_congestion_window: dict[str, list[tuple[datetime, int]]] = {}
 
 # Dedup: zone+trigger+slot already created
 _created_events: set[str] = set()   # "zone_id:trigger_type:slot_start_iso"
@@ -49,9 +50,18 @@ CONGESTION_DURATION   = 55      # minutes sustained (rounds run every 5 min)
 COMMUNITY_PCT         = 0.70    # > 70% riders affected
 EARNINGS_DROP_PCT     = 20.0    # must drop ≥ 20% vs baseline
 SHADOWBAN_DURATION    = 30      # minutes
+SHADOWBAN_CONFIRMATION_MIN = 10 # minutes before confirmation can lock
 QUEUE_WAIT_THRESHOLD  = 300     # 5 min pickup wait SLA breach
 QUEUE_DEPTH_THRESHOLD = 12
 ALGO_DROP_THRESHOLD   = 50.0
+STOCKOUT_ORDER_DROP_THRESHOLD = 40.0
+RWA_DISPATCH_LATENCY_THRESHOLD = 300
+RWA_ORDER_DROP_THRESHOLD = 30.0
+CIVIC_CONGESTION_SPIKE = 90
+CIVIC_SPIKE_WINDOW_MIN = 10
+CIVIC_SPIKE_DELTA = 20
+SUPPLY_CASCADE_ZONE_STOCKOUT_PCT = 0.50
+SUPPLY_CASCADE_ORDER_DROP = 35.0
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,6 +95,23 @@ def _three_factor_valid(snap: dict) -> bool:
     return drop >= EARNINGS_DROP_PCT
 
 
+def _trigger_gate_valid(trigger_type: str, snap: dict) -> bool:
+    """
+    Trigger-aware gate validation.
+
+    Most triggers use the standard three-factor rule. GPS shadowban is special:
+    the platform can intentionally force rider OFFLINE first, so ONLINE is not
+    required for this trigger.
+    """
+    if trigger_type == "gps_shadowban":
+        baseline = snap.get("earnings_rolling_baseline", 0) or 1
+        current = snap.get("earnings_current_slot", 0) or 0
+        drop = (baseline - current) / baseline * 100
+        ban_applied = bool(snap.get("shadowban_active")) and snap.get("rider_status") == "OFFLINE"
+        return ban_applied and drop >= EARNINGS_DROP_PCT
+    return _three_factor_valid(snap)
+
+
 # ─── Per-trigger evaluators ───────────────────────────────────────────────────
 def eval_heavy_rain(weather: dict, zone: dict) -> Optional[dict]:
     rain = weather.get("rainfall_mm", 0) or 0
@@ -113,24 +140,53 @@ def eval_heat(weather: dict, zone: dict) -> Optional[dict]:
 
 def eval_traffic(snap: dict, zone: dict) -> Optional[dict]:
     ci = snap.get("congestion_index", 0) or 0
-    rb = snap.get("road_blocked", False)
     tk = _trigger_key("traffic_congestion", zone["id"])
 
-    if ci > CONGESTION_THRESHOLD or rb:
+    if ci > CONGESTION_THRESHOLD:
         if tk not in _trigger_active_since:
             _trigger_active_since[tk] = datetime.now(timezone.utc)
         elapsed = (datetime.now(timezone.utc) - _trigger_active_since[tk]).total_seconds() / 60
-        if elapsed >= CONGESTION_DURATION or rb:
+        if elapsed >= CONGESTION_DURATION:
             return {
                 "trigger_type": "traffic_congestion",
                 "severity":     "medium",
-                "threshold":    f"congestion={ci}/100 road_blocked={rb}",
-                "data":         {"congestion_index": ci, "road_blocked": rb, "elapsed_min": elapsed},
+                "threshold":    f"congestion={ci}/100 sustained>={CONGESTION_DURATION}min",
+                "data":         {"congestion_index": ci, "elapsed_min": elapsed},
             }
         return None   # not yet sustained
     else:
         _trigger_active_since.pop(tk, None)
         return None
+
+
+def eval_stockout(snap: dict, zone: dict) -> Optional[dict]:
+    drop_pct = snap.get("order_rate_drop_pct", 0) or 0
+    if snap.get("stock_level") == "CRITICAL" and drop_pct >= STOCKOUT_ORDER_DROP_THRESHOLD:
+        return {
+            "trigger_type": "inventory_stockout",
+            "severity":     "medium",
+            "threshold":    f"stock=CRITICAL order_drop={drop_pct:.1f}%",
+            "data":         {
+                "stock_level": snap.get("stock_level"),
+                "order_rate_drop_pct": drop_pct,
+                "store_status": snap.get("store_status"),
+            },
+        }
+    return None
+
+
+def eval_road_closure(snap: dict, zone: dict) -> Optional[dict]:
+    if snap.get("road_blocked") is True:
+        return {
+            "trigger_type": "road_closure",
+            "severity":     "high",
+            "threshold":    "road_blocked=TRUE",
+            "data":         {
+                "road_blocked": True,
+                "congestion_index": snap.get("congestion_index"),
+            },
+        }
+    return None
 
 
 def eval_store_closure(snap: dict, zone: dict) -> Optional[dict]:
@@ -168,13 +224,20 @@ def eval_curfew(snap: dict, zone: dict) -> Optional[dict]:
 
 def eval_gps_shadowban(snap: dict, zone: dict) -> Optional[dict]:
     duration = snap.get("shadowban_duration_min", 0) or 0
-    if snap.get("shadowban_active") and (duration >= SHADOWBAN_DURATION or snap.get("allocation_anomaly")):
+    ban_applied = bool(snap.get("shadowban_active")) and snap.get("rider_status") == "OFFLINE"
+    confirmed = bool(snap.get("allocation_anomaly")) or duration >= SHADOWBAN_CONFIRMATION_MIN
+
+    # Shadowban flow is ban-first: rider is blocked from delivery, then confirmed.
+    if ban_applied and confirmed:
         return {
             "trigger_type": "gps_shadowban",
             "severity":     "medium",
-            "threshold":    f"shadowban_active=TRUE duration={duration}min",
+            "threshold":    f"shadowban_ban=TRUE confirm_after={duration}min",
             "data":         {
                 "shadowban_duration_min": duration,
+                "rider_status": snap.get("rider_status"),
+                "ban_applied": ban_applied,
+                "confirmed": confirmed,
                 "allocation_anomaly": snap.get("allocation_anomaly", False),
             },
         }
@@ -214,6 +277,68 @@ def eval_algorithmic_shock(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
+def eval_rwa_friction(snap: dict, zone: dict) -> Optional[dict]:
+    latency = snap.get("dispatch_latency_sec", 0) or 0
+    drop_pct = snap.get("order_rate_drop_pct", 0) or 0
+    if latency >= RWA_DISPATCH_LATENCY_THRESHOLD and drop_pct >= RWA_ORDER_DROP_THRESHOLD:
+        return {
+            "trigger_type": "rwa_friction",
+            "severity":     "low",
+            "threshold":    f"dispatch_latency={latency}s order_drop={drop_pct:.1f}%",
+            "data":         {
+                "dispatch_latency_sec": latency,
+                "order_rate_drop_pct": drop_pct,
+            },
+        }
+    return None
+
+
+def eval_civic_event(snap: dict, zone: dict) -> Optional[dict]:
+    zone_id = zone["id"]
+    now = datetime.now(timezone.utc)
+    ci = snap.get("congestion_index", 0) or 0
+    cutoff = now - timedelta(minutes=CIVIC_SPIKE_WINDOW_MIN)
+    prev = [
+        (ts, val)
+        for ts, val in _civic_congestion_window.get(zone_id, [])
+        if ts >= cutoff
+    ]
+    base = min((val for _, val in prev), default=ci)
+    delta = ci - base
+
+    _civic_congestion_window[zone_id] = [*prev, (now, ci)]
+
+    if ci >= CIVIC_CONGESTION_SPIKE and delta >= CIVIC_SPIKE_DELTA:
+        return {
+            "trigger_type": "civic_event",
+            "severity":     "medium",
+            "threshold":    (
+                f"congestion={ci}/100 delta={delta} "
+                f"window={CIVIC_SPIKE_WINDOW_MIN}min"
+            ),
+            "data":         {
+                "congestion_index": ci,
+                "congestion_delta": delta,
+                "road_blocked": bool(snap.get("road_blocked", False)),
+            },
+        }
+    return None
+
+
+def eval_grap_ban(snap: dict, zone: dict) -> Optional[dict]:
+    if snap.get("grap_vehicle_ban") is True:
+        return {
+            "trigger_type": "grap_vehicle_ban",
+            "severity":     "critical",
+            "threshold":    "grap_vehicle_ban=TRUE",
+            "data":         {
+                "grap_vehicle_ban": True,
+                "curfew_active": bool(snap.get("curfew_active", False)),
+            },
+        }
+    return None
+
+
 # ─── Community Signal ──────────────────────────────────────────────────────────
 def eval_community_signal(snapshots: list[dict], zone: dict) -> Optional[dict]:
     total = len(snapshots)
@@ -233,6 +358,32 @@ def eval_community_signal(snapshots: list[dict], zone: dict) -> Optional[dict]:
             "affected_riders": affected,
             "total_riders":    total,
             "detected_at":     datetime.now(timezone.utc),
+        }
+    return None
+
+
+def eval_supply_cascade(snapshots: list[dict], zone: dict) -> Optional[dict]:
+    total = len(snapshots)
+    if total == 0:
+        return None
+
+    critical = [s for s in snapshots if s.get("stock_level") == "CRITICAL"]
+    critical_ratio = len(critical) / total
+    avg_drop = sum((s.get("order_rate_drop_pct") or 0) for s in snapshots) / total
+
+    if critical_ratio >= SUPPLY_CASCADE_ZONE_STOCKOUT_PCT and avg_drop >= SUPPLY_CASCADE_ORDER_DROP:
+        return {
+            "trigger_type": "supply_cascade",
+            "severity":     "high",
+            "threshold":    (
+                f"critical_stock_pct={critical_ratio*100:.1f}% avg_order_drop={avg_drop:.1f}%"
+            ),
+            "data":         {
+                "critical_stock_pct": round(critical_ratio * 100, 1),
+                "avg_order_rate_drop_pct": round(avg_drop, 1),
+                "critical_riders": len(critical),
+                "total_riders": total,
+            },
         }
     return None
 
@@ -282,22 +433,31 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
 
         # ── Rider-level triggers (need three-factor gate) ─────────────────────
         rider_trigger_counts: dict[str, int] = {}
+        rider_trigger_samples: dict[str, dict] = {}
 
         for snap in snaps:
             for eval_fn in (
                 eval_traffic,
+                eval_stockout,
+                eval_road_closure,
                 eval_store_closure,
                 eval_platform_outage,
                 eval_curfew,
                 eval_gps_shadowban,
                 eval_dark_store_queue,
                 eval_algorithmic_shock,
+                eval_rwa_friction,
+                eval_civic_event,
+                eval_grap_ban,
             ):
                 result = eval_fn(snap, zone)
                 if result:
-                    if _three_factor_valid(snap):
+                    if _trigger_gate_valid(result["trigger_type"], snap):
                         ttype = result["trigger_type"]
+                        if ttype == "civic_event" and rider_trigger_counts.get("traffic_congestion", 0) > 0:
+                            continue
                         rider_trigger_counts[ttype] = rider_trigger_counts.get(ttype, 0) + 1
+                        rider_trigger_samples.setdefault(ttype, result)
 
         for ttype, count in rider_trigger_counts.items():
             dk = _dedup_key(zid, ttype, slot_start)
@@ -305,11 +465,13 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
                 # Rebuild result dict from a relevant snap
                 if not snaps: continue
                 sample_snap = snaps[0]
+                sample_result = rider_trigger_samples.get(ttype, {})
+                sample_data = sample_result.get("data", {}) if isinstance(sample_result, dict) else {}
                 result_data = {
                     "trigger_type": ttype,
                     "severity":     _severity_for(ttype),
-                    "threshold":    _threshold_for(ttype, sample_snap),
-                    "data":         {"affected_count": count},
+                    "threshold":    sample_result.get("threshold", _threshold_for(ttype, sample_snap)),
+                    "data":         {**sample_data, "affected_count": count},
                 }
                 event_id = await _create_event(
                     db, result_data, zid, zname, slot_start, slot_end, count
@@ -341,6 +503,31 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
                     zid, zname, slot_start, slot_end, sig["affected_riders"]
                 )
                 _created_events.add(dk)
+
+        cascade = eval_supply_cascade(snaps, zone)
+        if cascade:
+            dk = _dedup_key(zid, cascade["trigger_type"], slot_start)
+            if dk not in _created_events:
+                event_id = await _create_event(
+                    db,
+                    cascade,
+                    zid,
+                    zname,
+                    slot_start,
+                    slot_end,
+                    cascade["data"]["critical_riders"],
+                )
+                _created_events.add(dk)
+                new_active.append({
+                    "trigger_id":      str(event_id),
+                    "type":            cascade["trigger_type"],
+                    "zone":            zname,
+                    "zone_id":         zid,
+                    "threshold":       cascade["threshold"],
+                    "active_since":    datetime.now(timezone.utc),
+                    "affected_riders": cascade["data"]["critical_riders"],
+                    "severity":        cascade["severity"],
+                })
 
     _active_triggers_cache  = new_active
     _community_signals_cache = new_signals
@@ -441,6 +628,12 @@ def _severity_for(trigger_type: str) -> str:
         "gps_shadowban":     "medium",
         "dark_store_queue":  "low",
         "algorithmic_shock": "medium",
+        "inventory_stockout":"medium",
+        "road_closure":      "high",
+        "rwa_friction":      "low",
+        "civic_event":       "medium",
+        "grap_vehicle_ban":  "critical",
+        "supply_cascade":    "high",
     }.get(trigger_type, "medium")
 
 
@@ -453,6 +646,15 @@ def _threshold_for(trigger_type: str, snap: dict) -> str:
         "gps_shadowban":      f"shadowban_duration={snap.get('shadowban_duration_min')}min",
         "dark_store_queue":   f"wait={snap.get('avg_pickup_wait_sec')}s>300s",
         "algorithmic_shock":  f"order_drop={snap.get('order_rate_drop_pct')}%",
+        "inventory_stockout": f"stock=CRITICAL order_drop={snap.get('order_rate_drop_pct')}%",
+        "road_closure":       "road_blocked=TRUE",
+        "rwa_friction":       (
+            f"dispatch_latency={snap.get('dispatch_latency_sec')}s "
+            f"order_drop={snap.get('order_rate_drop_pct')}%"
+        ),
+        "civic_event":        f"congestion={snap.get('congestion_index')}/100 spike>=90",
+        "grap_vehicle_ban":   "grap_vehicle_ban=TRUE",
+        "supply_cascade":     ">=50% riders critical stock + avg drop>=35%",
     }.get(trigger_type, "—")
 
 

@@ -60,7 +60,9 @@ class InjectTriggerRequest(BaseModel):
         ...,
         description="One of: heavy_rain, traffic_congestion, store_closure, "
                     "platform_outage, regulatory_curfew, gps_shadowban, "
-                    "dark_store_queue, algorithmic_shock",
+                    "dark_store_queue, algorithmic_shock, inventory_stockout, "
+                    "road_closure, rwa_friction, civic_event, grap_vehicle_ban, "
+                    "supply_cascade",
         examples=["heavy_rain"]
     )
     zone: str = Field(..., description="Zone name e.g. gachibowli", examples=["gachibowli"])

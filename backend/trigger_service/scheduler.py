@@ -97,6 +97,7 @@ async def _run_cycle():
                         shadowban_duration_min   = snap["shadowban_duration_min"],
                         allocation_anomaly       = snap["allocation_anomaly"],
                         curfew_active            = snap["curfew_active"],
+                        grap_vehicle_ban         = snap.get("grap_vehicle_ban", False),
                         congestion_index         = snap["congestion_index"],
                         road_blocked             = snap["road_blocked"],
                         pickup_queue_depth       = snap["pickup_queue_depth"],
