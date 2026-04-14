@@ -73,12 +73,17 @@ export default function ManualClaimsPage() {
       return;
     }
 
+    if (!selectedClaim?.claim_id) {
+      alert("Invalid claim propagation. Sector ID missing.");
+      return;
+    }
+
     setReviewing(claimId);
     try {
       if (status === "approved") {
-        await adminApi.claims.approve(claimId);
+        await adminApi.claims.approve(selectedClaim.claim_id);
       } else {
-        await adminApi.claims.reject(claimId, rejectReason);
+        await adminApi.claims.reject(selectedClaim.claim_id, rejectReason);
       }
       
       await loadClaims();
@@ -156,7 +161,7 @@ export default function ManualClaimsPage() {
                     >
                       <div className="flex items-center justify-between">
                          <div className="flex items-center gap-6">
-                            <div className={`h-16 w-16 rounded-[1.5rem] ${theme.bg} flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500 shadow-2xl ${theme.ring} ring-1 backdrop-blur-md`}>
+                            <div className={`h-16 w-16 flex-shrink-0 rounded-[1.5rem] ${theme.bg} flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500 shadow-2xl ${theme.ring} ring-1 backdrop-blur-md`}>
                                {getTriggerEmoji(claim.disruption_type)}
                             </div>
                             <div>
