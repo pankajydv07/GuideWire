@@ -140,6 +140,12 @@ _TRIGGER_TO_SCENARIO = {
     "dark_store_queue":  ScenarioKey.DARK_STORE_QUEUE,
     "algorithmic_shock": ScenarioKey.ALGORITHMIC_SHOCK,
     "regulatory_curfew": ScenarioKey.REGULATORY_CURFEW,
+    "inventory_stockout": ScenarioKey.INVENTORY_STOCKOUT,
+    "road_closure":       ScenarioKey.ROAD_CLOSURE,
+    "rwa_friction":       ScenarioKey.RWA_FRICTION,
+    "civic_event":        ScenarioKey.CIVIC_EVENT,
+    "grap_vehicle_ban":   ScenarioKey.GRAP_BAN,
+    "supply_cascade":     ScenarioKey.SUPPLY_CASCADE,
     "traffic_congestion": None,   # handled by traffic mock
 }
 
@@ -180,6 +186,14 @@ async def inject_trigger(
 
     # ── Create DB event immediately ───────────────────────────
     extra: dict = {"injected": True, "duration_seconds": body.duration_seconds}
+    if body.trigger_type == "gps_shadowban":
+        extra.update({
+            "shadowban_active": True,
+            "rider_status": "OFFLINE",
+            "ban_applied": True,
+            "confirmed": True,
+            "allocation_anomaly": True,
+        })
     if body.rainfall_mm is not None:
         extra["rainfall_mm"] = body.rainfall_mm
     if body.congestion_index is not None:
@@ -216,4 +230,7 @@ def _severity(trigger_type: str) -> str:
         "store_closure": "high", "platform_outage": "critical",
         "regulatory_curfew": "critical", "gps_shadowban": "medium",
         "dark_store_queue": "low", "algorithmic_shock": "medium",
+        "inventory_stockout": "medium", "road_closure": "high",
+        "rwa_friction": "low", "civic_event": "medium",
+        "grap_vehicle_ban": "critical", "supply_cascade": "high",
     }.get(trigger_type, "medium")

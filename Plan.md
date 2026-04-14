@@ -142,7 +142,11 @@ This document maps every known gap (missing triggers, partial implementations, a
    - Add threshold constants:
      - `CIVIC_CONGESTION_SPIKE = 90` (sudden spike to ≥ 90/100, higher than normal congestion threshold of 80)
      - `CIVIC_SPIKE_WINDOW_MIN = 10` (spike within the last 10 minutes — no sustained-duration requirement, opposite of regular congestion)
-   - Add `eval_civic_event(snap: dict, zone: dict) -> Optional[dict]` that fires when `snap["congestion_index"] >= CIVIC_CONGESTION_SPIKE` **without** requiring the 55-minute sustained window.
+      - `CIVIC_SPIKE_DELTA = 20` (must jump by at least 20 points vs recent 10-minute baseline)
+   - Add `eval_civic_event(snap: dict, zone: dict) -> Optional[dict]` that fires only when:
+     - `snap["congestion_index"] >= CIVIC_CONGESTION_SPIKE`, and
+     - short-window delta (`current_congestion - min(last_10m_congestion)`) is `>= CIVIC_SPIKE_DELTA`.
+   - This ensures abrupt civic/VIP spikes are distinguishable from ordinary sustained congestion.
    - To prevent duplicate overlap with `eval_traffic`, skip `eval_civic_event` for the same zone in the same slot if a `traffic_congestion` event was already created.
    - Assign `trigger_type = "civic_event"`, `severity = "medium"`.
    - Register in rider-level trigger loop (3-factor gate applies).
@@ -263,7 +267,8 @@ This document maps every known gap (missing triggers, partial implementations, a
 
 2. **`ml/serve.py`** — add `predict_anomaly(features: dict) -> float` function
    - Load `isolation_forest.pkl` on startup (lazy-load, cached).
-   - Return an anomaly score in [0, 1] (map IsolationForest's raw score: −1 = anomaly → 1.0, +1 = normal → 0.0).
+   - Return an anomaly score in [0, 1] using percentile-based normalization from `decision_function` against a rolling/reference distribution (preferred over ad-hoc raw-score scaling).
+   - Keep probability calibration (`CalibratedClassifierCV`) as optional phase-2; start with percentile normalization for stability and simplicity.
    - Fall back gracefully (return 0.0) if the model file is absent (e.g., first boot before training).
 
 3. **`claims_service/fraud.py`** — `run_fraud_check()`
@@ -286,12 +291,12 @@ This document maps every known gap (missing triggers, partial implementations, a
 **Scope:**
 
 1. **`claims_service/fraud.py`** — add `detect_collusion(rider_id, disruption_event_id, zone_id, db) -> int`
-   - Query `Claim` table: count riders who filed a claim for the **same** `disruption_event_id` within the last 10 minutes (`created_at >= now - 10min`).
+    - Query `Claim` table: count **distinct riders** who filed a claim for the **same** `disruption_event_id` within the last 10 minutes (`created_at >= now - 10min`).
    - If count > a threshold (e.g., `COLLUSION_SPIKE_THRESHOLD = 15`), compute the "collusion suspicion" for this rider:
-     - Ratio = `(claims_in_window / total_online_riders_in_zone)`.
+       - Ratio = `(distinct_riders_in_window / max(total_online_riders_in_zone, 1))`, capped to `1.0`.
      - If ratio > 0.80 (> 80 % of zone riders filing at once, which is statistically unlikely): return 25 pts.
      - Otherwise return 0 pts.
-   - This is a simple bipartite signal: "too many people claiming at exactly the same time in one zone."
+    - Repeated claims from the same rider should be tracked separately as a duplicate/retry fraud feature, not inflate the collusion denominator ratio.
 
 2. **`claims_service/fraud.py`** — `run_fraud_check()`
    - Call `detect_collusion()` and add its returned pts to `score`.

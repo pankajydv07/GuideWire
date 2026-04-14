@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
+ML_TIMEOUT_SECONDS = float(os.getenv("ML_TIMEOUT_SECONDS", "0.8"))
 
 TIER_MULTIPLIER = {
     "essential": 0.7,
@@ -22,10 +23,16 @@ TIER_COVERAGE_PCT = {
 }
 
 BASE_PREMIUM_BY_BAND = {
-    "low": 50,
-    "medium": 100,
-    "high": 150,
-    "critical": 200
+    "low": 25,
+    "medium": 40,
+    "high": 55,
+    "critical": 70
+}
+
+WEEKLY_PREMIUM_CAPS = {
+    "essential": 99,
+    "balanced": 129,
+    "max_protect": 169,
 }
 
 DEMO_ZONE_DEFAULTS = {
@@ -138,7 +145,7 @@ async def call_ml_model(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=ML_TIMEOUT_SECONDS) as client:
             response = await client.post(f"{ML_SERVICE_URL}/predict", json=payload)
             response.raise_for_status()
             return response.json()
@@ -220,7 +227,8 @@ async def calculate_premium(
 
     final_premiums = {}
     for tier in TIER_MULTIPLIER.keys():
-        final_premiums[tier] = sum(s["all_tier_premiums"][tier] for s in slot_results)
+        computed = sum(s["all_tier_premiums"][tier] for s in slot_results)
+        final_premiums[tier] = min(computed, WEEKLY_PREMIUM_CAPS[tier])
 
     risk_breakdown = {
         "weather": zone_data["flood_risk_score"],

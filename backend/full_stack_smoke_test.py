@@ -307,8 +307,9 @@ if jwt_token:
             headers={"Authorization": f"Bearer {jwt_token}"},
         )
         if r.status_code == 201:
-            manual_claim_id = r.json()["id"]
-            spam_score = r.json().get("spam_score", 0)
+            payload = r.json()
+            manual_claim_id = payload.get("manual_claim_id") or payload.get("id")
+            spam_score = payload.get("spam_score", 0)
             log_test("Submit manual claim", True, f"ID: {manual_claim_id[:20]}..., Spam: {spam_score}")
         else:
             log_test("Submit manual claim", False, f"Status: {r.status_code}, {r.text[:100]}")

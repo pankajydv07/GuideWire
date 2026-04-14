@@ -180,9 +180,9 @@ async def onboard(data: dict, rider=Depends(get_current_rider), db: AsyncSession
             "explanation": f"Zone '{zone.name}' — flood risk {zone.flood_risk_score}, traffic risk {zone.traffic_risk_score}" if zone else "Zone data unavailable",
         },
         "premium_quote": {
-            "essential": {"weekly": premium_response.get("premium", {}).get("essential", 120), "coverage": "70%"},
-            "balanced": {"weekly": premium_response.get("premium", {}).get("balanced", 180), "coverage": "80%"},
-            "max_protect": {"weekly": premium_response.get("premium", {}).get("max_protect", 250), "coverage": "90%"},
+            "essential": {"weekly": premium_response.get("premium", {}).get("essential", 99), "coverage": "70%"},
+            "balanced": {"weekly": premium_response.get("premium", {}).get("balanced", 129), "coverage": "80%"},
+            "max_protect": {"weekly": premium_response.get("premium", {}).get("max_protect", 169), "coverage": "90%"},
         },
         "slot_breakdown": slot_breakdown,
     }

@@ -70,6 +70,7 @@ class PlatformSnapshot(Base):
     shadowban_duration_min: Mapped[int] = mapped_column(default=0)
     allocation_anomaly: Mapped[bool] = mapped_column(default=False)
     curfew_active: Mapped[bool] = mapped_column(default=False)
+    grap_vehicle_ban: Mapped[bool] = mapped_column(default=False)
     
     # Traffic
     congestion_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
