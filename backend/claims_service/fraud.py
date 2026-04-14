@@ -3,6 +3,7 @@ Dev 4: Fraud Detection Logic
 """
 
 import logging
+import os
 from uuid import UUID
 from datetime import datetime
 from sqlalchemy import select, func
@@ -13,6 +14,19 @@ from trigger_service.models import PlatformSnapshot
 from rider_service.models import RiderZoneBaseline
 
 logger = logging.getLogger("zylo.claims.fraud")
+
+
+def _load_fraud_threshold() -> int:
+    raw = os.getenv("FRAUD_THRESHOLD", "75").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid FRAUD_THRESHOLD=%s; falling back to 75", raw)
+        return 75
+    return max(0, min(value, 100))
+
+
+AUTO_CLAIM_FRAUD_THRESHOLD = _load_fraud_threshold()
 
 
 async def check_duplicate_claim(rider_id: UUID, disruption_event_id: UUID, db: AsyncSession) -> bool:

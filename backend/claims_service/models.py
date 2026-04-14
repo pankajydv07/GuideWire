@@ -26,7 +26,7 @@ class Claim(Base):
     actual_earnings: Mapped[int] = mapped_column(Integer, nullable=False)
     payout_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     fraud_score: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, under_review, approved, paid, rejected, flagged
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
