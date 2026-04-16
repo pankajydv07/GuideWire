@@ -161,3 +161,6 @@ Estimated status now:
   - `backend`: `python -m pytest -q tests` failed because `pytest` is not installed.
   - `admin`: `npm run lint` failed because `eslint` is not installed.
   - `admin`: `npm run build` failed because `next` is not installed.
+- To run these checks locally after dependency setup:
+  - `backend`: install dependencies (project-standard Python setup) and rerun `python -m pytest -q tests`.
+  - `admin`: run `npm install`, then rerun `npm run lint` and `npm run build`.
