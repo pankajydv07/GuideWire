@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, A
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { api, type ClaimListItem, type PayoutListItem } from '../../services/api';
@@ -109,6 +110,10 @@ export default function ClaimsScreen() {
 
   return (
     <View style={styles.container}>
+      <LinearGradient 
+        colors={['#09090b', '#000000', '#000000']} 
+        style={StyleSheet.absoluteFill} 
+      />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.dark.tint} />}
@@ -140,10 +145,11 @@ export default function ClaimsScreen() {
                   key={claim.claim_id} 
                   entering={FadeInDown.delay(index * 100).springify()}
                   layout={Layout.springify()}
-                  style={styles.card}
+                  style={styles.cardWrapper}
                 >
+                  <BlurView tint="dark" intensity={30} style={StyleSheet.absoluteFill} />
                   <View style={styles.cardHeader}>
-                     <View style={[styles.typeBadge, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                     <View style={[styles.typeBadge, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
                         <Text style={styles.typeBadgeText}>{claim.type === 'manual' ? '📝 MANUAL' : '🤖 AUTO'}</Text>
                      </View>
                      <View style={[styles.statusBadge, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
@@ -182,13 +188,16 @@ export default function ClaimsScreen() {
               entering={FadeInDown.delay(index * 100).springify()}
               style={styles.payoutCard}
             >
-              <View style={styles.payoutHeader}>
-                 <Text style={styles.payoutRef}>UPI/{payout.reference_id.slice(-8).toUpperCase()}</Text>
-                 <Text style={styles.payoutStatus}>CREDITED</Text>
-              </View>
-              <View style={styles.payoutBody}>
-                 <Text style={styles.payoutAmountText}>+₹{payout.amount}</Text>
-                 <Text style={styles.payoutDate}>{formatApiDateTime(payout.created_at)}</Text>
+              <BlurView tint="dark" intensity={20} style={StyleSheet.absoluteFill} />
+              <View style={styles.payoutContent}>
+                <View style={styles.payoutHeader}>
+                   <Text style={styles.payoutRef}>UPI/{payout.reference_id.slice(-8).toUpperCase()}</Text>
+                   <Text style={styles.payoutStatus}>CREDITED</Text>
+                </View>
+                <View style={styles.payoutBody}>
+                   <Text style={styles.payoutAmountText}>+₹{payout.amount}</Text>
+                   <Text style={styles.payoutDate}>{formatApiDateTime(payout.created_at)}</Text>
+                </View>
               </View>
             </Animated.View>
           ))
@@ -206,7 +215,7 @@ export default function ClaimsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   center: { justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20 },
   errorBanner: {
@@ -221,33 +230,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  toggleContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 20, padding: 6, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  toggleBtn: { flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
-  toggleBtnActive: { backgroundColor: Colors.dark.tint },
-  toggleText: { color: '#475569', fontWeight: '800', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
-  toggleTextActive: { color: '#fff' },
-  card: { backgroundColor: 'rgba(30, 41, 59, 0.4)', borderRadius: 28, padding: 24, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  toggleContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 6, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  toggleBtn: { flex: 1, paddingVertical: 14, borderRadius: 20, alignItems: 'center' },
+  toggleBtnActive: { backgroundColor: 'rgba(255,255,255,0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  toggleText: { color: '#71717a', fontWeight: '800', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
+  toggleTextActive: { color: '#f8fafc', fontWeight: '900' },
+  cardWrapper: { backgroundColor: 'rgba(18, 18, 24, 0.72)', borderRadius: 32, padding: 24, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   typeBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  typeBadgeText: { color: '#94a3b8', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  typeBadgeText: { color: '#b8b7c7', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   cardBody: { marginBottom: 20 },
   claimTrigger: { color: '#f8fafc', fontWeight: '900', fontSize: 18, marginBottom: 4, letterSpacing: -0.5 },
   amountContainer: { flexDirection: 'row', alignItems: 'baseline' },
-  currencySymbol: { color: Colors.dark.tint, fontSize: 18, fontWeight: '900', marginRight: 2 },
-  claimAmount: { color: '#fff', fontSize: 36, fontWeight: '900' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 16 },
-  footerLabel: { color: '#475569', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  payoutCard: { backgroundColor: 'rgba(16, 185, 129, 0.03)', borderRadius: 24, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.1)' },
-  payoutHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  payoutRef: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  payoutStatus: { color: '#10b981', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  currencySymbol: { color: '#a1a1aa', fontSize: 18, fontWeight: '900', marginRight: 2 },
+  claimAmount: { color: '#fff', fontSize: 40, fontWeight: '900', letterSpacing: -1 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 16 },
+  footerLabel: { color: '#8b8aa0', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  payoutCard: { backgroundColor: 'rgba(16, 185, 129, 0.05)', borderRadius: 28, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.15)', overflow: 'hidden' },
+  payoutContent: { padding: 24 },
+  payoutHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  payoutRef: { color: '#8b8aa0', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  payoutStatus: { color: '#10b981', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   payoutBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  payoutAmountText: { color: '#10b981', fontSize: 24, fontWeight: '900' },
-  payoutDate: { color: '#475569', fontSize: 11, fontWeight: '700' },
+  payoutAmountText: { color: '#10b981', fontSize: 28, fontWeight: '900' },
+  payoutDate: { color: '#8b8aa0', fontSize: 11, fontWeight: '700' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyEmoji: { fontSize: 48, marginBottom: 20, opacity: 0.2 },
   emptyTitle: { color: '#f8fafc', fontSize: 18, fontWeight: '900', marginBottom: 8 },
-  emptySubtitle: { color: '#475569', fontSize: 14, textAlign: 'center', lineHeight: 22, maxWidth: 240 },
+  emptySubtitle: { color: '#8b8aa0', fontSize: 14, textAlign: 'center', lineHeight: 22, maxWidth: 240 },
 });

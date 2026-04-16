@@ -6,6 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type PolicyQuoteResponse, type PolicyResponse } from '../../services/api';
@@ -19,8 +21,8 @@ const tierIcon = (tier: string) => {
 };
 
 const tierColor = (tier: string) => {
-  if (tier === 'essential') return '#94a3b8';
-  if (tier === 'balanced') return '#38bdf8';
+  if (tier === 'essential') return '#b8b7c7';
+  if (tier === 'balanced') return '#f8fafc';
   return '#10b981';
 };
 
@@ -137,7 +139,7 @@ export default function PolicySelectScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#38bdf8" />
+        <ActivityIndicator size="large" color="#f8fafc" />
         <Text style={styles.loadingText}>Calibrating parametric yield...</Text>
       </View>
     );
@@ -145,6 +147,10 @@ export default function PolicySelectScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <LinearGradient 
+        colors={['#09090b', '#000000', '#000000']} 
+        style={StyleSheet.absoluteFill} 
+      />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInUp.duration(600).springify()}>
           <Text style={styles.title}>Secure Your Income</Text>
@@ -212,8 +218,10 @@ export default function PolicySelectScreen() {
                       ]}
                       onPress={() => setSelectedTier(tier.tier)}
                     >
-                      <View style={styles.tierHeader}>
-                        <View style={[styles.iconFrame, { backgroundColor: `${color}15` }]}>
+                      <BlurView tint="dark" intensity={isSelected ? 50 : 20} style={StyleSheet.absoluteFill} />
+                      <View style={styles.tierContent}>
+                        <View style={styles.tierHeader}>
+                          <View style={[styles.iconFrame, { backgroundColor: `${color}20` }]}>
                           <Ionicons name={tierIcon(tier.tier) as any} size={24} color={color} />
                         </View>
                         <View style={{ flex: 1 }}>
@@ -242,6 +250,7 @@ export default function PolicySelectScreen() {
                           <Text style={styles.recBadgeText}>PEER CHOICE</Text>
                         </View>
                       )}
+                      </View>
                     </TouchableOpacity>
                   </Animated.View>
                 );
@@ -258,27 +267,27 @@ export default function PolicySelectScreen() {
             <Text style={styles.errorText}>Parametric link unstable. Retrying telemetry...</Text>
           </View>
         )}
-        <View style={{ height: 40 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   center: { justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: '#475569', marginTop: 16, fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+  loadingText: { color: '#8b8aa0', marginTop: 16, fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
   scroll: { padding: 24, gap: 24 },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '700' },
-  activePolicyCard: { backgroundColor: 'rgba(56, 189, 248, 0.06)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.18)' },
+  subtitle: { fontSize: 15, color: '#8b8aa0', lineHeight: 22, fontWeight: '700' },
+  activePolicyCard: { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
   activePolicyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  activePolicyTitle: { color: '#e0f2fe', fontSize: 15, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
-  activePolicyBadge: { color: '#38bdf8', fontSize: 11, fontWeight: '900' },
-  activePolicyMeta: { color: '#cbd5e1', fontSize: 13, lineHeight: 20, fontWeight: '600' },
+  activePolicyTitle: { color: '#f8fafc', fontSize: 15, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
+  activePolicyBadge: { color: '#f8fafc', fontSize: 11, fontWeight: '900' },
+  activePolicyMeta: { color: '#b8b7c7', fontSize: 13, lineHeight: 20, fontWeight: '600' },
   actionRow: { gap: 12, marginTop: 18 },
-  secondaryActionBtn: { backgroundColor: 'rgba(56, 189, 248, 0.18)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
-  secondaryActionText: { color: '#e0f2fe', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
+  secondaryActionBtn: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
+  secondaryActionText: { color: '#f8fafc', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
   dangerActionBtn: { backgroundColor: 'rgba(244, 63, 94, 0.14)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
   dangerActionText: { color: '#fecdd3', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
   actionDisabled: { opacity: 0.6 },
@@ -286,24 +295,25 @@ const styles = StyleSheet.create({
   riskHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   riskTitle: { color: '#f59e0b', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   riskText: { color: '#f8fafc', fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  riskSubtext: { color: '#94a3b8', fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  riskSubtext: { color: '#b8b7c7', fontSize: 13, lineHeight: 18, fontWeight: '500' },
   tierContainer: { gap: 16 },
-  tierCard: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' },
-  recommendedBorder: { borderColor: 'rgba(16, 185, 129, 0.2)' },
+  tierCard: { backgroundColor: 'rgba(18, 18, 24, 0.72)', borderRadius: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', position: 'relative', overflow: 'hidden' },
+  tierContent: { padding: 24 },
+  recommendedBorder: { borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1.5 },
   tierHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 },
   iconFrame: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   tierName: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-  tierSub: { fontSize: 9, color: '#475569', fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+  tierSub: { fontSize: 9, color: '#8b8aa0', fontWeight: '800', letterSpacing: 1, marginTop: 2 },
   priceContainer: { flexDirection: 'row', alignItems: 'baseline' },
-  currency: { color: '#475569', fontSize: 14, fontWeight: '900', marginRight: 2 },
+  currency: { color: '#8b8aa0', fontSize: 14, fontWeight: '900', marginRight: 2 },
   price: { color: '#f8fafc', fontSize: 28, fontWeight: '900' },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginBottom: 20 },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 20 },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  featureText: { color: '#94a3b8', fontSize: 13, fontWeight: '700' },
-  recBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#10b981', paddingHorizontal: 12, paddingVertical: 6, borderBottomLeftRadius: 16 },
-  recBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  continueBtn: { backgroundColor: '#38bdf8', paddingVertical: 20, borderRadius: 24, alignItems: 'center', shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
-  continueText: { color: '#020617', fontSize: 17, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  featureText: { color: '#b8b7c7', fontSize: 13, fontWeight: '700' },
+  recBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderBottomLeftRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  recBadgeText: { color: '#f8fafc', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  continueBtn: { backgroundColor: '#f8fafc', paddingVertical: 20, borderRadius: 24, alignItems: 'center', shadowColor: '#ffffff', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  continueText: { color: '#09090b', fontSize: 17, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   errorCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 16 },
   errorText: { color: '#fca5a5', fontSize: 14, fontWeight: '700', textAlign: 'center' },
 });

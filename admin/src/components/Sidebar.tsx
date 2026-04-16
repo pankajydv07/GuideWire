@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: "/claims", label: "Auto Claims", icon: FileText },
   { href: "/manual-claims", label: "Manual Claims", icon: Camera },
   { href: "/fraud-alerts", label: "Fraud Alerts", icon: ShieldAlert },
-  { href: "/predictive", label: "Predictive", icon: LineChart },
+  { href: "/predictive", label: "Risk Forecast", icon: LineChart },
   { href: "/payout-analytics", label: "Payout Analytics", icon: Wallet },
   { href: "/triggers", label: "Triggers", icon: Zap },
 ];
@@ -71,17 +71,17 @@ export function Sidebar() {
         className={`fixed inset-y-0 left-0 z-40 flex flex-col md:sticky md:top-0 md:h-screen md:translate-x-0 transition-all duration-300 ${isOpenMobile ? "translate-x-0" : "-translate-x-full"
           }`}
         style={{
-          width: isCollapsed ? "84px" : "236px",
+          width: isCollapsed ? "72px" : "236px",
           background: "var(--bg-surface)",
           borderRight: "1px solid var(--border-subtle)",
         }}
       >
-        <div className={`flex flex-col h-full py-7 ${isCollapsed ? "px-3" : "px-4"}`}>
+        <div className={`flex flex-col h-full py-7 ${isCollapsed ? "px-2.5" : "px-4"}`}>
 
           {/* Header Row: Logo & Hamburger */}
-          <div className={`flex items-center ${isCollapsed ? "flex-col gap-5" : "justify-between"} mb-8 px-2`}>
+          <div className={`flex items-center ${isCollapsed ? "flex-col items-center gap-4 px-0" : "justify-between px-2"} mb-8`}>
             {/* Logo */}
-            <div className="flex items-center gap-3">
+            <div className={isCollapsed ? "flex items-center justify-center" : "flex items-center gap-3"}>
               <Image
                 src="/Zylo.png"
                 alt="Zylo Logo"
@@ -109,7 +109,7 @@ export function Sidebar() {
             {/* Desktop Hamburger */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-white/5 text-gray-500 hover:text-gray-300 flex-shrink-0"
+              className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-white/5 text-gray-500 hover:text-gray-300 shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -191,7 +191,7 @@ export function Sidebar() {
                   }}
                 >
                   {active && !isCollapsed && <div className="nav-active-indicator" />}
-                  <Icon className="w-5 h-5 flex-shrink-0" style={{ marginLeft: active && !isCollapsed ? "8px" : 0 }} />
+                  <Icon className="w-5 h-5 shrink-0" style={{ marginLeft: active && !isCollapsed ? "8px" : 0 }} />
                   {!isCollapsed && item.label}
                   {active && !isCollapsed && (
                     <span

@@ -1,17 +1,18 @@
 import React from 'react';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 
 import Colors from '../../constants/Colors';
 import { useAuth } from '../../contexts/AuthContext';
 import { useClientOnlyValue } from '../../components/useClientOnlyValue';
 
 function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
+  name: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
 }) {
-  return <FontAwesome size={22} style={{ marginBottom: -3 }} {...props} />;
+  return <Ionicons size={24} style={{ marginBottom: -3 }} {...props} />;
 }
 
 export default function TabLayout() {
@@ -20,8 +21,8 @@ export default function TabLayout() {
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#020617' }}>
-        <ActivityIndicator color={Colors.dark.tint} size="large" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#050507' }}>
+        <ActivityIndicator color="#f8fafc" size="large" />
       </View>
     );
   }
@@ -33,59 +34,62 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.dark.tint,
-        tabBarInactiveTintColor: '#475569',
-        headerShown: headerShown,
-        headerStyle: { backgroundColor: Colors.dark.background },
-        headerTitleStyle: { fontWeight: '900', color: Colors.dark.text, fontSize: 24, letterSpacing: -0.5 },
+        tabBarActiveTintColor: '#f8fafc',
+        tabBarInactiveTintColor: '#8b8aa0',
+        headerShown: false,
+        headerStyle: { backgroundColor: 'transparent' },
+        headerTransparent: true, 
+        headerTitleStyle: { fontWeight: '900', color: '#f8fafc', fontSize: 28, letterSpacing: -1 },
         headerShadowVisible: false,
         tabBarStyle: {
           position: 'absolute',
-          bottom: 20,
-          left: 20,
-          right: 20,
+          bottom: 30,
+          left: 30,
+          right: 30,
           elevation: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
-          borderRadius: 24,
+          backgroundColor: 'transparent',
+          borderRadius: 40,
           height: 70,
-          paddingBottom: 10,
-          paddingTop: 10,
           borderTopWidth: 0,
           borderWidth: 1,
-          borderColor: 'rgba(56, 189, 248, 0.1)',
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+          overflow: 'hidden',
         },
+        tabBarBackground: () => (
+          <BlurView tint="dark" intensity={80} style={StyleSheet.absoluteFill} />
+        ),
+        tabBarShowLabel: false,
+        tabBarItemStyle: {
+          paddingVertical: 10,
+        }
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Guardian',
-          tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
-          headerTitle: 'Zylo',
+          tabBarIcon: ({ color }) => <TabBarIcon name="home-outline" color={color} />,
         }}
       />
       <Tabs.Screen
         name="claims"
         options={{
           title: 'History',
-          tabBarIcon: ({ color }) => <TabBarIcon name="history" color={color} />,
-          headerTitle: 'Claim Archive',
+          tabBarIcon: ({ color }) => <TabBarIcon name="time-outline" color={color} />,
         }}
       />
       <Tabs.Screen
         name="manual-claim"
         options={{
           title: 'Report',
-          tabBarIcon: ({ color }) => <TabBarIcon name="camera" color={color} />,
-          headerTitle: 'Report Disruption',
+          tabBarIcon: ({ color }) => <TabBarIcon name="camera-outline" color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Node',
-          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
-          headerTitle: 'Identity Node',
+          tabBarIcon: ({ color }) => <TabBarIcon name="person-outline" color={color} />,
         }}
       />
       <Tabs.Screen

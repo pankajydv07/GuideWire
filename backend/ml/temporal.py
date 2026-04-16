@@ -69,28 +69,45 @@ def build_next_week_forecast(
     days: int = 7,
 ) -> list[dict]:
     now = datetime.now(timezone.utc)
+    zone_component = max(0.0, min(zone_risk_score / 100, 1.0)) * 0.36
+    disruption_component = max(0.0, min(disruption_probability, 1.0)) * 0.24
+    order_drop_component = max(0.0, min(avg_order_drop_pct / 100, 1.0)) * 0.18
+    volatility_adj = max(0.0, min(earnings_volatility / 800, 0.12))
     base_risk = max(
-        0.05,
-        min(
-            0.95,
-            0.25
-            + (zone_risk_score / 220)
-            + (disruption_probability * 0.25)
-            + (avg_order_drop_pct / 260),
-        ),
+        0.04,
+        min(0.9, 0.1 + zone_component + disruption_component + order_drop_component + volatility_adj),
     )
-    volatility_adj = max(0.0, min(0.16, earnings_volatility / 600))
+    weekday_adjustments = {
+        0: -0.02,
+        1: -0.01,
+        2: 0.0,
+        3: 0.01,
+        4: 0.04,
+        5: 0.07,
+        6: 0.05,
+    }
 
     forecast: list[dict] = []
     for i in range(days):
-        weekday = (now + timedelta(days=i + 1)).weekday()
-        weekend_boost = 0.06 if weekday in {5, 6} else 0.0
-        day_risk = max(0.02, min(0.98, base_risk + weekend_boost + volatility_adj))
+        day = now + timedelta(days=i + 1)
+        weekday = day.weekday()
+        recency_decay = min(0.12, i * 0.018)
+        cycle_adjustment = ((i % 3) - 1) * 0.008
+        day_risk = max(
+            0.03,
+            min(
+                0.95,
+                base_risk
+                + weekday_adjustments.get(weekday, 0.0)
+                + cycle_adjustment
+                - recency_decay,
+            ),
+        )
         expected_multiplier = round(max(0.45, 1 - (day_risk * 0.55)), 3)
 
         forecast.append(
             {
-                "date": (now + timedelta(days=i + 1)).date().isoformat(),
+                "date": day.date().isoformat(),
                 "day_of_week": weekday,
                 "predicted_disruption_probability": round(day_risk, 3),
                 "risk_band": (
