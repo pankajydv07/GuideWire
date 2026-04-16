@@ -318,7 +318,6 @@ export default function TriggersPage() {
               </div>
             ) : (
               events.map((event: DisruptionEvent, idx: number) => {
-                const col = getColor(event.trigger_type);
                 return (
                   <motion.div
                     key={event.event_id}

@@ -89,6 +89,8 @@ export interface Zone {
   name: string;
   city: string;
   risk_score: number;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export interface DashboardStats {

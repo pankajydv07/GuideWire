@@ -682,6 +682,20 @@ async def inject_disruption_event(
 
 
 # ─── DB writer ────────────────────────────────────────────────────────────────
+def _json_safe(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 async def _create_event(
     db: AsyncSession,
     result: dict,
@@ -709,7 +723,7 @@ async def _create_event(
         slot_start    = slot_start,
         slot_end      = slot_end,
         severity      = result["severity"],
-        data_json     = result.get("data"),
+        data_json     = _json_safe(result.get("data")),
         affected_riders = affected_riders,
     )
     db.add(event)

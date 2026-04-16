@@ -10,7 +10,11 @@ import type {
   Zone,
 } from "@/lib/types";
 
-export const API_BASE = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_API_URL || "") : "http://backend:8000";
+const configuredApiBase = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+export const API_BASE =
+  configuredApiBase ||
+  (typeof window !== "undefined" ? "http://localhost:8000" : "http://backend:8000");
 
 const TOKEN_STORAGE_KEY = "zylo_admin_token";
 

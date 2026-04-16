@@ -126,24 +126,26 @@ async def _run_flagged_case(fraud_score: int):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    async with session_local() as session:
-        event_id, rider_id = await _seed_auto_claim_data(session)
+    try:
+        async with session_local() as session:
+            event_id, rider_id = await _seed_auto_claim_data(session)
 
-        with (
-            patch("claims_service.service.run_fraud_check", AsyncMock(return_value=fraud_score)),
-            patch("claims_service.service.process_upi_payout", AsyncMock()) as payout_mock,
-        ):
-            created = await process_auto_claims(event_id, session)
+            with (
+                patch("claims_service.service.run_fraud_check", AsyncMock(return_value=fraud_score)),
+                patch("claims_service.service.process_upi_payout", AsyncMock()) as payout_mock,
+            ):
+                created = await process_auto_claims(event_id, session)
 
-            claim_result = await session.execute(select(Claim).where(Claim.rider_id == rider_id))
-            claim = claim_result.scalar_one_or_none()
+                claim_result = await session.execute(select(Claim).where(Claim.rider_id == rider_id))
+                claim = claim_result.scalar_one_or_none()
 
-            assert created == 1
-            assert claim is not None
-            await engine.dispose()
-            if os.path.exists(isolated_db_path):
-                os.remove(isolated_db_path)
-            return claim, payout_mock
+                assert created == 1
+                assert claim is not None
+                return claim, payout_mock
+    finally:
+        await engine.dispose()
+        if os.path.exists(isolated_db_path):
+            os.remove(isolated_db_path)
 
 
 def test_auto_claim_is_flagged_and_payout_skipped_at_threshold():
