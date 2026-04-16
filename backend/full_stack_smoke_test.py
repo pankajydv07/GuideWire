@@ -316,14 +316,14 @@ if jwt_token:
     except Exception as e:
         log_test("Manual claim submission", False, str(e))
 
-print("\n[4.2] Verify Manual Claim in Review Queue")
+print("\n[4.2] Verify Manual Claim in Admin History")
 if admin_token:
     try:
-        r = httpx.get(f"{BASE_URL}/api/admin/claims/manual",
+        r = httpx.get(f"{BASE_URL}/api/admin/claims/manual?status=all",
                      headers={"Authorization": f"Bearer {admin_token}"})
         if r.status_code == 200:
-            manual_claims = r.json().get("data", [])
-            log_test("Admin: List manual claims", True, f"Count: {len(manual_claims)} pending")
+            manual_claims = r.json().get("claims", [])
+            log_test("Admin: List manual claims", True, f"Count: {len(manual_claims)} total")
         else:
             log_test("Admin: List manual claims", False, f"Status: {r.status_code}")
     except Exception as e:
@@ -348,7 +348,7 @@ if admin_token:
     except Exception as e:
         log_test("Admin: Fetch auto claims", False, str(e))
 
-print("\n[5.2] Admin: Approve Manual Claim")
+print("\n[5.2] Admin: Override Manual Claim")
 if admin_token and manual_claim_id:
     try:
         r = httpx.post(
@@ -359,7 +359,7 @@ if admin_token and manual_claim_id:
         if r.status_code == 200:
             approved = r.json()
             status = approved.get("status")
-            log_test("Admin: Approve claim", True, f"New status: {status}")
+            log_test("Admin: Approve claim", True, f"Override status: {status}")
         else:
             log_test("Admin: Approve claim", False, f"Status: {r.status_code}")
     except Exception as e:

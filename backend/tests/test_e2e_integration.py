@@ -131,30 +131,22 @@ async def run_e2e_test():
             assert r.status_code == 200, "Admin login failed"
             admin_token = r.json()["access_token"]
 
-            print("\n8. Admin Reviewing Manual Claim Queue...")
-            r = await client.get(f"{BASE_URL}/api/admin/claims/manual", headers={"Authorization": f"Bearer {admin_token}"})
-            claims_queue = r.json().get("claims", [])
-            target_mc = next((c for c in claims_queue if c["id"] == manual_claim_id), None)
-            assert target_mc is not None, "Manual claim not found in admin queue"
-            base_claim_id = target_mc["claim_id"]
-            print(f"   Claim found in queue: {base_claim_id}")
-
-            print("\n9. Admin Approving Claim & Initiating Payout...")
-            r = await client.post(f"{BASE_URL}/api/admin/claims/{base_claim_id}/approve", headers={"Authorization": f"Bearer {admin_token}"})
-            assert r.status_code == 200, f"Approval failed: {r.text}"
-
-            print("\n10. Validating Rider Claim Status...")
+            print("\n8. Validating Automated Claim Decision...")
             r = await client.get(f"{BASE_URL}/api/claims", headers={"Authorization": f"Bearer {jwt_token}"})
             final_claim = r.json().get("claims", [])[0]
-            assert final_claim["status"] == "paid", f"Claim status is {final_claim['status']}"
-            print(f"   Final claim status: {final_claim['status']} payout={final_claim['payout_amount']}")
+            assert final_claim["status"] in {"paid", "rejected"}, f"Unexpected claim status: {final_claim['status']}"
+            print(f"   Automated decision: {final_claim['status']} payout={final_claim['payout_amount']}")
 
-            r = await client.get(f"{BASE_URL}/api/policies/active", headers={"Authorization": f"Bearer {jwt_token}"})
-            active_policy = r.json()
-            assert active_policy["coverage_used"] == final_claim["payout_amount"], (
-                f"coverage_used mismatch: {active_policy['coverage_used']} vs {final_claim['payout_amount']}"
+            print("\n9. Admin Reviewing Historical Manual Claims...")
+            r = await client.get(
+                f"{BASE_URL}/api/admin/claims/manual?status=all",
+                headers={"Authorization": f"Bearer {admin_token}"},
             )
-            print(f"   Coverage accounting consistent: {active_policy['coverage_used']}")
+            claims_history = r.json().get("claims", [])
+            target_mc = next((c for c in claims_history if c["id"] == manual_claim_id), None)
+            assert target_mc is not None, "Manual claim not found in admin history"
+            assert target_mc["review_status"] in {"approved", "rejected"}
+            print(f"   Claim history status: {target_mc['review_status']}")
         finally:
             await close_db()
 

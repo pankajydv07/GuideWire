@@ -78,7 +78,7 @@ def calculate_spam_score(
 
 
 def explain_spam_rejection(
-    gps_distance_m: float,
+    gps_distance_m: float | None,
     time_delta_min: float,
     disruption_type: str,
     weather_match: bool = False,
@@ -89,7 +89,7 @@ def explain_spam_rejection(
     """
     reasons: list[str] = []
 
-    if gps_distance_m > 500:
+    if gps_distance_m is not None and gps_distance_m > 500:
         reasons.append(f"Photo GPS is {int(gps_distance_m)}m away from the reported incident location.")
 
     if time_delta_min > 30:

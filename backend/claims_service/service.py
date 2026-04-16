@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
-from claims_service.models import Claim
+from claims_service.models import Claim, Payout
 from trigger_service.models import DisruptionEvent, PlatformSnapshot
 from rider_service.models import Rider, RiderZoneBaseline
 from policy_service.models import Policy
@@ -162,7 +162,8 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
 
 async def process_manual_claim(claim_data: dict, db: AsyncSession) -> dict:
     """
-    Called by Dev 5's router when a manual claim passes initial spam check (< 70).
+    Creates the financial claim anchor for a manual claim and applies the
+    adjudicated decision immediately.
     """
     rider_id = claim_data["rider_id"]
     policy_id = claim_data["policy_id"]
@@ -212,6 +213,9 @@ async def process_manual_claim(claim_data: dict, db: AsyncSession) -> dict:
     coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
     payout_amount = min(max(income_loss, 0), coverage_remaining)
 
+    review_decision = claim_data.get("review_decision", "under_review")
+    review_reason = claim_data.get("review_reason")
+
     claim = Claim(
         rider_id=rider_id,
         policy_id=policy_id,
@@ -223,15 +227,35 @@ async def process_manual_claim(claim_data: dict, db: AsyncSession) -> dict:
         payout_amount=payout_amount,
         fraud_score=claim_data.get("spam_score", 0),
         status="under_review",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
     db.add(claim)
     await db.flush()
 
-    return {"claim_id": str(claim.id), "status": "under_review", "payout_amount": payout_amount}
+    payout_id = None
+    result_status = "under_review"
+
+    if review_decision == "approved":
+        claim.status = "paid"
+        claim.processed_at = datetime.utcnow()
+        payout = await process_upi_payout(claim.id, claim.rider_id, claim.payout_amount, db)
+        payout_id = str(payout.id)
+        result_status = "approved"
+    elif review_decision == "rejected":
+        claim.status = "rejected"
+        claim.processed_at = datetime.utcnow()
+        result_status = "rejected"
+
+    return {
+        "claim_id": str(claim.id),
+        "status": result_status,
+        "payout_amount": payout_amount,
+        "payout_id": payout_id,
+        "reason": review_reason,
+    }
 
 
-async def approve_manual_claim(claim_id: UUID, db: AsyncSession) -> dict:
+async def approve_manual_claim(claim_id: UUID, db: AsyncSession, allow_override: bool = False) -> dict:
     """
     Called by Dev 5 when admin manually approves a claim.
     """
@@ -241,7 +265,19 @@ async def approve_manual_claim(claim_id: UUID, db: AsyncSession) -> dict:
     claim = claim_result.scalar_one_or_none()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
-    if claim.status in ("approved", "paid", "rejected"):
+    if claim.status == "paid":
+        existing_payout_result = await db.execute(select(Payout).where(Payout.claim_id == claim.id).limit(1))
+        existing_payout = existing_payout_result.scalar_one_or_none()
+        if not allow_override:
+            raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
+        return {
+            "claim_id": str(claim.id),
+            "status": "approved",
+            "payout_id": str(existing_payout.id) if existing_payout else None,
+            "payout_amount": claim.payout_amount,
+            "overridden": False,
+        }
+    if claim.status == "rejected" and not allow_override:
         raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
 
     claim.status = "paid"
@@ -253,11 +289,12 @@ async def approve_manual_claim(claim_id: UUID, db: AsyncSession) -> dict:
         "claim_id": str(claim.id),
         "status": "approved",
         "payout_id": str(payout.id),
-        "payout_amount": claim.payout_amount
+        "payout_amount": claim.payout_amount,
+        "overridden": allow_override,
     }
 
 
-async def reject_manual_claim(claim_id: UUID, reason: str, db: AsyncSession) -> dict:
+async def reject_manual_claim(claim_id: UUID, reason: str, db: AsyncSession, allow_override: bool = False) -> dict:
     """
     Called by Dev 5 when admin manually rejects a claim.
     """
@@ -267,10 +304,19 @@ async def reject_manual_claim(claim_id: UUID, reason: str, db: AsyncSession) -> 
     claim = claim_result.scalar_one_or_none()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
-    if claim.status in ("approved", "paid", "rejected"):
+    payout_reversal_required = claim.status == "paid"
+    if claim.status == "rejected" and not allow_override:
+        raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
+    if claim.status == "paid" and not allow_override:
         raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
 
     claim.status = "rejected"
     claim.processed_at = datetime.utcnow()
 
-    return {"claim_id": str(claim.id), "status": "rejected", "reason": reason}
+    return {
+        "claim_id": str(claim.id),
+        "status": "rejected",
+        "reason": reason,
+        "overridden": allow_override,
+        "payout_reversal_required": payout_reversal_required,
+    }

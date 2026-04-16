@@ -10,17 +10,14 @@ from shared.database import get_db
 from shared.auth import get_current_rider
 from policy_service.models import Policy, get_current_iso_week
 from manual_claims.models import ManualClaim
+from manual_claims.adjudication import adjudicate_manual_claim
 from manual_claims.photo_handler import extract_exif_data
 from manual_claims.geo_validation import (
     haversine_distance,
     calculate_spam_score,
-    explain_spam_rejection,
 )
 from trigger_service.service import check_historical_conditions
-from claims_service.service import (
-    process_manual_claim as dev4_process_manual_claim,
-    reject_manual_claim as dev4_reject_manual_claim,
-)
+from claims_service.service import process_manual_claim as dev4_process_manual_claim
 
 router = APIRouter()
 
@@ -109,37 +106,48 @@ async def submit_manual_claim(
         exif_timestamp_available=has_exif_timestamp,
     )
 
-    rejection_reasons = explain_spam_rejection(
-        gps_distance_m=dist_m,
-        time_delta_min=time_delta_min,
-        disruption_type=disruption_type,
-        weather_match=conditions.get("weather", False),
-        traffic_match=conditions.get("traffic", False),
+    adjudication = await adjudicate_manual_claim(
+        {
+            "rider_id": rider.id,
+            "policy_id": policy.id,
+            "disruption_type": disruption_type,
+            "description": description,
+            "incident_time": incident_dt,
+            "spam_score": spam_score,
+            "gps_distance_m": int(dist_m) if dist_m < 999999 else None,
+            "geo_valid": (dist_m < 500) if has_exif_gps else None,
+            "weather_match": conditions.get("weather"),
+            "traffic_match": conditions.get("traffic"),
+            "time_delta_min": time_delta_min,
+            "exif_gps_available": has_exif_gps,
+            "exif_timestamp_available": has_exif_timestamp,
+            "photo_path": file_path,
+        },
+        db=db,
+    )
+    review_status = adjudication.decision
+    review_notes = (
+        f"Auto-adjudicated by Nebius Kimi: {adjudication.reason_summary} "
+        f"| confidence={adjudication.confidence:.2f} "
+        f"| band={adjudication.threshold_context.get('band')} "
+        f"| aligned={adjudication.threshold_context.get('aligned_with_threshold')} "
+        f"| evidence={', '.join(adjudication.evidence_used) if adjudication.evidence_used else 'none'}"
     )
 
     # 6. Create Records
-    review_status = "pending"
-    if spam_score >= 70:
-        review_status = "rejected"
-
-    auto_reject_reason = "; ".join(rejection_reasons) if rejection_reasons else "Auto-rejected due to high spam score."
-
-    # Call Dev 4 logic to create the financial claim anchor
-    # We pass it as "manual" type
     dev4_result = await dev4_process_manual_claim(
         {
             "rider_id": rider.id,
             "policy_id": policy.id,
             "disruption_type": disruption_type,
             "incident_time": incident_dt,
-            "spam_score": spam_score
+            "spam_score": spam_score,
+            "review_decision": review_status,
+            "review_reason": adjudication.reason_summary,
         },
         db=db
     )
     dev4_claim_id = dev4_result["claim_id"]
-
-    if review_status == "rejected":
-        await dev4_reject_manual_claim(uuid.UUID(dev4_claim_id), auto_reject_reason, db=db)
 
     new_manual = ManualClaim(
         rider_id=rider.id,
@@ -155,12 +163,12 @@ async def submit_manual_claim(
         telemetry_lon=longitude,
         gps_distance_m=int(dist_m) if dist_m < 999999 else None,
         spam_score=spam_score,
-        geo_valid=(dist_m < 500) if has_exif_gps else None,
+        geo_valid=(dist_m < 500) if has_exif_gps else False,
         weather_match=conditions.get("weather"),
         traffic_match=conditions.get("traffic"),
         review_status=review_status,
-        reviewer_notes=auto_reject_reason if review_status == "rejected" else None,
-        reviewed_at=datetime.utcnow() if review_status == "rejected" else None,
+        reviewer_notes=review_notes,
+        reviewed_at=datetime.utcnow(),
     )
     
     db.add(new_manual)
@@ -171,8 +179,10 @@ async def submit_manual_claim(
         "manual_claim_id": str(new_manual.id),
         "status": review_status,
         "spam_score": spam_score,
-        "message": "Claim submitted successfully." if review_status == "pending" else auto_reject_reason,
-        "rejection_reasons": rejection_reasons if review_status == "rejected" else [],
+        "message": adjudication.reason_summary,
+        "confidence": adjudication.confidence,
+        "evidence_used": adjudication.evidence_used,
+        "threshold_context": adjudication.threshold_context,
     }
 
 @router.get("/{claim_id}")

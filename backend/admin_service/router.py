@@ -196,11 +196,16 @@ async def approve_claim(
         raise HTTPException(status_code=404, detail="Target financial claim reference missing.")
 
     # 2. Call Dev 4 Engine with the resolved Claim ID
-    result = await approve_manual_claim(target_claim_id, db=db)
+    result = await approve_manual_claim(target_claim_id, db=db, allow_override=True)
     
     # 3. Finalize Manual Claim review status
     if manual_claim:
         manual_claim.review_status = "approved"
+        manual_claim.reviewer_notes = (
+            "Admin override approved claim."
+            if result.get("overridden")
+            else (manual_claim.reviewer_notes or "Admin approved claim.")
+        )
         manual_claim.reviewed_at = datetime.utcnow()
     
     await db.commit()
@@ -240,7 +245,7 @@ async def reject_claim(
         raise HTTPException(status_code=404, detail="Target financial claim reference missing.")
 
     # 2. Call Dev 4 Engine with the resolved Claim ID
-    result = await reject_manual_claim(target_claim_id, reason, db=db)
+    result = await reject_manual_claim(target_claim_id, reason, db=db, allow_override=True)
     
     # 3. Finalize Manual Claim review status
     if manual_claim:

@@ -370,13 +370,13 @@ else:
 
 # GET /api/admin/claims/manual
 if admin_ok:
-    r = req("GET", "/api/admin/claims/manual", headers=ADMIN_AUTH)
+    r = req("GET", "/api/admin/claims/manual?status=all", headers=ADMIN_AUTH)
     if r and r.status_code == 200:
         claims = r.json().get("claims", [])
         if claims and not state.get("manual_claim_id"):
             mc = claims[0]
             state["manual_claim_id"] = str(mc.get("claim_id") or mc.get("id",""))
-        log("GET /api/admin/claims/manual", "pass", f"{len(claims)} pending review")
+        log("GET /api/admin/claims/manual", "pass", f"{len(claims)} total manual claim(s)")
     else:
         log("GET /api/admin/claims/manual", "fail", f"status={r.status_code if r else 'N/A'} {r.text[:100] if r else ''}")
 else:

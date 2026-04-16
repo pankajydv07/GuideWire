@@ -33,11 +33,11 @@ export default function ManualClaimsPage() {
 
   const loadClaims = async () => {
     try {
-      const response = await adminApi.claims.listManual();
+      const response = await adminApi.claims.listManual("spam_score", "asc", "all");
       setClaims(response.claims);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load manual claim queue.");
+      setError(err instanceof Error ? err.message : "Failed to load manual claims.");
     } finally {
       setLoading(false);
     }
@@ -49,7 +49,12 @@ export default function ManualClaimsPage() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const isReviewLocked = (c: ManualClaimReview) => c.review_status !== "pending" || c.spam_score >= 70;
+  const hasFinalDecision = (c: ManualClaimReview) => ["approved", "rejected"].includes(c.review_status);
+  const needsHumanOverride = (c: ManualClaimReview) => !hasFinalDecision(c);
+  const getActionCopy = (c: ManualClaimReview) =>
+    hasFinalDecision(c)
+      ? { approve: "Override Approve", reject: "Override Reject" }
+      : { approve: "Approve", reject: "Reject" };
 
   const handleReview = async (claimId: string, status: "approved" | "rejected") => {
     if (status === "rejected" && !rejectReason.trim()) {
@@ -78,8 +83,8 @@ export default function ManualClaimsPage() {
     }
   };
 
-  const pendingClaims = claims.filter((c) => c.review_status === "pending" && c.spam_score < 70);
-  const processedClaims = claims.filter((c) => c.review_status !== "pending" || c.spam_score >= 70);
+  const reviewableClaims = claims.filter(needsHumanOverride);
+  const automatedClaims = claims.filter(hasFinalDecision);
 
   return (
     <PageContainer>
@@ -87,13 +92,13 @@ export default function ManualClaimsPage() {
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="text-[9px] font-black uppercase tracking-[0.25em] mb-2.5" style={{ color: "var(--text-muted)" }}>
-            Human Review
+            Automated Adjudication
           </div>
           <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: "var(--text-primary)" }}>
-            Review Queue
+            Manual Claims
           </h1>
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Human-in-the-loop verification for community-signaled disruptions
+            Auto-decided claims from the rider app, with admin override for exceptions and audits.
           </p>
         </motion.div>
 
@@ -120,7 +125,7 @@ export default function ManualClaimsPage() {
                 >
                   <Clock className="w-4 h-4" style={{ color: "#a855f7" }} />
                 </div>
-                <h2 className="text-lg font-black" style={{ color: "var(--text-primary)" }}>Active Signals</h2>
+                <h2 className="text-lg font-black" style={{ color: "var(--text-primary)" }}>Needs Override</h2>
               </div>
               <span
                 className="text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full"
@@ -129,7 +134,7 @@ export default function ManualClaimsPage() {
                   color: "#a855f7",
                 }}
               >
-                {pendingClaims.length} pending
+                {reviewableClaims.length} open
               </span>
             </div>
 
@@ -139,7 +144,7 @@ export default function ManualClaimsPage() {
                   Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="skeleton h-20 rounded-2xl" />
                   ))
-                ) : pendingClaims.length === 0 ? (
+                ) : reviewableClaims.length === 0 ? (
                   <motion.div
                     key="empty-queue"
                     initial={{ opacity: 0 }}
@@ -149,11 +154,14 @@ export default function ManualClaimsPage() {
                   >
                     <CheckCircle className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--text-muted)", opacity: 0.4 }} />
                     <div className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                      Queue Clear
+                      No Overrides Needed
                     </div>
+                    <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                      Manual claims are being auto-adjudicated successfully.
+                    </p>
                   </motion.div>
                 ) : (
-                  pendingClaims.map((claim, idx) => (
+                  reviewableClaims.map((claim, idx) => (
                     <motion.div
                       key={claim.id}
                       layout
@@ -184,6 +192,9 @@ export default function ManualClaimsPage() {
                             <div className="text-[10px] font-black uppercase tracking-widest mt-0.5" style={{ color: "#f59e0b" }}>
                               {formatTriggerLabel(claim.disruption_type)}
                             </div>
+                            <div className="text-[9px] mt-1" style={{ color: "var(--text-muted)" }}>
+                              Awaiting manual override
+                            </div>
                           </div>
                         </div>
                         <div className="text-right">
@@ -194,7 +205,7 @@ export default function ManualClaimsPage() {
                             className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest"
                             style={{ color: "#a855f7" }}
                           >
-                            Analyze <ArrowRight className="w-3 h-3" />
+                            Review <ArrowRight className="w-3 h-3" />
                           </div>
                         </div>
                       </div>
@@ -204,20 +215,21 @@ export default function ManualClaimsPage() {
               </AnimatePresence>
             </div>
 
-            {processedClaims.length > 0 && (
+            {automatedClaims.length > 0 && (
               <div className="pt-4">
                 <div className="flex items-center gap-2 mb-4 opacity-50">
                   <ClipboardList className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
                   <h2 className="text-sm font-black uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                    Processed
+                    Automated Decisions
                   </h2>
                 </div>
                 <div className="space-y-2">
-                  {processedClaims.slice(0, 10).map((claim) => (
+                  {automatedClaims.slice(0, 10).map((claim) => (
                     <div
                       key={claim.id}
+                      onClick={() => { setSelectedClaim(claim); setShowRejectInput(false); }}
                       className="flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
-                      style={{ background: "var(--bg-elevated)" }}
+                      style={{ background: "var(--bg-elevated)", cursor: "pointer" }}
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xl opacity-50">{getTriggerEmoji(claim.disruption_type)}</span>
@@ -231,7 +243,7 @@ export default function ManualClaimsPage() {
                         </div>
                       </div>
                       <span className={STATUS_STYLES[claim.review_status] || STATUS_STYLES.pending}>
-                        {claim.spam_score >= 70 ? "Spam" : claim.review_status}
+                        {claim.review_status}
                       </span>
                     </div>
                   ))}
@@ -272,10 +284,10 @@ export default function ManualClaimsPage() {
                         <Eye className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
                       </div>
                       <h3 className="text-base font-black mb-2" style={{ color: "var(--text-secondary)" }}>
-                        Security Chamber
+                        Claim Decision
                       </h3>
                       <p className="text-xs leading-relaxed max-w-[200px]" style={{ color: "var(--text-muted)" }}>
-                        Select a signal to begin verification and review.
+                        Select a manual claim to inspect its evidence and apply an admin override if needed.
                       </p>
                     </div>
                   </BorderGlow>
@@ -308,11 +320,35 @@ export default function ManualClaimsPage() {
                           className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
                           style={{ background: "rgba(124,58,237,0.1)", color: "#a855f7" }}
                         >
-                          #{shortId(selectedClaim.id).toUpperCase()}
+                          {selectedClaim.review_status}
                         </span>
                       </div>
 
                       <div className="p-5 space-y-4">
+                        <div
+                          className="rounded-xl p-4 space-y-2"
+                          style={{ background: "rgba(124,58,237,0.06)" }}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                                Decision Status
+                              </div>
+                              <div className="text-sm font-black mt-1" style={{ color: "var(--text-primary)" }}>
+                                {selectedClaim.review_status === "approved" ? "Auto-approved" : selectedClaim.review_status === "rejected" ? "Auto-rejected" : "Pending manual action"}
+                              </div>
+                            </div>
+                            <span className={STATUS_STYLES[selectedClaim.review_status] || STATUS_STYLES.pending}>
+                              {selectedClaim.review_status}
+                            </span>
+                          </div>
+                          {selectedClaim.reviewer_notes && (
+                            <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                              {selectedClaim.reviewer_notes}
+                            </p>
+                          )}
+                        </div>
+
                         <div
                           className="rounded-xl p-4 space-y-3"
                           style={{ background: "var(--bg-elevated)" }}
@@ -392,7 +428,7 @@ export default function ManualClaimsPage() {
                         {!showRejectInput ? (
                           <div className="flex gap-2">
                             <button
-                              disabled={reviewing !== null || isReviewLocked(selectedClaim)}
+                              disabled={reviewing !== null}
                               onClick={() => handleReview(selectedClaim.id, "approved")}
                               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40"
                               style={{
@@ -403,11 +439,11 @@ export default function ManualClaimsPage() {
                               {reviewing === selectedClaim.id ? (
                                 <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                               ) : (
-                                <><CheckCircle className="w-3.5 h-3.5" /> Verify</>
+                                <><CheckCircle className="w-3.5 h-3.5" /> {getActionCopy(selectedClaim).approve}</>
                               )}
                             </button>
                             <button
-                              disabled={reviewing !== null || isReviewLocked(selectedClaim)}
+                              disabled={reviewing !== null}
                               onClick={() => setShowRejectInput(true)}
                               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40"
                               style={{
@@ -415,7 +451,7 @@ export default function ManualClaimsPage() {
                                 color: "#f43f5e",
                               }}
                             >
-                              <XCircle className="w-3.5 h-3.5" /> Reject
+                              <XCircle className="w-3.5 h-3.5" /> {getActionCopy(selectedClaim).reject}
                             </button>
                           </div>
                         ) : (
@@ -425,12 +461,12 @@ export default function ManualClaimsPage() {
                               style={{ background: "rgba(244,63,94,0.05)" }}
                             >
                               <div className="text-[9px] font-black uppercase tracking-widest mb-2" style={{ color: "#f43f5e" }}>
-                                Rejection Reason
+                                Override Reason
                               </div>
                               <textarea
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
-                                placeholder="Explain the reason for rejection..."
+                                placeholder="Explain why this auto-decision should be overridden..."
                                 className="w-full text-xs leading-relaxed resize-none outline-none min-h-[80px] bg-transparent"
                                 style={{ color: "var(--text-primary)" }}
                               />
@@ -442,7 +478,7 @@ export default function ManualClaimsPage() {
                                 className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider"
                                 style={{ background: "#f43f5e", color: "#fff" }}
                               >
-                                Confirm Reject
+                                Confirm Override
                               </button>
                               <button
                                 onClick={() => { setShowRejectInput(false); setRejectReason(""); }}

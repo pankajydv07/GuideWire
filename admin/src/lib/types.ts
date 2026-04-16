@@ -43,6 +43,7 @@ export interface ManualClaimReview {
   review_status: string;
   reviewer_notes?: string | null;
   created_at: string;
+  reviewed_at?: string | null;
 }
 
 export interface ActiveTrigger {

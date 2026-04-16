@@ -29,6 +29,7 @@ apscheduler==3.10.4
 
 # External APIs
 httpx==0.27.0
+openai>=1.0.0,<2
 
 # Image/EXIF
 Pillow==10.4.0

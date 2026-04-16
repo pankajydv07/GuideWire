@@ -100,8 +100,18 @@ export default function ManualClaimScreen() {
         formData.append('longitude', String(location.longitude));
       }
       if (Platform.OS === 'web') {
-        const blob = await fetch(photo.uri).then((res) => res.blob());
-        formData.append('photo', blob, 'telemetry.jpg');
+        const webFile = (photo as ImagePicker.ImagePickerAsset & { file?: File }).file;
+        if (webFile instanceof File) {
+          formData.append('photo', webFile, webFile.name || 'telemetry.jpg');
+        } else {
+          const blob = await fetch(photo.uri).then((res) => {
+            if (!res.ok) {
+              throw new Error('Unable to read the selected image in the browser.');
+            }
+            return res.blob();
+          });
+          formData.append('photo', blob, 'telemetry.jpg');
+        }
       } else {
         formData.append('photo', { uri: photo.uri, name: 'telemetry.jpg', type: photo.mimeType || 'image/jpeg' } as any);
       }
@@ -109,7 +119,7 @@ export default function ManualClaimScreen() {
       setResult(response);
     } catch (error: any) {
       const msg = error instanceof Error ? error.message : 'Sync failure';
-      setErrors((prev) => ({ ...prev, description: msg }));
+      setSubmitError(msg);
     } finally {
       setSubmitting(false);
     }

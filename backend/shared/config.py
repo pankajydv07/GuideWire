@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: str = ""
 
     ML_SERVICE_URL: str = "http://ml:8001"
+    NEBIUS_API_KEY: str = ""
+    NEBIUS_BASE_URL: str = "https://api.tokenfactory.us-central1.nebius.com/v1/"
+    NEBIUS_MODEL: str = "moonshotai/Kimi-K2.5-fast"
+    NEBIUS_TIMEOUT_SECONDS: int = 20
+    NEBIUS_MAX_RETRIES: int = 1
 
     UPLOAD_DIR: str = "./uploads"
 

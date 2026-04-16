@@ -106,10 +106,10 @@ class AdminApiClient {
 
   claims = {
     listAll: () => this.request<{ claims: AutoClaim[] }>("GET", "/api/admin/claims/auto"),
-    listManual: (sort = "spam_score", order = "asc") =>
+    listManual: (sort = "spam_score", order = "asc", status = "all") =>
       this.request<{ claims: ManualClaimReview[] }>(
         "GET",
-        `/api/admin/claims/manual?sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}`,
+        `/api/admin/claims/manual?sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}&status=${encodeURIComponent(status)}`,
       ),
     approve: (claimId: string) => this.request<{ claim_id: string; status: string; payout_id?: string }>(
       "POST",
