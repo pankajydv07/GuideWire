@@ -15,7 +15,7 @@ export default function PredictivePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    const active = true;
     const load = async () => {
       try {
         await adminApi.autoLogin();
@@ -130,4 +130,3 @@ export default function PredictivePage() {
     </PageContainer>
   );
 }
-
