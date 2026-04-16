@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon, ShieldAlert, LineChart, Wallet } from "lucide-react";
 import { adminApi } from "@/lib/api";
 
 const NAV_ITEMS = [
@@ -11,6 +12,9 @@ const NAV_ITEMS = [
   { href: "/map", label: "Map", icon: MapIcon },
   { href: "/claims", label: "Auto Claims", icon: FileText },
   { href: "/manual-claims", label: "Manual Claims", icon: Camera },
+  { href: "/fraud-alerts", label: "Fraud Alerts", icon: ShieldAlert },
+  { href: "/predictive", label: "Predictive", icon: LineChart },
+  { href: "/payout-analytics", label: "Payout Analytics", icon: Wallet },
   { href: "/triggers", label: "Triggers", icon: Zap },
 ];
 
@@ -34,8 +38,6 @@ export function Sidebar() {
     const interval = window.setInterval(() => void loadHealth(), 30000);
     return () => { active = false; window.clearInterval(interval); };
   }, []);
-
-  useEffect(() => { setIsOpenMobile(false); }, [pathname]);
 
   return (
     <>
@@ -80,9 +82,11 @@ export function Sidebar() {
           <div className={`flex items-center ${isCollapsed ? "flex-col gap-5" : "justify-between"} mb-8 px-2`}>
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <img
+              <Image
                 src="/Zylo.png"
                 alt="Zylo Logo"
+                width={48}
+                height={48}
                 className="w-12 h-12 object-contain drop-shadow-[0_0_12px_rgba(168,85,247,0.35)]"
               />
               {!isCollapsed && (
@@ -166,6 +170,7 @@ export function Sidebar() {
                   key={item.href}
                   href={item.href}
                   title={isCollapsed ? item.label : undefined}
+                  onClick={() => setIsOpenMobile(false)}
                   className={`relative flex items-center ${isCollapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-3"} rounded-2xl text-sm font-semibold transition-all duration-200`}
                   style={{
                     background: active ? "rgba(124,58,237,0.16)" : "transparent",

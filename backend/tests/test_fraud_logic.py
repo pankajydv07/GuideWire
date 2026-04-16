@@ -100,9 +100,8 @@ def test_run_fraud_check_adds_anomaly_points():
         _ScalarResult(snapshot),
         _ScalarResult(120),
         _ScalarResult(1),
+        _ScalarResult(None),
         _ScalarResult(0),
-        _ScalarResult(0),
-        _ScalarResult(10),
     ])
 
     with patch.object(fraud_module, "predict_anomaly", return_value=0.8):

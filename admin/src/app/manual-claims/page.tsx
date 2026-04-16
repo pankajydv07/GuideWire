@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -416,9 +417,12 @@ export default function ManualClaimsPage() {
                           </p>
                           {selectedClaim.photo_url && (
                             <div className="mt-3 rounded-xl overflow-hidden">
-                              <img
+                              <Image
                                 src={selectedClaim.photo_url.startsWith("http") ? selectedClaim.photo_url : `${API_BASE}${selectedClaim.photo_url}`}
                                 alt="Signal Evidence"
+                                width={512}
+                                height={112}
+                                unoptimized
                                 className="w-full h-28 object-cover opacity-80 hover:opacity-100 transition-opacity"
                               />
                             </div>

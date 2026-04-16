@@ -90,6 +90,8 @@ export interface Zone {
   name: string;
   city: string;
   risk_score: number;
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export interface DashboardStats {
@@ -99,6 +101,33 @@ export interface DashboardStats {
   loss_ratio: number;
   total_payouts: number;
   total_income_loss: number;
+}
+
+export interface FraudAlertItem {
+  claim_id: string;
+  rider_id: string;
+  rider_name?: string | null;
+  disruption_type?: string | null;
+  fraud_score: number;
+  status: string;
+  payout_amount: number;
+  created_at: string;
+}
+
+export interface PredictiveZoneForecast {
+  zone_id: string;
+  zone: string;
+  city: string;
+  risk_score: number;
+  recent_event_count: number;
+  max_predicted_risk: number;
+  forecast: Array<{
+    date: string;
+    day_of_week: number;
+    predicted_disruption_probability: number;
+    risk_band: string;
+    expected_earnings_multiplier: number;
+  }>;
 }
 
 export interface OverviewData {
