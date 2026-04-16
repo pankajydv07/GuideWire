@@ -22,6 +22,7 @@ Also detects Community Signal: >70% of zone riders see order collapse.
 """
 
 import uuid
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +40,7 @@ _community_signals_cache: list[dict] = []
 _last_evaluation: Optional[datetime] = None
 _civic_congestion_window: dict[str, list[tuple[datetime, int]]] = {}
 _adaptive_threshold_cache: dict[str, dict] = {}
+_adaptive_threshold_lock = asyncio.Lock()
 
 # Dedup: zone+trigger+slot already created
 _created_events: set[str] = set()   # "zone_id:trigger_type:slot_start_iso"
@@ -81,9 +83,10 @@ def _default_zone_thresholds() -> dict[str, float]:
 
 async def _self_calibrated_thresholds(db: AsyncSession, zone_id: str) -> dict[str, float]:
     now = datetime.now(timezone.utc)
-    cached = _adaptive_threshold_cache.get(zone_id)
-    if cached and cached.get("expires_at") and cached["expires_at"] > now:
-        return cached["thresholds"]
+    async with _adaptive_threshold_lock:
+        cached = _adaptive_threshold_cache.get(zone_id)
+        if cached and cached.get("expires_at") and cached["expires_at"] > now:
+            return cached["thresholds"]
 
     defaults = _default_zone_thresholds()
     lookback = now - timedelta(days=14)
@@ -136,10 +139,11 @@ async def _self_calibrated_thresholds(db: AsyncSession, zone_id: str) -> dict[st
             smooth_threshold(defaults["algo_drop_pct"], algo_drop, floor=30.0, ceiling=70.0, percentile_rank=0.85), 2
         ),
     }
-    _adaptive_threshold_cache[zone_id] = {
-        "thresholds": calibrated,
-        "expires_at": now + timedelta(minutes=30),
-    }
+    async with _adaptive_threshold_lock:
+        _adaptive_threshold_cache[zone_id] = {
+            "thresholds": calibrated,
+            "expires_at": now + timedelta(minutes=30),
+        }
     return calibrated
 
 

@@ -88,7 +88,7 @@ async def build_graph_snapshot(db: AsyncSession, hours: int = 72) -> dict:
 
     propagation_edges: list[dict] = []
     propagation_scores: dict[tuple[str, str], int] = defaultdict(int)
-    for (_, _bucket), zone_ids in by_trigger_bucket.items():
+    for (_trigger_type, bucket), zone_ids in by_trigger_bucket.items():
         zones = sorted(str(z) for z in zone_ids)
         for i in range(len(zones)):
             for j in range(i + 1, len(zones)):

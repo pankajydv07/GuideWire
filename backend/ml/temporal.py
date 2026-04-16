@@ -13,7 +13,7 @@ def _to_float(value, default: float = 0.0) -> float:
         return default
 
 
-def percentile(values: list[float], pct: float) -> float:
+def percentile_value(values: list[float], pct: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(values)
@@ -34,7 +34,7 @@ def smooth_threshold(
     if len(observed_values) < min_samples:
         return float(default_value)
 
-    observed = percentile(observed_values, percentile_rank)
+    observed = percentile_value(observed_values, percentile_rank)
     blended = (default_value * smoothing) + (observed * (1 - smoothing))
     return max(floor, min(ceiling, blended))
 
