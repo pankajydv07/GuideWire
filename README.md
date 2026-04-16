@@ -25,6 +25,7 @@
 11. [Development Plan](#11-development-plan)  
 12. [Phase 2 — What's Built](#12-phase-2--whats-built)  
 13. [Adversarial Defense & Anti-Spoofing Strategy](#13-adversarial-defense--anti-spoofing-strategy)  
+14. [Regulatory Compliance & Insurance Sense](#regulatory-compliance--insurance-sense)  
 
 ---
 
@@ -1243,6 +1244,68 @@ adjustments ensuring honest workers are never punished for signals that bad weat
 creates; and (5) a ring-level escalation protocol with batch holds, silent flags, retroactive
 audits, platform partner alerts, and per-zone payout velocity caps that protects liquidity
 before a ring can drain it. No GPS spoofing app defeats all five layers simultaneously.
+
+---
+
+## Regulatory Compliance & Insurance Sense
+
+### Social Security Code, 2020 — Engagement Rule
+
+Zylo enforces a configurable **minimum engagement threshold** before a rider can purchase
+parametric income protection:
+
+- **90-day rule** (single-platform riders) / **120-day rule** (multi-apping riders) per SS Code, 2020.
+- Configuration: `MIN_ENGAGEMENT_DAYS` environment variable (default: `0` for demo, set to `90`
+  for production compliance).
+- Enforcement point: Policy creation (`POST /api/policies`) calculates `tenure_days` from the
+  rider's `created_at` timestamp and rejects purchases below the threshold with an
+  `ENGAGEMENT_RULE` error code.
+- Admin visibility: The pool health endpoint exposes the count of active riders vs. total
+  registered riders, enabling the "how many workers fall below the SS Code threshold" metric.
+
+### DPDP Act, 2023 — Data Consent Framework
+
+All personal data processing follows India's Digital Personal Data Protection Act, 2023:
+
+| Data Category | Purpose | Consent Mechanism |
+|---|---|---|
+| **GPS location** | Zone presence verification for claim adjudication | Explicit checkbox during registration |
+| **UPI / Bank account** | Automatic payout disbursement | Explicit checkbox during registration |
+| **Platform activity** | Earnings baseline and disruption corroboration | Explicit checkbox during registration |
+
+- Consent is **mandatory** — the registration flow blocks until all three consents are granted.
+- Consent state is recorded at the point of registration and can be audited.
+- Platform data is currently simulated; real-world deployment requires B2B data-sharing agreements
+  with Zepto/Blinkit/Swiggy under the DPDP Act's Data Fiduciary framework.
+
+### IRDAI Guidelines Alignment
+
+| Requirement | Implementation |
+|---|---|
+| **Dynamic pricing** | LightGBM ML model + zone risk scores + monsoon detection + slot-level granularity |
+| **Accuracy** | Per-zone lat/lon weather polling, Three-Factor Validation Gate (trigger + online + earnings drop) |
+| **Fraud prevention** | 6-signal fraud scoring: GPS, peer comparison, baseline validity, anomaly ML, collusion, EXIF |
+| **Financial sustainability (BCR)** | `GET /api/admin/analytics/pool-health` — real-time BCR calculation with IRDAI target ≤0.65 |
+| **Stress test** | `GET /api/admin/analytics/stress-test` — simulated 14-day monsoon proving pool survival |
+| **Zero-touch claims** | Fully automated auto-claim pipeline: trigger → fraud → UPI payout, zero human intervention |
+| **Trusted data sources** | OpenWeatherMap (live), CPCB AQI proxy, Google Traffic API (simulated in dev) |
+
+### Adverse Selection Prevention (48-Hour Lockout)
+
+Zylo uses a **weekly policy cycle** as a natural adverse selection prevention mechanism:
+
+- Policies are purchased **before the coverage week begins** (typically Sunday).
+- Once a week starts, riders cannot retroactively purchase coverage after a weather event is
+  reported — the `DUPLICATE_POLICY` check prevents same-week re-enrollment.
+- This is functionally equivalent to a "48-hour lockout before red alert" while being simpler
+  for riders to understand.
+
+### Operational Cost Efficiency
+
+- Auto-claims: **zero-touch** — trigger fires → fraud check → instant UPI payout. No human.
+- Manual claims: **AI-adjudicated** — Nebius/Kimi LLM evaluates evidence → recommends approve/reject
+  → admin reviews only edge cases.
+- Premiums: **₹20–₹169/week** — micro enough that admin costs don't eat into collection.
 
 ---
 

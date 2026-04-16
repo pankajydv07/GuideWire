@@ -210,6 +210,26 @@ async def create_policy(
             created_at = created_at.replace(tzinfo=timezone.utc)
         tenure_days = max((datetime.now(timezone.utc) - created_at).days, 0)
 
+    # ── SS Code, 2020 — Engagement Rule ──────────────────────────
+    # Riders must complete a minimum number of days on-platform before
+    # qualifying for parametric income protection (configurable via env).
+    from shared.config import settings as app_settings
+    min_days = app_settings.MIN_ENGAGEMENT_DAYS
+    if min_days > 0 and tenure_days < min_days:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "ENGAGEMENT_RULE",
+                "message": (
+                    f"SS Code 2020 compliance: Rider must complete {min_days} days "
+                    f"on-platform before purchasing a policy. "
+                    f"Current tenure: {tenure_days} days."
+                ),
+                "tenure_days": tenure_days,
+                "required_days": min_days,
+            },
+        )
+
     premium_data = await calculate_premium(
         zone=zone_name,
         slots=slots,

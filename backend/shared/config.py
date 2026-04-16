@@ -53,6 +53,15 @@ class Settings(BaseSettings):
 
     UPLOAD_DIR: str = "./uploads"
 
+    # SS Code, 2020 — Engagement Rule
+    # Riders must complete this many days on-platform before purchasing a policy.
+    # Set to 90 for production (SS Code mandate). 0 for demo/hackathon.
+    MIN_ENGAGEMENT_DAYS: int = 0
+
+    # Pool Sustainability — IRDAI Guideline
+    # Target Benefit-Cost Ratio. Payouts should be ≤ this fraction of premiums.
+    TARGET_BCR: float = 0.65
+
     @field_validator("DEBUG", mode="before")
     @classmethod
     def parse_debug(cls, value: Any) -> bool:

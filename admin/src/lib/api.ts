@@ -5,6 +5,7 @@ import type {
   FraudAlertItem,
   ManualClaimReview,
   OverviewData,
+  PoolHealth,
   PredictiveZoneForecast,
   TriggerStatusResponse,
   Zone,
@@ -22,6 +23,7 @@ function computeDashboardStats(
   autoClaims: AutoClaim[],
   manualClaims: ManualClaimReview[],
   triggerStatus: TriggerStatusResponse,
+  poolHealth: PoolHealth | null,
 ): DashboardStats {
   const totalClaims = autoClaims.length + manualClaims.length;
   const totalPayouts = autoClaims.reduce((sum, claim) => sum + (claim.payout_amount || 0), 0);
@@ -34,6 +36,8 @@ function computeDashboardStats(
     loss_ratio: totalIncomeLoss > 0 ? totalPayouts / totalIncomeLoss : 0,
     total_payouts: totalPayouts,
     total_income_loss: totalIncomeLoss,
+    bcr: poolHealth?.bcr ?? 0,
+    pool_status: poolHealth?.status ?? "unknown",
   };
 }
 
@@ -165,10 +169,11 @@ class AdminApiClient {
   stats = {
     overview: async (): Promise<OverviewData> => {
       await this.autoLogin();
-      const [autoClaimsResponse, manualClaimsResponse, triggerStatus] = await Promise.all([
+      const [autoClaimsResponse, manualClaimsResponse, triggerStatus, poolHealth] = await Promise.all([
         this.claims.listAll(),
         this.claims.listManual(),
         this.triggers.getStatus(),
+        this.analytics.poolHealth().catch(() => null),
       ]);
 
       const autoClaims = autoClaimsResponse.claims;
@@ -178,7 +183,8 @@ class AdminApiClient {
         autoClaims,
         manualClaims,
         triggerStatus,
-        stats: computeDashboardStats(autoClaims, manualClaims, triggerStatus),
+        poolHealth,
+        stats: computeDashboardStats(autoClaims, manualClaims, triggerStatus, poolHealth),
       };
     },
   };
@@ -214,6 +220,10 @@ class AdminApiClient {
         edges: Array<Record<string, unknown>>;
         hotspots: Array<{ zone_id: string; zone: string; events: number }>;
       }>("GET", `/api/admin/graph/knowledge?hours=${encodeURIComponent(String(hours))}`),
+    poolHealth: () =>
+      this.request<PoolHealth>("GET", "/api/admin/analytics/pool-health"),
+    stressTest: (days = 14) =>
+      this.request<Record<string, unknown>>("GET", `/api/admin/analytics/stress-test?monsoon_days=${days}`),
   };
 
   health() {

@@ -7,6 +7,7 @@ import {
   Clock,
   Zap,
   BarChart3,
+  Shield,
   ArrowRight,
   RefreshCw,
   AlertCircle,
@@ -143,13 +144,15 @@ export default function AdminOverview() {
           hsl: "349 89 60",
         },
         {
-          label: "Loss Ratio",
-          value: formatPercent(data.stats.loss_ratio),
-          sub: "payout efficiency",
-          icon: BarChart3,
-          color: "#10b981",
-          bg: "rgba(16,185,129,0.08)",
-          hsl: "160 84 39",
+          label: "Pool BCR",
+          value: data.stats.bcr > 0 ? data.stats.bcr.toFixed(2) : formatPercent(data.stats.loss_ratio),
+          sub: data.stats.bcr > 0
+            ? `Target: ≤0.65 • ${data.stats.pool_status === "sustainable" ? "✓ Healthy" : data.stats.pool_status === "caution" ? "⚠ Caution" : "✗ Critical"}`
+            : "payout efficiency",
+          icon: data.stats.bcr > 0 ? Shield : BarChart3,
+          color: data.stats.pool_status === "sustainable" ? "#10b981" : data.stats.pool_status === "caution" ? "#f59e0b" : "#f43f5e",
+          bg: data.stats.pool_status === "sustainable" ? "rgba(16,185,129,0.08)" : data.stats.pool_status === "caution" ? "rgba(245,158,11,0.08)" : "rgba(244,63,94,0.08)",
+          hsl: data.stats.pool_status === "sustainable" ? "160 84 39" : data.stats.pool_status === "caution" ? "38 92 50" : "349 89 60",
         },
       ]
     : [];

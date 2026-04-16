@@ -101,6 +101,21 @@ export interface DashboardStats {
   loss_ratio: number;
   total_payouts: number;
   total_income_loss: number;
+  bcr: number;
+  pool_status: string;
+}
+
+export interface PoolHealth {
+  bcr: number;
+  target_bcr: number;
+  status: "sustainable" | "caution" | "critical";
+  assessment: string;
+  pool_balance: number;
+  total_premiums_collected: number;
+  total_payouts_disbursed: number;
+  coverage_utilization: number;
+  active_policies: number;
+  active_riders: number;
 }
 
 export interface FraudAlertItem {
@@ -135,6 +150,7 @@ export interface OverviewData {
   manualClaims: ManualClaimReview[];
   triggerStatus: TriggerStatusResponse;
   stats: DashboardStats;
+  poolHealth: PoolHealth | null;
 }
 
 export const TRIGGER_LABELS: Record<string, string> = {
