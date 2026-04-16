@@ -20,16 +20,13 @@ export default function PayoutAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const active = true;
     const load = async () => {
       try {
         await adminApi.autoLogin();
         const response = await adminApi.analytics.payouts(14);
-        if (!active) return;
         setData(response);
         setError(null);
       } catch (err) {
-        if (!active) return;
         setError(err instanceof Error ? err.message : "Failed to load payout analytics.");
       }
     };

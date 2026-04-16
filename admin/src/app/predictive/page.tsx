@@ -15,7 +15,6 @@ export default function PredictivePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const active = true;
     const load = async () => {
       try {
         await adminApi.autoLogin();
@@ -24,16 +23,14 @@ export default function PredictivePage() {
           adminApi.analytics.thresholds(),
           adminApi.analytics.knowledgeGraph(72),
         ]);
-        if (!active) return;
         setZones(predictive.zones);
         setThresholds(thresholdData.zones);
         setHotspots(graph.hotspots.map((h) => ({ zone: h.zone, events: h.events })));
         setError(null);
       } catch (err) {
-        if (!active) return;
         setError(err instanceof Error ? err.message : "Failed to load predictive analytics.");
       } finally {
-        if (active) setLoading(false);
+        setLoading(false);
       }
     };
     void load();
