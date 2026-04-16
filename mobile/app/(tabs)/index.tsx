@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { api, type PolicyResponse, type TriggerStatus, type PayoutListItem } from '../../services/api';
+import { api, type PolicyResponse, type TriggerStatus, type PayoutListItem, type RiderIntelligenceResponse } from '../../services/api';
 import { formatApiDateTime } from '../../utils/datetime';
 
 const { width } = Dimensions.get('window');
@@ -46,6 +46,7 @@ export default function DashboardScreen() {
   const [triggers, setTriggers] = useState<TriggerStatus | null>(null);
   const [payouts, setPayouts] = useState<PayoutListItem[]>([]);
   const [zoneRisk, setZoneRisk] = useState<{ weather: number; traffic: number; store: number } | null>(null);
+  const [intelligence, setIntelligence] = useState<RiderIntelligenceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -61,17 +62,19 @@ export default function DashboardScreen() {
       }
     } catch {}
 
-    const [policyData, triggerData, payoutData, quoteData] = await Promise.all([
+    const [policyData, triggerData, payoutData, quoteData, intelligenceData] = await Promise.all([
       api.policies.getActive().catch(() => null),
       api.triggers.getStatus().catch(() => null),
       api.payouts.list().catch(() => ({ payouts: [] })),
       api.policies.getQuote(slots, rider?.city ?? '').catch(() => null),
+      api.riders.getIntelligence(7).catch(() => null),
     ]);
 
     setPolicy(policyData);
     setTriggers(triggerData);
     setPayouts(payoutData.payouts || []);
     setZoneRisk(quoteData?.quotes?.[0]?.risk_breakdown ?? null);
+    setIntelligence(intelligenceData);
     setLastUpdated(new Date());
     setRefreshError(null);
   };
@@ -267,6 +270,50 @@ export default function DashboardScreen() {
           )}
         </AnimatedCard>
 
+        <AnimatedCard delay={360}>
+          <View style={[styles.cardHeader, { marginBottom: 14 }]}>
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="analytics" size={18} color="#a78bfa" />
+              <Text style={styles.cardTitle}>Next-Week Forecast</Text>
+            </View>
+          </View>
+          {intelligence?.next_week_forecast?.length ? (
+            intelligence.next_week_forecast.slice(0, 3).map((day) => (
+              <View key={day.date} style={styles.forecastRow}>
+                <View>
+                  <Text style={styles.forecastDate}>{day.date}</Text>
+                  <Text style={styles.forecastMeta}>{day.risk_band.toUpperCase()} risk</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.forecastRisk}>{Math.round(day.predicted_disruption_probability * 100)}%</Text>
+                  <Text style={styles.forecastMeta}>earnings x{day.expected_earnings_multiplier}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.mutedText}>Forecast is calibrating from recent rider activity.</Text>
+          )}
+        </AnimatedCard>
+
+        <AnimatedCard delay={420}>
+          <View style={[styles.cardHeader, { marginBottom: 14 }]}>
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="notifications" size={18} color="#f59e0b" />
+              <Text style={styles.cardTitle}>Forward Alerts</Text>
+            </View>
+          </View>
+          {intelligence?.forward_alerts?.length ? (
+            intelligence.forward_alerts.map((alert, idx) => (
+              <View key={`${alert.type}-${idx}`} style={styles.alertSignalRow}>
+                <Text style={styles.alertSignalTitle}>{alert.message}</Text>
+                <Text style={styles.alertSignalMeta}>{alert.severity.toUpperCase()}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.mutedText}>No predictive alerts right now.</Text>
+          )}
+        </AnimatedCard>
+
         <View style={styles.actionButtons}>
           <TouchableOpacity style={[styles.ctaSecondary, styles.flexOne]} onPress={() => router.push('/policy/select')}>
             <Ionicons name="shield-outline" size={18} color="#f8fafc" style={{ marginRight: 8 }} />
@@ -332,6 +379,13 @@ const styles = StyleSheet.create({
   payoutLabel: { fontSize: 14, fontWeight: '700', color: '#f8fafc' },
   payoutDate: { fontSize: 12, color: '#64748b', marginTop: 2 },
   payoutAmount: { fontSize: 18, fontWeight: '800', color: '#38bdf8' },
+  forecastRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  forecastDate: { color: '#f8fafc', fontWeight: '700', fontSize: 14 },
+  forecastRisk: { color: '#a78bfa', fontWeight: '800', fontSize: 16 },
+  forecastMeta: { color: '#64748b', fontSize: 11, marginTop: 2 },
+  alertSignalRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  alertSignalTitle: { color: '#f8fafc', fontSize: 13, fontWeight: '600' },
+  alertSignalMeta: { color: '#f59e0b', fontSize: 10, marginTop: 3, fontWeight: '700', letterSpacing: 0.6 },
   actionButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
   flexOne: { flex: 1 },
   ctaButton: { backgroundColor: '#38bdf8', borderRadius: 16, paddingHorizontal: 24, paddingVertical: 16, width: '100%' },

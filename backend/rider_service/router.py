@@ -11,6 +11,10 @@ from rider_service.schemas import (
 )
 from rider_service.models import RiderRiskProfile, Zone
 from premium_service.service import calculate_premium as calculate_risk_premium
+from policy_service.models import Policy
+from trigger_service.models import PlatformSnapshot, DisruptionEvent
+from ml.temporal import summarize_snapshot_series, build_next_week_forecast
+from trigger_service.service import get_active_triggers
 
 router = APIRouter()
 
@@ -205,6 +209,112 @@ async def get_me(rider=Depends(get_current_rider), db: AsyncSession = Depends(ge
         "upi_id": rider.upi_id,
         "kyc_status": rider.kyc_status,
         "trust_score": rider.trust_score
+    }
+
+
+# ─── GET /me/intelligence ─────────────────────────────
+@router.get("/me/intelligence")
+async def get_rider_intelligence(
+    days: int = 7,
+    rider=Depends(get_current_rider),
+    db: AsyncSession = Depends(get_db),
+):
+    zone_result = await db.execute(select(Zone).where(Zone.id == rider.zone_id))
+    zone = zone_result.scalar_one_or_none()
+
+    risk_result = await db.execute(select(RiderRiskProfile).where(RiderRiskProfile.rider_id == rider.id))
+    risk_profile = risk_result.scalar_one_or_none()
+
+    snapshots = (
+        await db.execute(
+            select(PlatformSnapshot)
+            .where(PlatformSnapshot.rider_id == rider.id)
+            .order_by(PlatformSnapshot.time.desc())
+            .limit(64)
+        )
+    ).scalars().all()
+    snapshot_payload = [
+        {
+            "order_rate_drop_pct": s.order_rate_drop_pct,
+            "congestion_index": s.congestion_index,
+            "earnings_current_slot": s.earnings_current_slot,
+        }
+        for s in snapshots
+    ]
+    summary = summarize_snapshot_series(snapshot_payload)
+    forecast = build_next_week_forecast(
+        zone_risk_score=float(zone.composite_risk_score if zone else 55),
+        disruption_probability=float(risk_profile.disruption_probability if risk_profile else 0.35),
+        avg_order_drop_pct=float(summary["avg_order_drop_pct"]),
+        earnings_volatility=float(summary["earnings_volatility"]),
+        days=max(3, min(days, 14)),
+    )
+
+    active_policy = (
+        await db.execute(
+            select(Policy)
+            .where(Policy.rider_id == rider.id, Policy.status == "active")
+            .order_by(Policy.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    recent_events = (
+        await db.execute(
+            select(DisruptionEvent)
+            .where(DisruptionEvent.zone_id == rider.zone_id)
+            .order_by(DisruptionEvent.created_at.desc())
+            .limit(5)
+        )
+    ).scalars().all()
+
+    alerts: list[dict] = []
+    high_risk_days = [d for d in forecast if d["predicted_disruption_probability"] >= 0.65]
+    if high_risk_days:
+        alerts.append(
+            {
+                "type": "high_risk_window",
+                "severity": "high",
+                "message": f"{len(high_risk_days)} high-risk day(s) expected in the next week.",
+                "dates": [d["date"] for d in high_risk_days[:3]],
+            }
+        )
+
+    active_zone_triggers = [t for t in get_active_triggers() if str(t.get("zone_id")) == str(rider.zone_id)]
+    if active_zone_triggers:
+        alerts.append(
+            {
+                "type": "active_zone_trigger",
+                "severity": "medium",
+                "message": f"{len(active_zone_triggers)} live disruption signal(s) in your zone.",
+                "triggers": [t.get("type") for t in active_zone_triggers[:3]],
+            }
+        )
+
+    if active_policy and active_policy.coverage_limit > 0:
+        usage_ratio = float(active_policy.coverage_used or 0) / float(active_policy.coverage_limit)
+        if usage_ratio >= 0.75:
+            alerts.append(
+                {
+                    "type": "coverage_depletion_risk",
+                    "severity": "medium",
+                    "message": "Policy coverage usage has crossed 75%. Consider renewal planning.",
+                    "coverage_used_ratio": round(usage_ratio, 3),
+                }
+            )
+
+    return {
+        "zone": zone.name if zone else rider.city,
+        "next_week_forecast": forecast,
+        "forward_alerts": alerts,
+        "recent_zone_events": [
+            {
+                "trigger_type": e.trigger_type,
+                "severity": e.severity,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "affected_riders": e.affected_riders,
+            }
+            for e in recent_events
+        ],
     }
 
 

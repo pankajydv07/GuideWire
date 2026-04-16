@@ -37,7 +37,25 @@ function buildGradientVars(colors: string[]) {
 function easeOutCubic(x: number) { return 1 - Math.pow(1 - x, 3); }
 function easeInCubic(x: number) { return x * x * x; }
 
-function animateValue({ start = 0, end = 100, duration = 1000, delay = 0, ease = easeOutCubic, onUpdate, onEnd }: any) {
+interface AnimateValueOptions {
+  start?: number;
+  end?: number;
+  duration?: number;
+  delay?: number;
+  ease?: (value: number) => number;
+  onUpdate: (value: number) => void;
+  onEnd?: () => void;
+}
+
+function animateValue({
+  start = 0,
+  end = 100,
+  duration = 1000,
+  delay = 0,
+  ease = easeOutCubic,
+  onUpdate,
+  onEnd,
+}: AnimateValueOptions) {
   const t0 = performance.now() + delay;
   function tick() {
     const elapsed = performance.now() - t0;

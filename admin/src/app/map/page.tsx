@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Zap, 
@@ -36,22 +36,31 @@ const TRIGGER_COLORS: Record<string, { border: string; bg: string; text: string;
   default: { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.2)", text: "#9ca3af", glow: "#ffffff" },
 };
 
-const CITY_COORDS: Record<string, { lat: number; lon: number; zoom: number }> = {
+const DEFAULT_CITY_VIEWPORTS: Record<string, { lat: number; lon: number; zoom: number }> = {
   bengaluru: { lat: 12.9716, lon: 77.5946, zoom: 11 },
   hyderabad: { lat: 17.3850, lon: 78.4867, zoom: 11 },
   mumbai: { lat: 19.0760, lon: 72.8777, zoom: 10 },
   delhi: { lat: 28.6139, lon: 77.2090, zoom: 10 },
 };
 
+const DEFAULT_CITY = "bengaluru";
+
+function normalizeCity(city: string) {
+  return city.trim().toLowerCase();
+}
+
+function formatCityLabel(city: string) {
+  return city.replace(/_/g, " ");
+}
+
 export default function MapPage() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [triggerStatus, setTriggerStatus] = useState<TriggerStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [selectedCity, setSelectedCity] = useState("bengaluru");
+  const [selectedCity, setSelectedCity] = useState(DEFAULT_CITY);
   const [viewport, setViewport] = useState({
-    center: [CITY_COORDS.bengaluru.lon, CITY_COORDS.bengaluru.lat] as [number, number],
-    zoom: CITY_COORDS.bengaluru.zoom
+    center: [DEFAULT_CITY_VIEWPORTS[DEFAULT_CITY].lon, DEFAULT_CITY_VIEWPORTS[DEFAULT_CITY].lat] as [number, number],
+    zoom: DEFAULT_CITY_VIEWPORTS[DEFAULT_CITY].zoom
   });
 
   const loadData = async () => {
@@ -85,23 +94,53 @@ export default function MapPage() {
     return map;
   }, [triggerStatus]);
 
+  const cityOptions = useMemo(() => {
+    const fromZones = [...new Set(zones.map((zone) => normalizeCity(zone.city)).filter(Boolean))];
+    if (fromZones.length > 0) return fromZones.sort();
+    return Object.keys(DEFAULT_CITY_VIEWPORTS);
+  }, [zones]);
+
+  const getCityViewport = useCallback((city: string) => {
+    const normalizedCity = normalizeCity(city);
+    const cityZones = zones.filter((zone) => normalizeCity(zone.city) === normalizedCity);
+    const zonesWithCoords = cityZones.filter((zone) => zone.lon != null && zone.lat != null);
+
+    if (zonesWithCoords.length > 0) {
+      const lon = zonesWithCoords.reduce((sum, zone) => sum + Number(zone.lon), 0) / zonesWithCoords.length;
+      const lat = zonesWithCoords.reduce((sum, zone) => sum + Number(zone.lat), 0) / zonesWithCoords.length;
+      return {
+        center: [lon, lat] as [number, number],
+        zoom: DEFAULT_CITY_VIEWPORTS[normalizedCity]?.zoom ?? 11,
+      };
+    }
+
+    const fallback = DEFAULT_CITY_VIEWPORTS[normalizedCity] ?? DEFAULT_CITY_VIEWPORTS[DEFAULT_CITY];
+    return {
+      center: [fallback.lon, fallback.lat] as [number, number],
+      zoom: fallback.zoom,
+    };
+  }, [zones]);
+
   const filteredZones = useMemo(() => {
     return zones.filter(z => 
-      (z.city.toLowerCase() === selectedCity.toLowerCase()) &&
-      (search === "" || z.name.toLowerCase().includes(search.toLowerCase()))
+      normalizeCity(z.city) === normalizeCity(selectedCity)
     );
-  }, [zones, selectedCity, search]);
+  }, [zones, selectedCity]);
 
-  const handleCityChange = (city: string) => {
+  const focusCity = useCallback((city: string) => {
+    const normalizedCity = normalizeCity(city);
+    setSelectedCity(normalizedCity);
+    setViewport(getCityViewport(normalizedCity));
+  }, [getCityViewport]);
+
+  const focusZone = useCallback((zone: Zone, zoom = 13) => {
+    const city = normalizeCity(zone.city);
     setSelectedCity(city);
-    const coords = CITY_COORDS[city.toLowerCase()];
-    if (coords) {
-      setViewport({
-        center: [coords.lon, coords.lat],
-        zoom: coords.zoom
-      });
-    }
-  };
+    setViewport({
+      center: [zone.lon ?? getCityViewport(city).center[0], zone.lat ?? getCityViewport(city).center[1]],
+      zoom,
+    });
+  }, [getCityViewport]);
 
   return (
     <PageContainer fullBleed>
@@ -121,18 +160,18 @@ export default function MapPage() {
           </div>
 
           <div className="flex gap-2 p-1.5 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/5 pointer-events-auto">
-            {Object.keys(CITY_COORDS).map((city) => (
+            {cityOptions.map((city) => (
               <button
                 key={city}
-                onClick={() => handleCityChange(city)}
+                onClick={() => focusCity(city)}
                 className={cn(
                   "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300",
-                  selectedCity.toLowerCase() === city.toLowerCase()
+                  normalizeCity(selectedCity) === normalizeCity(city)
                     ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
                     : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
                 )}
               >
-                {city}
+                {formatCityLabel(city)}
               </button>
             ))}
           </div>
@@ -140,7 +179,7 @@ export default function MapPage() {
 
         <div className="flex-1 w-full bg-[#050505]">
           <Map
-            {...viewport}
+            viewport={viewport}
             onViewportChange={(v) => setViewport({ center: v.center, zoom: v.zoom })}
             className="w-full h-full"
           >
@@ -155,8 +194,8 @@ export default function MapPage() {
               return (
                 <MapMarker
                   key={zone.id}
-                  longitude={(zone as any).lon || 0}
-                  latitude={(zone as any).lat || 0}
+                  longitude={zone.lon ?? 0}
+                  latitude={zone.lat ?? 0}
                 >
                   <MarkerContent>
                     <div className="relative group">
@@ -291,12 +330,12 @@ export default function MapPage() {
                         onClick={() => {
                           const z = zones.find(z => z.id === trigger.zone_id);
                           if (z) {
-                            setViewport({
-                              center: [(z as any).lon, (z as any).lat],
-                              zoom: 13
-                            });
+                            focusZone(z);
                           }
                         }}
+                        type="button"
+                        aria-label={`Focus ${trigger.zone} on the map`}
+                        title={`Focus ${trigger.zone}`}
                         className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
                       >
                         <Target className="w-3.5 h-3.5 text-gray-400" />
@@ -342,6 +381,13 @@ export default function MapPage() {
              </div>
           </div>
         </div>
+        {loading && (
+          <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center pointer-events-none">
+            <div className="rounded-xl border border-white/10 bg-black/70 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Loading map data
+            </div>
+          </div>
+        )}
       </div>
     </PageContainer>
   );

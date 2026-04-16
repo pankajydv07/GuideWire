@@ -3,9 +3,9 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg15
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ankush
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ankush}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -29,14 +29,30 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── Neo4j (Knowledge Graph v0) ─────────────────────
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/zylo12345
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
   # ─── Database Setup (Tables + Seeds) ────────────
   setup:
     build: ./backend
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
@@ -53,8 +69,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
       REDIS_URL: redis://redis:6379/0
       ML_SERVICE_URL: http://ml:8001
       UPLOAD_DIR: /app/uploads
@@ -76,8 +92,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
       REDIS_URL: redis://redis:6379/0
       ML_SERVICE_URL: http://ml:8001
     depends_on:
@@ -103,4 +119,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  neo4j_data:
   upload_data:

@@ -1,10 +1,18 @@
 import httpx
 import asyncio
+import os
 import time
 import random
+import pytest
 
 BASE_URL = "http://localhost:8000"
 
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_LIVE_BACKEND_TESTS") != "1",
+    reason="requires a live backend on localhost:8000; set RUN_LIVE_BACKEND_TESTS=1 to run",
+)
+
+@pytest.mark.asyncio
 async def test_auth_flow():
     """Test the full rider auth flow from OTP to Profile access."""
     print("🚀 Starting Rider Auth Flow Test...")
