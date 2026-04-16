@@ -145,7 +145,7 @@ Estimated status now:
 5. Implement **graph-grade collusion/ring detection** over the graph layer.
 
 ### Medium Priority
-6. Add **advanced fraud models** (behavioural autoencoder and counterfactual estimator) for stronger decision support.
+6. Add **advanced fraud models** (behavioral autoencoder and counterfactual estimator) for stronger decision support.
 7. Improve temporal forecasting from heuristic utilities to **sequence-learning models** (TCN/Transformer).
 
 ### Lower Priority
