@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -206,7 +206,7 @@ async def approve_claim(
     # 3. Finalize Manual Claim review status
     if manual_claim:
         manual_claim.review_status = "approved"
-        manual_claim.reviewed_at = datetime.utcnow()
+        manual_claim.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     
     await db.commit()
     return result
@@ -251,7 +251,7 @@ async def reject_claim(
     if manual_claim:
         manual_claim.review_status = "rejected"
         manual_claim.reviewer_notes = reason
-        manual_claim.reviewed_at = datetime.utcnow()
+        manual_claim.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     
     await db.commit()
     return result
@@ -301,7 +301,7 @@ async def payout_analytics(
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    start = datetime.utcnow() - timedelta(days=max(1, min(days, 90)))
+    start = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 90)))).replace(tzinfo=None)
 
     payout_rows = (
         await db.execute(
@@ -359,7 +359,7 @@ async def predictive_analytics(
             await db.execute(
                 select(func.count(DisruptionEvent.id)).where(
                     DisruptionEvent.zone_id == zone.id,
-                    DisruptionEvent.created_at >= datetime.utcnow() - timedelta(days=7),
+                    DisruptionEvent.created_at >= (datetime.now(timezone.utc) - timedelta(days=7)).replace(tzinfo=None),
                 )
             )
         ).scalar_one() or 0
