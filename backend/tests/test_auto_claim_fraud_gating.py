@@ -5,6 +5,13 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from unittest.mock import AsyncMock, patch
 
+TEST_DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "fraud_gating_test.sqlite3",
+)
+if os.path.exists(TEST_DB_PATH):
+    os.remove(TEST_DB_PATH)
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB_PATH}"
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -109,11 +116,11 @@ async def _seed_auto_claim_data(session):
 
 
 async def _run_flagged_case(fraud_score: int):
-    test_db_path = os.path.join(
+    isolated_db_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         f"fraud_gating_test_{uuid4().hex}.sqlite3",
     )
-    engine = create_async_engine(f"sqlite+aiosqlite:///{test_db_path}")
+    engine = create_async_engine(f"sqlite+aiosqlite:///{isolated_db_path}")
     session_local = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
@@ -134,6 +141,8 @@ async def _run_flagged_case(fraud_score: int):
             assert created == 1
             assert claim is not None
             await engine.dispose()
+            if os.path.exists(isolated_db_path):
+                os.remove(isolated_db_path)
             return claim, payout_mock
 
 

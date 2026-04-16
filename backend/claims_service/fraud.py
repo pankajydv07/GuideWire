@@ -16,7 +16,6 @@ from ml.serve import predict_anomaly
 
 logger = logging.getLogger("zylo.claims.fraud")
 
-AUTO_CLAIM_FRAUD_THRESHOLD = int(os.getenv("FRAUD_THRESHOLD", "75"))
 ANOMALY_SCORE_THRESHOLD = 0.7
 ANOMALY_FRAUD_POINTS = 20
 COLLUSION_SPIKE_THRESHOLD = 15
