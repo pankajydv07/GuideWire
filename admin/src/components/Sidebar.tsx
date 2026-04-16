@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon, ShieldAlert, LineChart, Wallet } from "lucide-react";
 import { adminApi } from "@/lib/api";
 
 const NAV_ITEMS = [
@@ -11,6 +11,9 @@ const NAV_ITEMS = [
   { href: "/map", label: "Map", icon: MapIcon },
   { href: "/claims", label: "Auto Claims", icon: FileText },
   { href: "/manual-claims", label: "Manual Claims", icon: Camera },
+  { href: "/fraud-alerts", label: "Fraud Alerts", icon: ShieldAlert },
+  { href: "/predictive", label: "Predictive", icon: LineChart },
+  { href: "/payout-analytics", label: "Payout Analytics", icon: Wallet },
   { href: "/triggers", label: "Triggers", icon: Zap },
 ];
 

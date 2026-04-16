@@ -2,8 +2,10 @@ import type {
   AutoClaim,
   DashboardStats,
   DisruptionEvent,
+  FraudAlertItem,
   ManualClaimReview,
   OverviewData,
+  PredictiveZoneForecast,
   TriggerStatusResponse,
   Zone,
 } from "@/lib/types";
@@ -121,6 +123,11 @@ class AdminApiClient {
         `/api/admin/claims/${claimId}/reject`,
         { reason },
       ),
+    fraudAlerts: (minScore = 70) =>
+      this.request<{ alerts: FraudAlertItem[] }>(
+        "GET",
+        `/api/admin/claims/fraud-alerts?min_score=${encodeURIComponent(String(minScore))}`,
+      ),
   };
 
   triggers = {
@@ -170,6 +177,39 @@ class AdminApiClient {
         stats: computeDashboardStats(autoClaims, manualClaims, triggerStatus),
       };
     },
+  };
+
+  analytics = {
+    predictive: (days = 7) =>
+      this.request<{ window_days: number; zones: PredictiveZoneForecast[] }>(
+        "GET",
+        `/api/admin/analytics/predictive?days=${encodeURIComponent(String(days))}`,
+      ),
+    payouts: (days = 14) =>
+      this.request<{
+        window_days: number;
+        total_payout_amount: number;
+        payout_count: number;
+        by_trigger: Array<{ trigger_type: string; amount: number }>;
+        by_zone: Array<{ zone: string; amount: number }>;
+        daily_trend: Array<{ date: string; amount: number }>;
+      }>("GET", `/api/admin/analytics/payouts?days=${encodeURIComponent(String(days))}`),
+    thresholds: () =>
+      this.request<{
+        zones: Array<{
+          zone_id: string;
+          zone: string;
+          thresholds: Record<string, number>;
+        }>;
+      }>("GET", "/api/admin/analytics/thresholds"),
+    knowledgeGraph: (hours = 72) =>
+      this.request<{
+        generated_at: string;
+        window_hours: number;
+        nodes: Array<Record<string, unknown>>;
+        edges: Array<Record<string, unknown>>;
+        hotspots: Array<{ zone_id: string; zone: string; events: number }>;
+      }>("GET", `/api/admin/graph/knowledge?hours=${encodeURIComponent(String(hours))}`),
   };
 
   health() {

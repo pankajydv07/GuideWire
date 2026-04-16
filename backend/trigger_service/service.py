@@ -29,6 +29,7 @@ from sqlalchemy import select, and_
 
 from trigger_service.models import DisruptionEvent, WeatherData, PlatformSnapshot
 from shared.zones import get_zone_by_name, get_all_zones
+from ml.temporal import smooth_threshold
 
 # ─── In-memory trigger state ──────────────────────────────────────────────────
 # Tracks how long a trigger has been active (for sustained-duration checks)
@@ -37,6 +38,7 @@ _active_triggers_cache: list[dict] = []            # filled each scheduler cycle
 _community_signals_cache: list[dict] = []
 _last_evaluation: Optional[datetime] = None
 _civic_congestion_window: dict[str, list[tuple[datetime, int]]] = {}
+_adaptive_threshold_cache: dict[str, dict] = {}
 
 # Dedup: zone+trigger+slot already created
 _created_events: set[str] = set()   # "zone_id:trigger_type:slot_start_iso"
@@ -63,6 +65,82 @@ CIVIC_SPIKE_WINDOW_MIN = 10
 CIVIC_SPIKE_DELTA = 20
 SUPPLY_CASCADE_ZONE_STOCKOUT_PCT = 0.50
 SUPPLY_CASCADE_ORDER_DROP = 35.0
+
+
+def _default_zone_thresholds() -> dict[str, float]:
+    return {
+        "rainfall_mm": RAIN_THRESHOLD_MM,
+        "heat_index": HEAT_INDEX_THRESHOLD,
+        "aqi": AQI_GRAP_THRESHOLD,
+        "congestion_index": CONGESTION_THRESHOLD,
+        "queue_wait_sec": QUEUE_WAIT_THRESHOLD,
+        "queue_depth": QUEUE_DEPTH_THRESHOLD,
+        "algo_drop_pct": ALGO_DROP_THRESHOLD,
+    }
+
+
+async def _self_calibrated_thresholds(db: AsyncSession, zone_id: str) -> dict[str, float]:
+    now = datetime.now(timezone.utc)
+    cached = _adaptive_threshold_cache.get(zone_id)
+    if cached and cached.get("expires_at") and cached["expires_at"] > now:
+        return cached["thresholds"]
+
+    defaults = _default_zone_thresholds()
+    lookback = now - timedelta(days=14)
+
+    weather_rows = (
+        await db.execute(
+            select(WeatherData).where(
+                WeatherData.zone_id == uuid.UUID(zone_id),
+                WeatherData.time >= lookback.replace(tzinfo=None),
+            )
+        )
+    ).scalars().all()
+    snapshot_rows = (
+        await db.execute(
+            select(PlatformSnapshot).where(
+                PlatformSnapshot.zone_id == uuid.UUID(zone_id),
+                PlatformSnapshot.time >= lookback.replace(tzinfo=None),
+            )
+        )
+    ).scalars().all()
+
+    rain = [float(w.rainfall_mm) for w in weather_rows if w.rainfall_mm is not None]
+    heat = [float(w.heat_index) for w in weather_rows if w.heat_index is not None]
+    aqi = [float(w.aqi) for w in weather_rows if w.aqi is not None]
+    congestion = [float(s.congestion_index) for s in snapshot_rows if s.congestion_index is not None]
+    queue_wait = [float(s.avg_pickup_wait_sec) for s in snapshot_rows if s.avg_pickup_wait_sec is not None]
+    queue_depth = [float(s.pickup_queue_depth) for s in snapshot_rows if s.pickup_queue_depth is not None]
+    algo_drop = [float(s.order_rate_drop_pct) for s in snapshot_rows if s.order_rate_drop_pct is not None]
+
+    calibrated = {
+        "rainfall_mm": round(
+            smooth_threshold(defaults["rainfall_mm"], rain, floor=28.0, ceiling=70.0, percentile_rank=0.9), 2
+        ),
+        "heat_index": round(
+            smooth_threshold(defaults["heat_index"], heat, floor=28.0, ceiling=40.0, percentile_rank=0.85), 2
+        ),
+        "aqi": round(
+            smooth_threshold(defaults["aqi"], aqi, floor=220.0, ceiling=420.0, percentile_rank=0.9), 2
+        ),
+        "congestion_index": round(
+            smooth_threshold(defaults["congestion_index"], congestion, floor=65.0, ceiling=95.0, percentile_rank=0.85), 2
+        ),
+        "queue_wait_sec": round(
+            smooth_threshold(defaults["queue_wait_sec"], queue_wait, floor=180.0, ceiling=600.0, percentile_rank=0.8), 2
+        ),
+        "queue_depth": round(
+            smooth_threshold(defaults["queue_depth"], queue_depth, floor=8.0, ceiling=25.0, percentile_rank=0.8), 2
+        ),
+        "algo_drop_pct": round(
+            smooth_threshold(defaults["algo_drop_pct"], algo_drop, floor=30.0, ceiling=70.0, percentile_rank=0.85), 2
+        ),
+    }
+    _adaptive_threshold_cache[zone_id] = {
+        "thresholds": calibrated,
+        "expires_at": now + timedelta(minutes=30),
+    }
+    return calibrated
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -114,38 +192,44 @@ def _trigger_gate_valid(trigger_type: str, snap: dict) -> bool:
 
 
 # ─── Per-trigger evaluators ───────────────────────────────────────────────────
-def eval_heavy_rain(weather: dict, zone: dict) -> Optional[dict]:
+def eval_heavy_rain(weather: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
+    limits = thresholds or _default_zone_thresholds()
+    rain_threshold = limits["rainfall_mm"]
     rain = weather.get("rainfall_mm", 0) or 0
-    if rain > RAIN_THRESHOLD_MM:
+    if rain > rain_threshold:
         return {
             "trigger_type": "heavy_rain",
             "severity":     "high",
-            "threshold":    f"{rain:.1f}mm/1hr > {RAIN_THRESHOLD_MM}mm",
+            "threshold":    f"{rain:.1f}mm/1hr > {rain_threshold:.1f}mm",
             "data":         {"rainfall_mm": rain, "temperature": weather.get("temperature")},
         }
     return None
 
 
-def eval_heat(weather: dict, zone: dict) -> Optional[dict]:
+def eval_heat(weather: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
+    limits = thresholds or _default_zone_thresholds()
+    heat_threshold = limits["heat_index"]
     hi = weather.get("heat_index") or 0
     temp = weather.get("temperature") or 0
-    if hi > HEAT_INDEX_THRESHOLD or temp > 42:
+    if hi > heat_threshold or temp > 42:
         return {
             "trigger_type": "extreme_heat",
             "severity":     "medium",
-            "threshold":    f"heat_index={hi}°C or temp={temp}°C > 42°C",
+            "threshold":    f"heat_index={hi}°C>{heat_threshold:.1f}°C or temp={temp}°C > 42°C",
             "data":         {"heat_index": hi, "temperature": temp},
         }
     return None
 
 
-def eval_aqi(weather: dict, zone: dict) -> Optional[dict]:
+def eval_aqi(weather: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
+    limits = thresholds or _default_zone_thresholds()
+    aqi_threshold = limits["aqi"]
     aqi = weather.get("aqi")
-    if aqi is not None and aqi > AQI_GRAP_THRESHOLD:
+    if aqi is not None and aqi > aqi_threshold:
         return {
             "trigger_type": "aqi_grap",
             "severity": "high",
-            "threshold": f"aqi={aqi} > {AQI_GRAP_THRESHOLD}",
+            "threshold": f"aqi={aqi} > {aqi_threshold:.0f}",
             "data": {
                 "aqi": aqi,
                 "pm2_5": weather.get("pm2_5"),
@@ -155,11 +239,13 @@ def eval_aqi(weather: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_traffic(snap: dict, zone: dict) -> Optional[dict]:
+def eval_traffic(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
+    limits = thresholds or _default_zone_thresholds()
+    congestion_threshold = limits["congestion_index"]
     ci = snap.get("congestion_index", 0) or 0
     tk = _trigger_key("traffic_congestion", zone["id"])
 
-    if ci > CONGESTION_THRESHOLD:
+    if ci > congestion_threshold:
         if tk not in _trigger_active_since:
             _trigger_active_since[tk] = datetime.now(timezone.utc)
         elapsed = (datetime.now(timezone.utc) - _trigger_active_since[tk]).total_seconds() / 60
@@ -167,7 +253,7 @@ def eval_traffic(snap: dict, zone: dict) -> Optional[dict]:
             return {
                 "trigger_type": "traffic_congestion",
                 "severity":     "medium",
-                "threshold":    f"congestion={ci}/100 sustained>={CONGESTION_DURATION}min",
+                "threshold":    f"congestion={ci}/100>{congestion_threshold:.0f} sustained>={CONGESTION_DURATION}min",
                 "data":         {"congestion_index": ci, "elapsed_min": elapsed},
             }
         return None   # not yet sustained
@@ -176,7 +262,7 @@ def eval_traffic(snap: dict, zone: dict) -> Optional[dict]:
         return None
 
 
-def eval_stockout(snap: dict, zone: dict) -> Optional[dict]:
+def eval_stockout(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     drop_pct = snap.get("order_rate_drop_pct", 0) or 0
     if snap.get("stock_level") == "CRITICAL" and drop_pct >= STOCKOUT_ORDER_DROP_THRESHOLD:
         return {
@@ -192,7 +278,7 @@ def eval_stockout(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_road_closure(snap: dict, zone: dict) -> Optional[dict]:
+def eval_road_closure(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     if snap.get("road_blocked") is True:
         return {
             "trigger_type": "road_closure",
@@ -206,7 +292,7 @@ def eval_road_closure(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_store_closure(snap: dict, zone: dict) -> Optional[dict]:
+def eval_store_closure(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     if snap.get("store_status") == "CLOSED":
         return {
             "trigger_type": "store_closure",
@@ -217,7 +303,7 @@ def eval_store_closure(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_platform_outage(snap: dict, zone: dict) -> Optional[dict]:
+def eval_platform_outage(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     if snap.get("platform_status") == "DOWN":
         return {
             "trigger_type": "platform_outage",
@@ -228,7 +314,7 @@ def eval_platform_outage(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_curfew(snap: dict, zone: dict) -> Optional[dict]:
+def eval_curfew(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     if snap.get("curfew_active"):
         return {
             "trigger_type": "regulatory_curfew",
@@ -239,7 +325,7 @@ def eval_curfew(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_gps_shadowban(snap: dict, zone: dict) -> Optional[dict]:
+def eval_gps_shadowban(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     duration = snap.get("shadowban_duration_min", 0) or 0
     ban_applied = bool(snap.get("shadowban_active")) and snap.get("rider_status") == "OFFLINE"
     confirmed = bool(snap.get("allocation_anomaly")) or duration >= SHADOWBAN_CONFIRMATION_MIN
@@ -261,14 +347,17 @@ def eval_gps_shadowban(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_dark_store_queue(snap: dict, zone: dict) -> Optional[dict]:
+def eval_dark_store_queue(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
+    limits = thresholds or _default_zone_thresholds()
+    queue_wait_threshold = limits["queue_wait_sec"]
+    queue_depth_threshold = limits["queue_depth"]
     wait_sec = snap.get("avg_pickup_wait_sec", 0) or 0
     queue_depth = snap.get("pickup_queue_depth", 0) or 0
-    if wait_sec >= QUEUE_WAIT_THRESHOLD and queue_depth >= QUEUE_DEPTH_THRESHOLD:
+    if wait_sec >= queue_wait_threshold and queue_depth >= queue_depth_threshold:
         return {
             "trigger_type": "dark_store_queue",
             "severity":     "low",
-            "threshold":    f"wait={wait_sec}s queue_depth={queue_depth}",
+            "threshold":    f"wait={wait_sec}s>={queue_wait_threshold:.0f}s queue_depth={queue_depth}>={queue_depth_threshold:.0f}",
             "data":         {
                 "avg_pickup_wait_sec": wait_sec,
                 "pickup_queue_depth": queue_depth,
@@ -278,13 +367,15 @@ def eval_dark_store_queue(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_algorithmic_shock(snap: dict, zone: dict) -> Optional[dict]:
+def eval_algorithmic_shock(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
+    limits = thresholds or _default_zone_thresholds()
+    algo_drop_threshold = limits["algo_drop_pct"]
     drop_pct = snap.get("order_rate_drop_pct", 0) or 0
-    if snap.get("allocation_anomaly") and drop_pct >= ALGO_DROP_THRESHOLD:
+    if snap.get("allocation_anomaly") and drop_pct >= algo_drop_threshold:
         return {
             "trigger_type": "algorithmic_shock",
             "severity":     "medium",
-            "threshold":    f"allocation_anomaly=TRUE order_drop={drop_pct:.1f}%",
+            "threshold":    f"allocation_anomaly=TRUE order_drop={drop_pct:.1f}%>={algo_drop_threshold:.1f}%",
             "data":         {
                 "order_rate_drop_pct": drop_pct,
                 "orders_per_hour": snap.get("orders_per_hour"),
@@ -294,7 +385,7 @@ def eval_algorithmic_shock(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_rwa_friction(snap: dict, zone: dict) -> Optional[dict]:
+def eval_rwa_friction(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     latency = snap.get("dispatch_latency_sec", 0) or 0
     drop_pct = snap.get("order_rate_drop_pct", 0) or 0
     if latency >= RWA_DISPATCH_LATENCY_THRESHOLD and drop_pct >= RWA_ORDER_DROP_THRESHOLD:
@@ -310,7 +401,7 @@ def eval_rwa_friction(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_civic_event(snap: dict, zone: dict) -> Optional[dict]:
+def eval_civic_event(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     zone_id = zone["id"]
     now = datetime.now(timezone.utc)
     ci = snap.get("congestion_index", 0) or 0
@@ -342,7 +433,7 @@ def eval_civic_event(snap: dict, zone: dict) -> Optional[dict]:
     return None
 
 
-def eval_grap_ban(snap: dict, zone: dict) -> Optional[dict]:
+def eval_grap_ban(snap: dict, zone: dict, thresholds: Optional[dict] = None) -> Optional[dict]:
     if snap.get("grap_vehicle_ban") is True:
         return {
             "trigger_type": "grap_vehicle_ban",
@@ -425,10 +516,11 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
         zname  = zone["name"]
         snaps  = snapshot_map.get(zid, [])
         weather= weather_map.get(zid, {})
+        zone_thresholds = await _self_calibrated_thresholds(db, zid)
 
         # ── Weather triggers (zone-level, no per-rider gate) ──────────────────
         for eval_fn in (eval_heavy_rain, eval_heat, eval_aqi):
-            result = eval_fn(weather, zone)
+            result = eval_fn(weather, zone, zone_thresholds)
             if result:
                 dk = _dedup_key(zid, result["trigger_type"], slot_start)
                 if dk not in _created_events:
@@ -467,7 +559,7 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
                 eval_civic_event,
                 eval_grap_ban,
             ):
-                result = eval_fn(snap, zone)
+                result = eval_fn(snap, zone, zone_thresholds)
                 if result:
                     if _trigger_gate_valid(result["trigger_type"], snap):
                         ttype = result["trigger_type"]
@@ -487,7 +579,7 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
                 result_data = {
                     "trigger_type": ttype,
                     "severity":     _severity_for(ttype),
-                    "threshold":    sample_result.get("threshold", _threshold_for(ttype, sample_snap)),
+                    "threshold":    sample_result.get("threshold", _threshold_for(ttype, sample_snap, zone_thresholds)),
                     "data":         {**sample_data, "affected_count": count},
                 }
                 event_id = await _create_event(
@@ -655,16 +747,17 @@ def _severity_for(trigger_type: str) -> str:
     }.get(trigger_type, "medium")
 
 
-def _threshold_for(trigger_type: str, snap: dict) -> str:
+def _threshold_for(trigger_type: str, snap: dict, thresholds: Optional[dict] = None) -> str:
+    limits = thresholds or _default_zone_thresholds()
     return {
-        "traffic_congestion": f"congestion={snap.get('congestion_index')}/100",
+        "traffic_congestion": f"congestion={snap.get('congestion_index')}/100>{limits['congestion_index']:.0f}",
         "store_closure":      "store_status=CLOSED",
         "platform_outage":    "platform_status=DOWN",
         "regulatory_curfew":  "curfew_active=TRUE",
         "gps_shadowban":      f"shadowban_duration={snap.get('shadowban_duration_min')}min",
-        "dark_store_queue":   f"wait={snap.get('avg_pickup_wait_sec')}s>300s",
-        "algorithmic_shock":  f"order_drop={snap.get('order_rate_drop_pct')}%",
-        "aqi_grap":           f"aqi>{AQI_GRAP_THRESHOLD}",
+        "dark_store_queue":   f"wait={snap.get('avg_pickup_wait_sec')}s>={limits['queue_wait_sec']:.0f}s",
+        "algorithmic_shock":  f"order_drop={snap.get('order_rate_drop_pct')}%>={limits['algo_drop_pct']:.1f}%",
+        "aqi_grap":           f"aqi>{limits['aqi']:.0f}",
         "inventory_stockout": f"stock=CRITICAL order_drop={snap.get('order_rate_drop_pct')}%",
         "road_closure":       "road_blocked=TRUE",
         "rwa_friction":       (
@@ -688,6 +781,11 @@ def get_community_signals() -> list:
 
 def get_last_evaluation() -> Optional[datetime]:
     return _last_evaluation
+
+
+async def get_zone_thresholds(db: AsyncSession, zone_id: str) -> dict[str, float]:
+    return await _self_calibrated_thresholds(db, zone_id)
+
 
 async def check_historical_conditions(zone_id: str, incident_time: datetime, db: AsyncSession) -> dict:
     """Historical corroboration for manual claims."""

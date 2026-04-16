@@ -101,6 +101,31 @@ export interface RiskProfile {
   avg_per_slot: Record<string, number>;
 }
 
+export interface RiderIntelligenceResponse {
+  zone: string;
+  next_week_forecast: Array<{
+    date: string;
+    day_of_week: number;
+    predicted_disruption_probability: number;
+    risk_band: string;
+    expected_earnings_multiplier: number;
+  }>;
+  forward_alerts: Array<{
+    type: string;
+    severity: string;
+    message: string;
+    dates?: string[];
+    triggers?: string[];
+    coverage_used_ratio?: number;
+  }>;
+  recent_zone_events: Array<{
+    trigger_type: string;
+    severity: string;
+    created_at: string | null;
+    affected_riders: number;
+  }>;
+}
+
 export interface Zone {
   id: string;
   name: string;
@@ -306,6 +331,9 @@ class ApiClient {
 
     getRiskProfile: () =>
       this.request<RiskProfile>('GET', '/api/riders/me/risk-profile'),
+
+    getIntelligence: (days = 7) =>
+      this.request<RiderIntelligenceResponse>('GET', `/api/riders/me/intelligence?days=${encodeURIComponent(String(days))}`),
   };
 
   zones = {

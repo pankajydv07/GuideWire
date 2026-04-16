@@ -29,6 +29,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── Neo4j (Knowledge Graph v0) ─────────────────────
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/zylo12345
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
   # ─── Database Setup (Tables + Seeds) ────────────
   setup:
     build: ./backend
@@ -103,4 +119,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  neo4j_data:
   upload_data:
