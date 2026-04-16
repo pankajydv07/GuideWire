@@ -3,9 +3,9 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg15
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ankush
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ankush}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -51,8 +51,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
@@ -69,8 +69,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
       REDIS_URL: redis://redis:6379/0
       ML_SERVICE_URL: http://ml:8001
       UPLOAD_DIR: /app/uploads
@@ -92,8 +92,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:ankush@postgres:5432/postgres
-      DATABASE_URL_SYNC: postgresql://postgres:ankush@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
       REDIS_URL: redis://redis:6379/0
       ML_SERVICE_URL: http://ml:8001
     depends_on:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -23,7 +23,8 @@ def _zone_node(zone: Zone, event_count: int) -> dict:
 
 
 async def build_graph_snapshot(db: AsyncSession, hours: int = 72) -> dict:
-    cutoff = datetime.utcnow() - timedelta(hours=max(hours, 1))
+    now_utc = datetime.now(timezone.utc)
+    cutoff = (now_utc - timedelta(hours=max(hours, 1))).replace(tzinfo=None)
 
     zone_rows = (await db.execute(select(Zone))).scalars().all()
     event_rows = (
@@ -120,7 +121,7 @@ async def build_graph_snapshot(db: AsyncSession, hours: int = 72) -> dict:
     )[:10]
 
     return {
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": now_utc.isoformat(),
         "window_hours": hours,
         "nodes": nodes,
         "edges": edges,
