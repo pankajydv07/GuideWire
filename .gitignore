@@ -38,6 +38,10 @@ admin-live.log
 mobile-live.err.log
 mobile-live.log
 
+# Identity/SSH keys
+mykey
+mykey.pub
+
 # System/IDE
 .DS_Store
 .vscode/
