@@ -54,6 +54,7 @@ SHADOWBAN_CONFIRMATION_MIN = 10 # minutes before confirmation can lock
 QUEUE_WAIT_THRESHOLD  = 300     # 5 min pickup wait SLA breach
 QUEUE_DEPTH_THRESHOLD = 12
 ALGO_DROP_THRESHOLD   = 50.0
+AQI_GRAP_THRESHOLD = 300
 STOCKOUT_ORDER_DROP_THRESHOLD = 40.0
 RWA_DISPATCH_LATENCY_THRESHOLD = 300
 RWA_ORDER_DROP_THRESHOLD = 30.0
@@ -134,6 +135,22 @@ def eval_heat(weather: dict, zone: dict) -> Optional[dict]:
             "severity":     "medium",
             "threshold":    f"heat_index={hi}°C or temp={temp}°C > 42°C",
             "data":         {"heat_index": hi, "temperature": temp},
+        }
+    return None
+
+
+def eval_aqi(weather: dict, zone: dict) -> Optional[dict]:
+    aqi = weather.get("aqi")
+    if aqi is not None and aqi > AQI_GRAP_THRESHOLD:
+        return {
+            "trigger_type": "aqi_grap",
+            "severity": "high",
+            "threshold": f"aqi={aqi} > {AQI_GRAP_THRESHOLD}",
+            "data": {
+                "aqi": aqi,
+                "pm2_5": weather.get("pm2_5"),
+                "pm10": weather.get("pm10"),
+            },
         }
     return None
 
@@ -410,7 +427,7 @@ async def evaluate_all_zones(db: AsyncSession, weather_map: dict, snapshot_map: 
         weather= weather_map.get(zid, {})
 
         # ── Weather triggers (zone-level, no per-rider gate) ──────────────────
-        for eval_fn in (eval_heavy_rain, eval_heat):
+        for eval_fn in (eval_heavy_rain, eval_heat, eval_aqi):
             result = eval_fn(weather, zone)
             if result:
                 dk = _dedup_key(zid, result["trigger_type"], slot_start)
@@ -628,6 +645,7 @@ def _severity_for(trigger_type: str) -> str:
         "gps_shadowban":     "medium",
         "dark_store_queue":  "low",
         "algorithmic_shock": "medium",
+        "aqi_grap":          "high",
         "inventory_stockout":"medium",
         "road_closure":      "high",
         "rwa_friction":      "low",
@@ -646,6 +664,7 @@ def _threshold_for(trigger_type: str, snap: dict) -> str:
         "gps_shadowban":      f"shadowban_duration={snap.get('shadowban_duration_min')}min",
         "dark_store_queue":   f"wait={snap.get('avg_pickup_wait_sec')}s>300s",
         "algorithmic_shock":  f"order_drop={snap.get('order_rate_drop_pct')}%",
+        "aqi_grap":           f"aqi>{AQI_GRAP_THRESHOLD}",
         "inventory_stockout": f"stock=CRITICAL order_drop={snap.get('order_rate_drop_pct')}%",
         "road_closure":       "road_blocked=TRUE",
         "rwa_friction":       (

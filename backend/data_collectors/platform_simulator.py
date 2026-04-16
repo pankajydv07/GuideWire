@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 # ─── Disruption scenario keys ─────────────────────────────────────────────────
 class ScenarioKey:
     HEAVY_RAIN        = "HEAVY_RAIN"
+    AQI_GRAP          = "AQI_GRAP"
     STORE_CLOSURE     = "STORE_CLOSURE"
     PLATFORM_OUTAGE   = "PLATFORM_OUTAGE"
     GPS_SHADOWBAN     = "GPS_SHADOWBAN"
@@ -182,6 +183,14 @@ def get_rider_snapshot(rider_id: str, zone_id: str) -> dict:
             current_earn  = orders_hr * earn_per_order
             drop_pct      = max(0.0, round((baseline - current_earn) / max(baseline,1)*100, 1))
             if rng.random() < 0.10:
+                rider_status = "OFFLINE"
+
+        elif k == ScenarioKey.AQI_GRAP:
+            drop_pct_ = rng.uniform(40, 60)
+            orders_hr = max(0, int(orders_hr * (1 - drop_pct_ / 100)))
+            current_earn = orders_hr * earn_per_order
+            drop_pct = max(drop_pct_, round((baseline - current_earn) / max(baseline, 1) * 100, 1))
+            if rng.random() < 0.30:
                 rider_status = "OFFLINE"
 
         elif k == ScenarioKey.STORE_CLOSURE:

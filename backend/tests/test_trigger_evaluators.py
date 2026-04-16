@@ -7,6 +7,7 @@ from trigger_service.service import (
     _civic_congestion_window,
     _trigger_gate_valid,
     _trigger_active_since,
+    eval_aqi,
     eval_civic_event,
     eval_grap_ban,
     eval_gps_shadowban,
@@ -25,6 +26,13 @@ def test_eval_stockout_variants():
     assert eval_stockout({"stock_level": "CRITICAL", "order_rate_drop_pct": 45.0}, ZONE) is not None
     assert eval_stockout({"stock_level": "CRITICAL", "order_rate_drop_pct": 20.0}, ZONE) is None
     assert eval_stockout({"stock_level": "LOW", "order_rate_drop_pct": 50.0}, ZONE) is None
+
+
+def test_eval_aqi_threshold_boundary():
+    assert eval_aqi({"aqi": 300}, ZONE) is None
+    hit = eval_aqi({"aqi": 301, "pm2_5": 120.5, "pm10": 240.0}, ZONE)
+    assert hit is not None
+    assert hit["trigger_type"] == "aqi_grap"
 
 
 def test_eval_road_closure_immediate_and_traffic_guard():

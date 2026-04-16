@@ -13,4 +13,6 @@ RUN pip install --default-timeout=100 --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /app
 
+RUN python -m ml.training.train_isolation_forest
+
 CMD ["uvicorn", "ml.serve:app", "--host", "0.0.0.0", "--port", "8001"]

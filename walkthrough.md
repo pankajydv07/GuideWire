@@ -36,6 +36,11 @@ graph TD
     D4 -->|process_manual_claim, approve_manual_claim| D5
 ```
 
+## Recently Added Trigger Coverage
+
+- Trigger catalog now includes `aqi_grap` for AQI/GRAP stage 3-4 air-quality disruption detection.
+- Auto-claims with `fraud_score >= FRAUD_THRESHOLD` are now created as `flagged` and held back from payout for admin review.
+
 ## Integration Checkpoints
 
 | Day | Checkpoint | Devs Involved |

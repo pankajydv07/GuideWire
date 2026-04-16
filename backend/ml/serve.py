@@ -2,6 +2,8 @@ import json
 import pickle
 from pathlib import Path
 
+import joblib
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -11,6 +13,15 @@ from .demo_model import DemoRiskModel
 
 MODEL_PATH = Path(__file__).resolve().parent / "model_artifacts" / "risk_model.pkl"
 METADATA_PATH = Path(__file__).resolve().parent / "model_artifacts" / "feature_names.json"
+ANOMALY_MODEL_PATH = Path(__file__).resolve().parent / "model_artifacts" / "isolation_forest.pkl"
+ANOMALY_FEATURES = [
+    "orders_per_hour",
+    "earnings_current_slot",
+    "earnings_rolling_baseline",
+    "order_rate_drop_pct",
+    "avg_pickup_wait_sec",
+    "congestion_index",
+]
 
 
 class PredictRequest(BaseModel):
@@ -33,6 +44,7 @@ app = FastAPI(title="Zylo ML Service", version="1.0.0")
 model = None
 metadata = {}
 feature_names = []
+_anomaly_model = None
 
 
 def load_artifacts() -> None:
@@ -68,6 +80,32 @@ def probability_to_band(probability: float) -> str:
     if probability < 0.75:
         return "high"
     return "critical"
+
+
+def _load_anomaly_model():
+    global _anomaly_model
+    if _anomaly_model is not None:
+        return _anomaly_model
+    if not ANOMALY_MODEL_PATH.exists():
+        return None
+    _anomaly_model = joblib.load(ANOMALY_MODEL_PATH)
+    return _anomaly_model
+
+
+def predict_anomaly(features: dict) -> float:
+    model = _load_anomaly_model()
+    if model is None:
+        return 0.0
+
+    vector = np.array([[float(features.get(name, 0.0)) for name in ANOMALY_FEATURES]])
+    try:
+        raw_score = float(model.decision_function(vector)[0])
+    except Exception:
+        return 0.0
+
+    # IsolationForest returns lower scores for stronger anomalies.
+    normalized = 1.0 / (1.0 + np.exp(raw_score * 3.0))
+    return float(max(0.0, min(1.0, normalized)))
 
 
 @app.on_event("startup")

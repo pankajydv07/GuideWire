@@ -58,7 +58,7 @@ class DisruptionEventListResponse(BaseModel):
 class InjectTriggerRequest(BaseModel):
     trigger_type: str = Field(
         ...,
-        description="One of: heavy_rain, traffic_congestion, store_closure, "
+        description="One of: heavy_rain, aqi_grap, traffic_congestion, store_closure, "
                     "platform_outage, regulatory_curfew, gps_shadowban, "
                     "dark_store_queue, algorithmic_shock, inventory_stockout, "
                     "road_closure, rwa_friction, civic_event, grap_vehicle_ban, "

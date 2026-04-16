@@ -16,7 +16,11 @@ from claims_service.models import Claim
 from trigger_service.models import DisruptionEvent, PlatformSnapshot
 from rider_service.models import Rider, RiderZoneBaseline
 from policy_service.models import Policy
-from claims_service.fraud import run_fraud_check, check_duplicate_claim
+from claims_service.fraud import (
+    AUTO_CLAIM_FRAUD_THRESHOLD,
+    run_fraud_check,
+    check_duplicate_claim,
+)
 from payout_service.service import process_upi_payout
 
 logger = logging.getLogger("zylo.claims")
@@ -120,6 +124,7 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
         if payout_amount <= 0:
             continue
 
+        flagged = fraud_score >= AUTO_CLAIM_FRAUD_THRESHOLD
         claim = Claim(
             rider_id=rider_id,
             policy_id=policy.id,
@@ -129,16 +134,25 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
             income_loss=income_loss,
             expected_earnings=expected_earnings,
             actual_earnings=actual_earnings,
-            payout_amount=payout_amount,
+            payout_amount=0 if flagged else payout_amount,
             fraud_score=fraud_score,
-            status="paid",
+            status="flagged" if flagged else "paid",
             created_at=datetime.utcnow(),
             processed_at=datetime.utcnow()
         )
         db.add(claim)
         await db.flush()
 
-        await process_upi_payout(claim.id, rider_id, payout_amount, db)
+        if flagged:
+            logger.warning(
+                "Auto-claim flagged for manual review: rider=%s event=%s fraud_score=%s threshold=%s",
+                rider_id,
+                disruption_event_id,
+                fraud_score,
+                AUTO_CLAIM_FRAUD_THRESHOLD,
+            )
+        else:
+            await process_upi_payout(claim.id, rider_id, payout_amount, db)
         claims_created += 1
 
     await db.commit()

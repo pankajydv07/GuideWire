@@ -7,10 +7,10 @@ import os
 import httpx
 import random
 from datetime import datetime
-from typing import Optional
 
 OWM_API_KEY = os.getenv("OWM_API_KEY", "")   # set in .env to get real data
 OWM_BASE = "https://api.openweathermap.org/data/2.5/weather"
+OWM_AIR_POLLUTION_BASE = "https://api.openweathermap.org/data/2.5/air_pollution"
 
 
 async def fetch_weather(zone: dict) -> dict:
@@ -30,6 +30,23 @@ async def fetch_weather(zone: dict) -> dict:
                 if resp.status_code == 200:
                     data = resp.json()
                     rain_1h = data.get("rain", {}).get("1h", 0.0)
+                    aqi = None
+                    pm2_5 = None
+                    pm10 = None
+                    air_resp = await client.get(OWM_AIR_POLLUTION_BASE, params={
+                        "lat": lat,
+                        "lon": lon,
+                        "appid": OWM_API_KEY,
+                    })
+                    if air_resp.status_code == 200:
+                        air_data = air_resp.json()
+                        air_list = air_data.get("list") or []
+                        if air_list:
+                            current_air = air_list[0]
+                            owm_aqi = current_air.get("main", {}).get("aqi")
+                            pm2_5 = current_air.get("components", {}).get("pm2_5")
+                            pm10 = current_air.get("components", {}).get("pm10")
+                            aqi = _map_owm_aqi_to_indian_proxy(owm_aqi)
                     return {
                         "zone_id":      zone_id,
                         "zone_name":    zone_name,
@@ -37,7 +54,9 @@ async def fetch_weather(zone: dict) -> dict:
                         "rainfall_mm":  rain_1h,
                         "humidity":     data["main"]["humidity"],
                         "wind_speed":   data["wind"]["speed"] * 3.6,   # m/s → km/h
-                        "aqi":          None,     # separate AQI endpoint
+                        "aqi":          aqi,
+                        "pm2_5":        pm2_5,
+                        "pm10":         pm10,
                         "heat_index":   _heat_index(data["main"]["temp"], data["main"]["humidity"]),
                         "source":       "openweathermap_live",
                         "time":         datetime.utcnow(),
@@ -59,7 +78,7 @@ def _mock_weather(zone_id: str, zone_name: str) -> dict:
     temp      = round(random.gauss(28, 4), 1)
     humidity  = random.randint(50, 90)
     wind_kmh  = max(0.0, round(random.gauss(15, 10), 1))
-    aqi       = random.randint(50, 180)
+    aqi       = _mock_aqi()
 
     return {
         "zone_id":      zone_id,
@@ -73,6 +92,19 @@ def _mock_weather(zone_id: str, zone_name: str) -> dict:
         "source":       "mock",
         "time":         datetime.utcnow(),
     }
+
+
+def _map_owm_aqi_to_indian_proxy(owm_aqi: int | None) -> int | None:
+    if owm_aqi is None:
+        return None
+    return min(500, max(0, int(owm_aqi) * 60))
+
+
+def _mock_aqi() -> int:
+    # Keep AQI usually moderate but allow occasional GRAP stage 3/4 demo values.
+    if random.random() < 0.15:
+        return random.randint(301, 450)
+    return random.randint(50, 220)
 
 
 def _heat_index(temp_c: float, humidity: int) -> float:

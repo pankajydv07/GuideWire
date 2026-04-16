@@ -41,6 +41,7 @@ class ClaimStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     PAID = "paid"
+    FLAGGED = "flagged"
     UNDER_REVIEW = "under_review"
 
 
@@ -53,6 +54,7 @@ class PayoutStatus(str, Enum):
 
 class TriggerType(str, Enum):
     HEAVY_RAIN = "heavy_rain"
+    AQI_GRAP = "aqi_grap"
     EXTREME_HEAT = "extreme_heat"
     TRAFFIC_CONGESTION = "traffic_congestion"
     ROAD_CLOSURE = "road_closure"

@@ -134,6 +134,7 @@ async def list_disruption_events(
 # ─── 3. POST /api/triggers/inject (demo only) ────────────────────────────────
 _TRIGGER_TO_SCENARIO = {
     "heavy_rain":        ScenarioKey.HEAVY_RAIN,
+    "aqi_grap":          ScenarioKey.AQI_GRAP,
     "store_closure":     ScenarioKey.STORE_CLOSURE,
     "platform_outage":   ScenarioKey.PLATFORM_OUTAGE,
     "gps_shadowban":     ScenarioKey.GPS_SHADOWBAN,
@@ -226,7 +227,7 @@ async def inject_trigger(
 
 def _severity(trigger_type: str) -> str:
     return {
-        "heavy_rain": "high", "traffic_congestion": "medium",
+        "heavy_rain": "high", "aqi_grap": "high", "traffic_congestion": "medium",
         "store_closure": "high", "platform_outage": "critical",
         "regulatory_curfew": "critical", "gps_shadowban": "medium",
         "dark_store_queue": "low", "algorithmic_shock": "medium",
