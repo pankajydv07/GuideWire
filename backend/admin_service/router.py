@@ -123,13 +123,19 @@ async def list_manual_claims(
 
 @router.get("/claims/auto", summary="Full claim log (auto-claims)")
 async def list_all_auto_claims(
+    status: str = Query(default="all"),
     admin=Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Admin view of all automated claims with fraud scores.
     """
-    stmt = select(Claim).where(Claim.type == "auto").order_by(desc(Claim.fraud_score))
+    stmt = select(Claim).where(Claim.type == "auto")
+    if status == "reviewable":
+        stmt = stmt.where(Claim.status.in_(["flagged"]))
+    elif status != "all":
+        stmt = stmt.where(Claim.status == status)
+    stmt = stmt.order_by(desc(Claim.fraud_score))
     result = await db.execute(stmt)
     claims = result.scalars().all()
 

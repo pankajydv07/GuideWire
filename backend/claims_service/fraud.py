@@ -24,6 +24,19 @@ COLLUSION_RATIO_THRESHOLD = 0.80
 COLLUSION_FRAUD_POINTS = 25
 
 
+def _load_fraud_threshold() -> int:
+    raw = os.getenv("FRAUD_THRESHOLD", "75").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid FRAUD_THRESHOLD=%s; falling back to 75", raw)
+        return 75
+    return max(0, min(value, 100))
+
+
+AUTO_CLAIM_FRAUD_THRESHOLD = _load_fraud_threshold()
+
+
 async def check_duplicate_claim(rider_id: UUID, disruption_event_id: UUID, db: AsyncSession) -> bool:
     """Check if a claim already exists for this rider and disruption event."""
     result = await db.execute(

@@ -119,6 +119,32 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
             db=db
         )
 
+        if fraud_score >= AUTO_CLAIM_FRAUD_THRESHOLD:
+            logger.warning(
+                "Auto-claim flagged for review: rider=%s event=%s fraud_score=%s threshold=%s",
+                rider_id,
+                disruption_event_id,
+                fraud_score,
+                AUTO_CLAIM_FRAUD_THRESHOLD,
+            )
+            claim = Claim(
+                rider_id=rider_id,
+                policy_id=policy.id,
+                disruption_event_id=disruption_event_id,
+                type="auto",
+                disruption_type=event.trigger_type,
+                income_loss=income_loss,
+                expected_earnings=expected_earnings,
+                actual_earnings=actual_earnings,
+                payout_amount=0,
+                fraud_score=fraud_score,
+                status="flagged",
+                created_at=datetime.utcnow(),
+            )
+            db.add(claim)
+            claims_created += 1
+            continue
+
         coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
         payout_amount = min(income_loss, coverage_remaining)
         if payout_amount <= 0:
