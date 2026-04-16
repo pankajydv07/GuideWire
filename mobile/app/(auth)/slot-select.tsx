@@ -132,18 +132,18 @@ export default function SlotSelectScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   header: { padding: 32, paddingBottom: 16 },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600', marginTop: 8 },
+  subtitle: { fontSize: 15, color: '#8b8aa0', lineHeight: 22, fontWeight: '600', marginTop: 8 },
   grid: { paddingHorizontal: 32, paddingBottom: 140, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   cardWrapper: { width: '48%', marginBottom: 16 },
-  card: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
+  card: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center' },
   cardActive: { borderColor: Colors.dark.tint, backgroundColor: 'rgba(56, 189, 248, 0.05)' },
   cardDisabled: { opacity: 0.1 },
   icon: { fontSize: 32, marginBottom: 12 },
   label: { fontSize: 14, fontWeight: '900', color: '#f8fafc', textAlign: 'center', marginBottom: 4 },
-  time: { fontSize: 11, color: '#475569', textAlign: 'center', fontWeight: '700' },
+  time: { fontSize: 11, color: '#8b8aa0', textAlign: 'center', fontWeight: '700' },
   footer: { 
     position: 'absolute', 
     bottom: 0, 
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     right: 0, 
     padding: 32, 
     paddingBottom: 40, 
-    backgroundColor: 'rgba(2, 6, 23, 0.95)',
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
     zIndex: 1000, // Ensure it's on top in Web mode
     elevation: 10
   },

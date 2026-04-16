@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type PolicyResponse, type TriggerStatus, type PayoutListItem, type RiderIntelligenceResponse } from '../../services/api';
 import { formatApiDateTime } from '../../utils/datetime';
-
-const { width } = Dimensions.get('window');
 
 const triggerEmoji = (type: string) => {
   switch (type) {
@@ -27,15 +27,18 @@ const triggerEmoji = (type: string) => {
   }
 };
 
-const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
-
-function AnimatedCard({ children, delay = 0, style }: { children: React.ReactNode, delay?: number, style?: any }) {
+function AnimatedCard({ children, delay = 0, style, isGlass = true }: { children: React.ReactNode, delay?: number, style?: any, isGlass?: boolean }) {
   return (
-    <Animated.View 
+    <Animated.View
       entering={FadeInUp.delay(delay).duration(600).springify()}
       style={[styles.card, style]}
     >
-      {children}
+      {isGlass && (
+        <BlurView tint="dark" intensity={30} style={StyleSheet.absoluteFill} />
+      )}
+      <View style={styles.cardContent}>
+        {children}
+      </View>
     </Animated.View>
   );
 }
@@ -105,42 +108,51 @@ export default function DashboardScreen() {
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#38bdf8" />
+        <ActivityIndicator size="large" color="#f8fafc" />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <LinearGradient
+        colors={['#09090b', '#000000', '#000000']}
+        style={StyleSheet.absoluteFill}
+      />
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#38bdf8" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f8fafc" />}
       >
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Animated.Text entering={FadeInRight.duration(600)} style={styles.greeting}>
-              Hey, {rider?.name || 'Rider'} 👋
-            </Animated.Text>
-            <View style={styles.statusIndicator}>
-              <View style={[styles.dot, { backgroundColor: hasActivePolicy ? '#22c55e' : '#f59e0b' }]} />
-              <Text style={[styles.subtext, { color: hasActivePolicy ? '#22c55e' : '#f59e0b' }]}>
-                {hasActivePolicy ? 'Coverage Shield Active' : 'Shield Offline'}
-              </Text>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Image
+              source={require('../../assets/images/Zylo.png')}
+              style={{ width: 40, height: 40 }}
+              resizeMode="contain"
+            />
+            <View>
+              <Animated.Text entering={FadeInRight.duration(600)} style={styles.greeting}>
+                Hey, {rider?.name || 'Rider'} 👋
+              </Animated.Text>
+              <View style={styles.statusIndicator}>
+                <View style={[styles.dot, { backgroundColor: hasActivePolicy ? '#22c55e' : '#f59e0b' }]} />
+                <Text style={[styles.subtext, { color: hasActivePolicy ? '#22c55e' : '#f59e0b' }]}>
+                  {hasActivePolicy ? 'Coverage Shield Active' : 'Shield Offline'}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.refreshMeta}>
-              {lastUpdated ? `Sync: ${formatApiDateTime(lastUpdated.toISOString())}` : 'Synchronizing...'}
-            </Text>
           </View>
-          <TouchableOpacity 
-            style={styles.profileIcon} 
+          <TouchableOpacity
+            style={styles.profileIcon}
             onPress={() => router.push('/(tabs)/profile')}
           >
-             <Ionicons name="person-circle-outline" size={32} color="#94a3b8" />
+             <Ionicons name="person-circle-outline" size={32} color="#b8b7c7" />
           </TouchableOpacity>
         </View>
 
         {rider?.zone && zoneRisk && (
           <Animated.View entering={FadeInUp.delay(50).springify()} style={styles.zoneHealthBar}>
+            <BlurView tint="dark" intensity={40} style={StyleSheet.absoluteFill} />
             <View style={styles.zoneHealthItem}>
                <Text style={styles.zoneHealthIcon}>🌧️</Text>
                <Text style={styles.zoneHealthValue}>{zoneRisk.weather}%</Text>
@@ -168,14 +180,14 @@ export default function DashboardScreen() {
           <AnimatedCard delay={100} style={styles.activePolicyCard}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
-                <ShieldCheckIcon size={20} color="#38bdf8" />
+                <ShieldCheckIcon size={20} color="#f8fafc" />
                 <Text style={styles.cardTitle}>Live Policy</Text>
               </View>
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{policy.plan_tier.replace('_', ' ').toUpperCase()}</Text>
               </View>
             </View>
-            
+
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
                 <Text style={styles.statLabel}>LIMIT</Text>
@@ -194,7 +206,7 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.policyFooter}>
-               <Ionicons name="time-outline" size={14} color="#64748b" />
+               <Ionicons name="time-outline" size={14} color="#8b8aa0" />
                <Text style={styles.cardFooterText}>
                   Week {policy.coverage_week} • Exp. {policy.expires_at ? formatApiDateTime(policy.expires_at) : 'End of period'}
                </Text>
@@ -223,7 +235,7 @@ export default function DashboardScreen() {
                 </View>
              )}
            </View>
-          
+
           {zoneAlerts.length > 0 ? (
             zoneAlerts.map((alert) => (
               <View key={alert.trigger_id} style={styles.alertRow}>
@@ -251,12 +263,12 @@ export default function DashboardScreen() {
                 <Text style={styles.cardTitle}>Recent Payouts</Text>
              </View>
           </View>
-          
+
           {payouts.length > 0 ? (
             payouts.slice(0, 3).map((payout) => (
               <View key={payout.payout_id} style={styles.payoutRow}>
                 <View style={styles.payoutIcon}>
-                   <Ionicons name="arrow-down-circle" size={20} color="#38bdf8" />
+                   <Ionicons name="arrow-down-circle" size={20} color="#f8fafc" />
                 </View>
                 <View style={{ flex: 1, marginHorizontal: 12 }}>
                   <Text style={styles.payoutLabel}>Income Supplement</Text>
@@ -335,7 +347,7 @@ function ShieldCheckIcon({ size, color }: { size: number, color: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   center: { justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, gap: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
@@ -343,54 +355,55 @@ const styles = StyleSheet.create({
   statusIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   subtext: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  refreshMeta: { fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: '600' },
-  profileIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
-  zoneHealthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0f172a', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 20, borderWidth: 1, borderColor: '#1e293b' },
+  refreshMeta: { fontSize: 11, color: '#8b8aa0', marginTop: 4, fontWeight: '600' },
+  profileIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#121218', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  zoneHealthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(18, 18, 24, 0.72)', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
   zoneHealthItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   zoneHealthIcon: { fontSize: 16 },
-  zoneHealthValue: { color: '#f8fafc', fontSize: 13, fontWeight: '800' },
-  zoneHealthDivider: { width: 1, height: 16, backgroundColor: '#1e293b' },
-  card: { backgroundColor: '#0f172a', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#1e293b' },
-  activePolicyCard: { backgroundColor: '#0f172a', borderColor: '#1e293b', borderTopWidth: 4, borderTopColor: '#38bdf8' },
-  unprotectedCard: { backgroundColor: '#1e293b', alignItems: 'center', textAlign: 'center', paddingVertical: 32 },
-  alertCard: { borderColor: '#b45309', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
+  zoneHealthValue: { color: '#f8fafc', fontSize: 14, fontWeight: '900' },
+  zoneHealthDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.1)' },
+  card: { backgroundColor: 'rgba(18, 18, 24, 0.72)', borderRadius: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', position: 'relative' },
+  cardContent: { padding: 20 },
+  activePolicyCard: { borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1.5 },
+  unprotectedCard: { backgroundColor: 'rgba(18, 18, 24, 0.55)', alignItems: 'center', textAlign: 'center', paddingVertical: 32 },
+  alertCard: { borderColor: '#f59e0b', borderWidth: 1.5, shadowColor: '#f59e0b', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { height: 0, width: 0 }, elevation: 10 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cardTitle: { fontSize: 15, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 },
+  cardTitle: { fontSize: 15, fontWeight: '800', color: '#b8b7c7', textTransform: 'uppercase', letterSpacing: 1 },
   cardTitleLarge: { fontSize: 22, fontWeight: '800', color: '#f8fafc', marginBottom: 8 },
-  cardBody: { color: '#94a3b8', fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-  badge: { backgroundColor: '#0ea5e920', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#0ea5e940' },
-  badgeText: { color: '#38bdf8', fontSize: 11, fontWeight: '800' },
+  cardBody: { color: '#b8b7c7', fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  badge: { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+  badgeText: { color: '#f8fafc', fontSize: 11, fontWeight: '800' },
   statsContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 10 },
   statBox: { flex: 1, alignItems: 'center' },
-  statLabel: { fontSize: 10, fontWeight: '700', color: '#64748b', marginBottom: 4, letterSpacing: 0.5 },
+  statLabel: { fontSize: 10, fontWeight: '700', color: '#8b8aa0', marginBottom: 4, letterSpacing: 0.5 },
   statValue: { fontSize: 20, fontWeight: '800', color: '#f8fafc' },
-  divider: { width: 1, height: 30, backgroundColor: '#1e293b' },
+  divider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.08)' },
   policyFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 20, gap: 6 },
-  cardFooterText: { fontSize: 12, color: '#64748b', fontWeight: '500' },
+  cardFooterText: { fontSize: 12, color: '#8b8aa0', fontWeight: '500' },
   alertRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
-  alertIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' },
+  alertIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
   alertText: { color: '#f8fafc', fontSize: 16, fontWeight: '700' },
-  alertMeta: { color: '#64748b', fontSize: 12, marginTop: 2 },
+  alertMeta: { color: '#8b8aa0', fontSize: 12, marginTop: 2 },
   emptyState: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  mutedText: { color: '#64748b', fontSize: 14, fontWeight: '500' },
+  mutedText: { color: '#8b8aa0', fontSize: 14, fontWeight: '500' },
   payoutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  payoutIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#38bdf820', alignItems: 'center', justifyContent: 'center' },
+  payoutIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255, 255, 255, 0.08)', alignItems: 'center', justifyContent: 'center' },
   payoutLabel: { fontSize: 14, fontWeight: '700', color: '#f8fafc' },
-  payoutDate: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  payoutAmount: { fontSize: 18, fontWeight: '800', color: '#38bdf8' },
-  forecastRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  payoutDate: { fontSize: 12, color: '#8b8aa0', marginTop: 2 },
+  payoutAmount: { fontSize: 18, fontWeight: '800', color: '#f8fafc' },
+  forecastRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
   forecastDate: { color: '#f8fafc', fontWeight: '700', fontSize: 14 },
   forecastRisk: { color: '#a78bfa', fontWeight: '800', fontSize: 16 },
-  forecastMeta: { color: '#64748b', fontSize: 11, marginTop: 2 },
-  alertSignalRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  forecastMeta: { color: '#8b8aa0', fontSize: 11, marginTop: 2 },
+  alertSignalRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
   alertSignalTitle: { color: '#f8fafc', fontSize: 13, fontWeight: '600' },
   alertSignalMeta: { color: '#f59e0b', fontSize: 10, marginTop: 3, fontWeight: '700', letterSpacing: 0.6 },
   actionButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
   flexOne: { flex: 1 },
-  ctaButton: { backgroundColor: '#38bdf8', borderRadius: 16, paddingHorizontal: 24, paddingVertical: 16, width: '100%' },
-  ctaText: { color: '#fff', fontSize: 16, fontWeight: '800', textAlign: 'center' },
-  ctaSecondary: { backgroundColor: '#1e293b', borderRadius: 18, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+  ctaButton: { backgroundColor: '#f8fafc', borderRadius: 16, paddingHorizontal: 24, paddingVertical: 16, width: '100%', shadowColor: '#ffffff', shadowOpacity: 0.1, shadowRadius: 10 },
+  ctaText: { color: '#09090b', fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  ctaSecondary: { backgroundColor: '#121218', borderRadius: 18, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   ctaSecondaryText: { color: '#f8fafc', fontSize: 15, fontWeight: '700' },
   ctaDanger: { backgroundColor: '#450a0a', borderRadius: 18, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', borderWidth: 1, borderColor: '#7f1d1d' },
   ctaDangerText: { color: '#fecaca', fontSize: 15, fontWeight: '700' },

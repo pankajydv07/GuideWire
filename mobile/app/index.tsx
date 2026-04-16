@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, A
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -60,7 +61,7 @@ export default function WelcomeScreen() {
         resizeMode="cover"
       >
         <LinearGradient
-          colors={['transparent', 'rgba(2, 6, 23, 0.4)', '#020617']}
+          colors={['transparent', 'rgba(0, 0, 0, 0.46)', '#050507']}
           style={styles.gradient}
         >
           <View style={styles.content}>
@@ -72,7 +73,7 @@ export default function WelcomeScreen() {
               />
               <View>
                 <Text style={styles.brand}>ZYLO</Text>
-                <View style={{ width: 40, height: 4, backgroundColor: '#38bdf8', marginTop: 4, borderRadius: 2 }} />
+                <View style={{ width: 40, height: 4, backgroundColor: '#f8fafc', marginTop: 4, borderRadius: 2 }} />
               </View>
             </Animated.View>
 
@@ -95,7 +96,7 @@ export default function WelcomeScreen() {
                   </TouchableOpacity>
                 </>
               ) : (
-                <View style={styles.loginForm}>
+                <BlurView intensity={25} tint="dark" style={styles.loginForm}>
                   <Text style={styles.loginLabel}>Enter Phone Number</Text>
                   <TextInput
                     style={styles.input}
@@ -106,7 +107,7 @@ export default function WelcomeScreen() {
                     }}
                     keyboardType="phone-pad"
                     placeholder="+919876543210"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor="#8b8aa0"
                     maxLength={16}
                   />
                   {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
@@ -124,7 +125,7 @@ export default function WelcomeScreen() {
                   <TouchableOpacity onPress={() => setShowLogin(false)} style={{ marginTop: 10 }}>
                     <Text style={styles.backText}>Cancel</Text>
                   </TouchableOpacity>
-                </View>
+                </BlurView>
               )}
 
               <TouchableOpacity
@@ -146,23 +147,23 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   backgroundImage: { width: '100%', height: '100%' },
   gradient: { flex: 1, justifyContent: 'flex-end', paddingBottom: 60, paddingHorizontal: 30 },
   content: { gap: 32 },
   brand: { fontSize: 28, fontWeight: '900', color: '#f8fafc', letterSpacing: 2 },
   title: { fontSize: 44, fontWeight: '800', color: '#f8fafc', lineHeight: 54, letterSpacing: -1 },
-  subtitle: { fontSize: 16, color: '#94a3b8', lineHeight: 24, fontWeight: '500', opacity: 0.9, marginBottom: 10 },
+  subtitle: { fontSize: 16, color: '#b8b7c7', lineHeight: 24, fontWeight: '500', opacity: 0.9, marginBottom: 10 },
   formContainer: { gap: 20 },
-  loginForm: { gap: 12, backgroundColor: 'rgba(15, 23, 42, 0.8)', padding: 24, borderRadius: 32, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.2)' },
-  loginLabel: { color: '#f8fafc', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-  input: { backgroundColor: '#1e293b', color: '#f8fafc', borderRadius: 18, padding: 18, fontSize: 18, borderWidth: 1, borderColor: '#334155', fontWeight: '700' },
+  loginForm: { gap: 12, backgroundColor: 'rgba(18, 18, 24, 0.72)', padding: 24, borderRadius: 32, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', overflow: 'hidden' },
+  loginLabel: { color: '#f8fafc', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  input: { backgroundColor: 'rgba(18, 18, 24, 0.86)', color: '#f8fafc', borderRadius: 20, padding: 20, fontSize: 18, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', fontWeight: '700' },
   errorText: { color: '#fca5a5', fontSize: 13, marginTop: -4 },
-  primaryButton: { backgroundColor: '#38bdf8', paddingVertical: 20, borderRadius: 20, shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  primaryButton: { backgroundColor: '#f8fafc', paddingVertical: 20, borderRadius: 22, shadowColor: '#ffffff', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   buttonDisabled: { opacity: 0.5 },
-  primaryButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '800', textAlign: 'center' },
+  primaryButtonText: { color: '#09090b', fontSize: 17, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
   secondaryButton: { paddingVertical: 14 },
   secondaryButtonText: { color: '#f8fafc', fontSize: 16, fontWeight: '700', textAlign: 'center', opacity: 0.8 },
-  backText: { color: '#94a3b8', textAlign: 'center', fontSize: 14, fontWeight: '600' },
-  footerText: { textAlign: 'center', color: '#475569', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginTop: 10 },
+  backText: { color: '#b8b7c7', textAlign: 'center', fontSize: 14, fontWeight: '700' },
+  footerText: { textAlign: 'center', color: '#8b8aa0', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2, marginTop: 10 },
 });

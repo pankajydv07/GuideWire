@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, TouchableOpacity, ScrollView, View, Text, Image, ActivityIndicator } from 'react-native';
+import { StyleSheet, TouchableOpacity, ScrollView, View, Text, Image, ActivityIndicator, Alert } from 'react-native';
 import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { api, type RiskProfile } from '../../services/api';
@@ -10,6 +11,7 @@ export default function ProfileScreen() {
   const { rider, logout } = useAuth();
   const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     api.riders
@@ -29,6 +31,21 @@ export default function ProfileScreen() {
   const avgYield = riskProfile?.four_week_earnings
     ? Object.values(riskProfile.four_week_earnings).reduce((a, b) => a + b, 0)
     : 0;
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    try {
+      await logout();
+    } catch (err) {
+      console.error('Failed to terminate session:', err);
+      Alert.alert('Session Error', 'Could not fully clear local session. Redirecting to login.');
+    } finally {
+      router.replace('/');
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -98,8 +115,13 @@ export default function ProfileScreen() {
         </View>
 
         <Animated.View entering={FadeInDown.delay(900).springify()}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={() => void logout()}>
-            <Text style={styles.logoutText}>Terminate Session</Text>
+          <TouchableOpacity 
+            style={styles.logoutBtn} 
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.logoutText}>{isLoggingOut ? 'Terminating...' : 'Terminate Session'}</Text>
           </TouchableOpacity>
           <Text style={styles.versionText}>System OS v2.4.0-STITCH</Text>
         </Animated.View>
@@ -109,34 +131,34 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   scroll: { padding: 24, paddingBottom: 120 },
   profileHeader: { alignItems: 'center', marginBottom: 32, marginTop: 20 },
-  avatarContainer: { width: 100, height: 100, borderRadius: 36, backgroundColor: 'rgba(56, 189, 248, 0.1)', padding: 4, position: 'relative', marginBottom: 20 },
+  avatarContainer: { width: 100, height: 100, borderRadius: 36, backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: 4, position: 'relative', marginBottom: 20 },
   avatar: { width: '100%', height: '100%', borderRadius: 32 },
-  statusDot: { position: 'absolute', bottom: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#10b981', borderWidth: 4, borderColor: '#020617' },
+  statusDot: { position: 'absolute', bottom: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#10b981', borderWidth: 4, borderColor: '#050507' },
   name: { fontSize: 24, fontWeight: '900', color: '#f8fafc', marginBottom: 4, letterSpacing: -0.5 },
-  phone: { fontSize: 13, color: '#475569', fontWeight: '700', letterSpacing: 1 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, paddingVertical: 20, paddingHorizontal: 10, marginTop: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  phone: { fontSize: 13, color: '#8b8aa0', fontWeight: '700', letterSpacing: 1 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, paddingVertical: 20, paddingHorizontal: 10, marginTop: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   statBox: { flex: 1, alignItems: 'center' },
   statVal: { color: '#f8fafc', fontSize: 18, fontWeight: '900' },
-  statLabel: { color: '#475569', fontSize: 9, fontWeight: '800', marginTop: 4, letterSpacing: 1 },
-  statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.05)' },
-  riskGrid: { backgroundColor: 'rgba(56, 189, 248, 0.02)', borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.05)' },
-  gridTitle: { color: '#334155', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16 },
+  statLabel: { color: '#8b8aa0', fontSize: 9, fontWeight: '800', marginTop: 4, letterSpacing: 1 },
+  statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
+  riskGrid: { backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
+  gridTitle: { color: '#6f6e80', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16 },
   gridRow: { flexDirection: 'row', gap: 12 },
-  gridItem: { flex: 1, backgroundColor: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  gridVal: { color: '#38bdf8', fontSize: 20, fontWeight: '900' },
-  gridLabel: { color: '#475569', fontSize: 8, fontWeight: '800', marginTop: 4, letterSpacing: 0.5 },
+  gridItem: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  gridVal: { color: '#f8fafc', fontSize: 20, fontWeight: '900' },
+  gridLabel: { color: '#8b8aa0', fontSize: 8, fontWeight: '800', marginTop: 4, letterSpacing: 0.5 },
   menuContainer: { gap: 12, marginBottom: 40 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  menuIconContainer: { width: 44, height: 44, borderRadius: 16, backgroundColor: 'rgba(56, 189, 248, 0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  menuIconContainer: { width: 44, height: 44, borderRadius: 16, backgroundColor: 'rgba(255, 255, 255, 0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   menuIcon: { color: Colors.dark.tint, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   menuTextContainer: { flex: 1 },
   menuLabel: { color: '#f8fafc', fontSize: 15, fontWeight: '800' },
-  menuSub: { color: '#475569', fontSize: 11, fontWeight: '600', marginTop: 2 },
-  chevron: { color: '#334155', fontSize: 20, fontWeight: '700' },
+  menuSub: { color: '#8b8aa0', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  chevron: { color: '#6f6e80', fontSize: 20, fontWeight: '700' },
   logoutBtn: { backgroundColor: 'rgba(244, 63, 94, 0.05)', paddingVertical: 20, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(244, 63, 94, 0.1)' },
   logoutText: { color: '#f43f5e', fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  versionText: { textAlign: 'center', color: '#1e293b', fontSize: 10, fontWeight: '800', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' },
+  versionText: { textAlign: 'center', color: 'rgba(255,255,255,0.08)', fontSize: 10, fontWeight: '800', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' },
 });

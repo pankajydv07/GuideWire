@@ -49,7 +49,7 @@ export default function RegisterScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}
@@ -63,12 +63,12 @@ export default function RegisterScreen() {
           <View style={styles.form}>
             <Animated.View entering={FadeInDown.delay(400).springify()}>
               <Text style={styles.label}>OPERATOR NAME</Text>
-              <TextInput 
-                style={styles.input} 
-                value={name} 
-                onChangeText={setName} 
-                placeholder="Enter full name" 
-                placeholderTextColor="#334155" 
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Enter full name"
+                placeholderTextColor="#6f6e80"
               />
             </Animated.View>
 
@@ -79,9 +79,9 @@ export default function RegisterScreen() {
               ) : (
                 <View style={styles.chips}>
                   {platforms.map((p) => (
-                    <TouchableOpacity 
-                      key={p.id} 
-                      style={[styles.chip, platform === p.id && styles.chipActive]} 
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[styles.chip, platform === p.id && styles.chipActive]}
                       onPress={() => setPlatform(p.id)}
                       activeOpacity={0.7}
                     >
@@ -95,12 +95,12 @@ export default function RegisterScreen() {
 
             <Animated.View entering={FadeInDown.delay(800).springify()}>
               <Text style={styles.label}>REDISTRIBUTION UPI ID</Text>
-              <TextInput 
-                style={styles.input} 
-                value={upiId} 
-                onChangeText={setUpiId} 
-                placeholder="rider@okaxis" 
-                placeholderTextColor="#334155" 
+              <TextInput
+                style={styles.input}
+                value={upiId}
+                onChangeText={setUpiId}
+                placeholder="rider@okaxis"
+                placeholderTextColor="#6f6e80"
                 autoCapitalize="none"
               />
               {upiId.length > 0 && !isUpiValid && (
@@ -109,9 +109,9 @@ export default function RegisterScreen() {
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(1000).springify()} style={{ marginTop: 24 }}>
-              <TouchableOpacity 
-                style={[styles.button, !isValid && styles.buttonDisabled]} 
-                onPress={handleNext} 
+              <TouchableOpacity
+                style={[styles.button, !isValid && styles.buttonDisabled]}
+                onPress={handleNext}
                 disabled={!isValid}
               >
                 <Text style={styles.buttonText}>ESTABLISH PERIMETERS →</Text>
@@ -125,21 +125,21 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   scroll: { padding: 32, paddingBottom: 60 },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600', marginTop: 8 },
+  subtitle: { fontSize: 15, color: '#8b8aa0', lineHeight: 22, fontWeight: '600', marginTop: 8 },
   form: { marginTop: 40, gap: 24 },
   label: { color: Colors.dark.tint, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
-  input: { backgroundColor: 'rgba(255,255,255,0.02)', color: '#f8fafc', borderRadius: 20, padding: 18, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', fontWeight: '700' },
+  input: { backgroundColor: 'rgba(255,255,255,0.03)', color: '#f8fafc', borderRadius: 20, padding: 18, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', fontWeight: '700' },
   errorHint: { color: '#f43f5e', fontSize: 10, fontWeight: '800', marginTop: 8, letterSpacing: 0.5 },
   chips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  chip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center', gap: 8 },
-  chipActive: { backgroundColor: 'rgba(56, 189, 248, 0.1)', borderColor: 'rgba(56, 189, 248, 0.3)' },
+  chip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', gap: 8 },
+  chipActive: { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.3)' },
   chipIcon: { fontSize: 16 },
-  chipText: { color: '#475569', fontWeight: '800', fontSize: 13 },
+  chipText: { color: '#8b8aa0', fontWeight: '800', fontSize: 13 },
   chipTextActive: { color: '#f8fafc' },
-  button: { backgroundColor: Colors.dark.tint, borderRadius: 24, paddingVertical: 22, alignItems: 'center', shadowColor: Colors.dark.tint, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  button: { backgroundColor: '#f8fafc', borderRadius: 24, paddingVertical: 22, alignItems: 'center', shadowColor: '#ffffff', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   buttonDisabled: { opacity: 0.2, shadowOpacity: 0 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  buttonText: { color: '#09090b', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
 });

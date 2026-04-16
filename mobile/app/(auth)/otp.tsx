@@ -94,7 +94,7 @@ export default function OtpScreen() {
             keyboardType="number-pad"
             maxLength={6}
             placeholder="000 000"
-            placeholderTextColor="#334155"
+            placeholderTextColor="#6f6e80"
             autoFocus
           />
           {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
@@ -103,7 +103,7 @@ export default function OtpScreen() {
             onPress={handleVerify}
             disabled={loading || otp.length !== 6}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>VALIDATE SIGNAL</Text>}
+            {loading ? <ActivityIndicator color="#09090b" /> : <Text style={styles.btnText}>VALIDATE SIGNAL</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={styles.resendContainer} onPress={handleResend} disabled={timer > 0}>
             <Text style={[styles.resendText, timer > 0 && styles.resendTextDisabled]}>
@@ -121,21 +121,21 @@ export default function OtpScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   content: { flex: 1, padding: 32, justifyContent: 'center' },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', marginBottom: 12, letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '600' },
+  subtitle: { fontSize: 15, color: '#8b8aa0', lineHeight: 22, fontWeight: '600' },
   hint: { marginTop: 12, fontSize: 13, color: '#fbbf24', fontWeight: '700' },
   inputContainer: { marginTop: 40, gap: 20 },
-  input: { backgroundColor: 'rgba(255,255,255,0.03)', color: '#f8fafc', borderRadius: 24, padding: 24, fontSize: 32, textAlign: 'center', fontWeight: '900', letterSpacing: 8, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.2)' },
+  input: { backgroundColor: 'rgba(255,255,255,0.03)', color: '#f8fafc', borderRadius: 24, padding: 24, fontSize: 32, textAlign: 'center', fontWeight: '900', letterSpacing: 8, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
   inputError: { borderColor: '#ef4444' },
   errorText: { color: '#fca5a5', fontSize: 13, textAlign: 'center', marginTop: -8 },
-  btn: { backgroundColor: '#38bdf8', paddingVertical: 20, borderRadius: 20, shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  btn: { backgroundColor: '#f8fafc', paddingVertical: 20, borderRadius: 20, shadowColor: '#ffffff', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   btnDisabled: { opacity: 0.5 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+  btnText: { color: '#09090b', fontSize: 16, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
   resendContainer: { marginTop: 4, alignItems: 'center' },
-  resendText: { color: '#38bdf8', fontSize: 15, fontWeight: '700' },
-  resendTextDisabled: { color: '#64748b' },
+  resendText: { color: '#f8fafc', fontSize: 15, fontWeight: '700' },
+  resendTextDisabled: { color: '#8b8aa0' },
   backBtn: { marginTop: 24 },
-  backText: { color: '#475569', textAlign: 'center', fontWeight: '800', textTransform: 'uppercase', fontSize: 12, letterSpacing: 1 },
+  backText: { color: '#8b8aa0', textAlign: 'center', fontWeight: '800', textTransform: 'uppercase', fontSize: 12, letterSpacing: 1 },
 });

@@ -131,7 +131,7 @@ export default function PaymentScreen() {
            <Text style={styles.sectionTitle}>FUNDING BRIDGE</Text>
            <View style={styles.upiCard}>
               <View style={styles.upiIcon}>
-                 <Ionicons name="card" size={20} color="#38bdf8" />
+                 <Ionicons name="card" size={20} color="#f8fafc" />
               </View>
               <View style={{ flex: 1 }}>
                  <Text style={styles.upiLabel}>Linked UPI Identifier</Text>
@@ -147,10 +147,10 @@ export default function PaymentScreen() {
           disabled={processing}
         >
           {processing ? (
-            <ActivityIndicator color="#020617" />
+            <ActivityIndicator color="#050507" />
           ) : (
             <>
-              <Ionicons name="lock-closed" size={18} color="#020617" style={{ marginRight: 8 }} />
+              <Ionicons name="lock-closed" size={18} color="#050507" style={{ marginRight: 8 }} />
               <Text style={styles.payText}>Authorize Payment</Text>
             </>
           )}
@@ -162,33 +162,33 @@ export default function PaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  container: { flex: 1, backgroundColor: '#050507' },
   center: { justifyContent: 'center', alignItems: 'center', padding: 40 },
   scroll: { padding: 24, gap: 24 },
   title: { fontSize: 32, fontWeight: '900', color: '#f8fafc', letterSpacing: -1 },
-  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22, fontWeight: '700' },
-  glassCard: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  subtitle: { fontSize: 15, color: '#8b8aa0', lineHeight: 22, fontWeight: '700' },
+  glassCard: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  tierName: { fontSize: 22, fontWeight: '900', color: '#38bdf8', letterSpacing: 1 },
-  tierSub: { fontSize: 9, color: '#475569', fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+  tierName: { fontSize: 22, fontWeight: '900', color: '#f8fafc', letterSpacing: 1 },
+  tierSub: { fontSize: 9, color: '#8b8aa0', fontWeight: '800', letterSpacing: 1, marginTop: 2 },
   priceContainer: { flexDirection: 'row', alignItems: 'baseline' },
-  currency: { color: '#475569', fontSize: 14, fontWeight: '900', marginRight: 2 },
+  currency: { color: '#8b8aa0', fontSize: 14, fontWeight: '900', marginRight: 2 },
   price: { color: '#f8fafc', fontSize: 36, fontWeight: '900' },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginBottom: 24 },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 24 },
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20 },
   infoItem: { width: '45%' },
-  infoLabel: { fontSize: 9, color: '#475569', fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  infoLabel: { fontSize: 9, color: '#8b8aa0', fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
   infoValue: { fontSize: 16, color: '#f8fafc', fontWeight: '700' },
   upiContainer: { gap: 12 },
-  sectionTitle: { color: '#334155', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginLeft: 4 },
-  upiCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(56, 189, 248, 0.05)', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.1)' },
-  upiIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(56, 189, 248, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  upiLabel: { color: '#475569', fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  sectionTitle: { color: '#6f6e80', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginLeft: 4 },
+  upiCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+  upiIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255, 255, 255, 0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  upiLabel: { color: '#8b8aa0', fontSize: 11, fontWeight: '700', marginBottom: 2 },
   upiValue: { color: '#f8fafc', fontSize: 16, fontWeight: '800' },
-  payButton: { backgroundColor: '#38bdf8', borderRadius: 24, paddingVertical: 20, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#38bdf8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  payButton: { backgroundColor: '#f8fafc', borderRadius: 24, paddingVertical: 20, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#ffffff', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   payButtonDisabled: { opacity: 0.5 },
-  payText: { color: '#020617', fontSize: 17, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
+  payText: { color: '#050507', fontSize: 17, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   successIcon: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
   successTitle: { fontSize: 32, fontWeight: '900', color: '#10b981', marginBottom: 16, textAlign: 'center' },
-  successText: { fontSize: 16, color: '#94a3b8', textAlign: 'center', fontWeight: '600' },
+  successText: { fontSize: 16, color: '#b8b7c7', textAlign: 'center', fontWeight: '600' },
 });
