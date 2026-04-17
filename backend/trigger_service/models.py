@@ -24,6 +24,8 @@ class DisruptionEvent(Base):
     severity: Mapped[str] = mapped_column(String(20), nullable=False)   # low / medium / high / critical
     data_json: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     affected_riders: Mapped[int] = mapped_column(Integer, default=0)
+    source: Mapped[str] = mapped_column(String(30), default="scheduler", nullable=False)
+    processing_status: Mapped[str] = mapped_column(String(20), default="triggered", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -80,3 +82,45 @@ class PlatformSnapshot(Base):
     pickup_queue_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     avg_pickup_wait_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dispatch_latency_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class DisruptionExecutionStep(Base):
+    __tablename__ = "disruption_execution_steps"
+
+    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    disruption_event_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("disruption_events.id"), nullable=False
+    )
+    step_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    meta_json: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+
+
+class DisruptionRiderTrace(Base):
+    __tablename__ = "disruption_rider_traces"
+
+    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    disruption_event_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("disruption_events.id"), nullable=False
+    )
+    rider_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("riders.id"), nullable=False)
+    zone_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("zones.id"), nullable=False)
+    processing_stage: Mapped[str] = mapped_column(String(30), nullable=False, default="detected")
+    verification_result: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    verification_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    fraud_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    expected_earnings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actual_earnings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    income_loss: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    eligible_payout_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("claims.id"), nullable=True)
+    payout_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("payouts.id"), nullable=True)
+    payout_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    snapshot_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trace_json: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

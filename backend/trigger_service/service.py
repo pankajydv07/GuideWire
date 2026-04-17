@@ -23,12 +23,15 @@ Also detects Community Signal: >70% of zone riders see order collapse.
 
 import uuid
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from trigger_service.models import DisruptionEvent, WeatherData, PlatformSnapshot
+from trigger_service.trace_service import initialize_event_trace, update_event_processing_status
 from shared.zones import get_zone_by_name, get_all_zones
 from ml.temporal import smooth_threshold
 
@@ -665,7 +668,7 @@ async def inject_disruption_event(
         "data":         extra_data,
     }
     event_id = await _create_event(
-        db, result, zone_id, zone_name, slot_start, slot_end, affected_riders
+        db, result, zone_id, zone_name, slot_start, slot_end, affected_riders, source="admin_injected"
     )
     # Update active cache
     _active_triggers_cache.append({
@@ -704,6 +707,7 @@ async def _create_event(
     slot_start: datetime,
     slot_end: datetime,
     affected_riders: int,
+    source: str = "scheduler",
 ) -> uuid.UUID:
     event_id = uuid.uuid4()
     # Convert zone_id string to UUID if needed
@@ -715,20 +719,51 @@ async def _create_event(
     if slot_end and slot_end.tzinfo:
         slot_end = slot_end.replace(tzinfo=None)
         
-    event = DisruptionEvent(
-        id            = event_id,
-        trigger_type  = result["trigger_type"],
-        zone_id       = z_id,
-        zone_name     = zone_name,
-        slot_start    = slot_start,
-        slot_end      = slot_end,
-        severity      = result["severity"],
-        data_json     = _json_safe(result.get("data")),
-        affected_riders = affected_riders,
-    )
-    db.add(event)
-    await db.commit()
-    await db.refresh(event)
+    event = None
+    try:
+        event = DisruptionEvent(
+            id            = event_id,
+            trigger_type  = result["trigger_type"],
+            zone_id       = z_id,
+            zone_name     = zone_name,
+            slot_start    = slot_start,
+            slot_end      = slot_end,
+            severity      = result["severity"],
+            data_json     = _json_safe(result.get("data")),
+            affected_riders = affected_riders,
+            source        = source,
+            processing_status = "processing",
+        )
+        db.add(event)
+        await db.commit()
+    except (OperationalError, ProgrammingError):
+        await db.rollback()
+        await db.execute(
+            text(
+                "INSERT INTO disruption_events "
+                "(id, trigger_type, zone_id, zone_name, slot_start, slot_end, severity, data_json, affected_riders, created_at) "
+                "VALUES (:id, :trigger_type, :zone_id, :zone_name, :slot_start, :slot_end, :severity, :data_json, :affected_riders, :created_at)"
+            ),
+            {
+                "id": str(event_id),
+                "trigger_type": result["trigger_type"],
+                "zone_id": str(z_id),
+                "zone_name": zone_name,
+                "slot_start": slot_start,
+                "slot_end": slot_end,
+                "severity": result["severity"],
+                "data_json": json.dumps(_json_safe(result.get("data"))),
+                "affected_riders": affected_riders,
+                "created_at": datetime.utcnow(),
+            },
+        )
+        await db.commit()
+
+    try:
+        await initialize_event_trace(db, event_id, source)
+        await db.commit()
+    except Exception:
+        await db.rollback()
 
     claims_created = 0
     try:
@@ -736,6 +771,8 @@ async def _create_event(
 
         claims_created = await process_auto_claims(event_id, db)
     except Exception as exc:
+        await update_event_processing_status(db, event_id, "failed")
+        await db.commit()
         print(f"[TriggerService] Auto-claims failed for event {event_id}: {exc}")
     print(f"[TriggerService] ✅ DisruptionEvent created: {result['trigger_type']} @ {zone_name} "
           f"({claims_created} claims anchored)")

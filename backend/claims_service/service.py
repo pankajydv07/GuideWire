@@ -7,13 +7,15 @@ Handles the core claims engine for both auto and manual tracks.
 from uuid import UUID
 import logging
 from datetime import datetime
+from types import SimpleNamespace
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from fastapi import HTTPException
 
 from claims_service.models import Claim, Payout
-from trigger_service.models import DisruptionEvent, PlatformSnapshot
+from trigger_service.models import DisruptionEvent, PlatformSnapshot, DisruptionRiderTrace
 from rider_service.models import Rider, RiderZoneBaseline
 from policy_service.models import Policy
 from claims_service.fraud import (
@@ -22,6 +24,12 @@ from claims_service.fraud import (
     check_duplicate_claim,
 )
 from payout_service.service import process_upi_payout
+from trigger_service.trace_service import (
+    create_rider_trace,
+    persist_trace_state,
+    update_event_processing_status,
+    upsert_step,
+)
 
 logger = logging.getLogger("zylo.claims")
 
@@ -47,6 +55,59 @@ def _slot_window(value: datetime) -> tuple[str, datetime, datetime]:
     return slot_time_str, slot_start, slot_end
 
 
+def _json_safe(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+async def _update_trace(
+    db: AsyncSession,
+    trace: DisruptionRiderTrace,
+    **fields,
+) -> None:
+    for key, value in fields.items():
+        setattr(trace, key, value)
+    await persist_trace_state(db)
+
+
+async def _load_event_compat(disruption_event_id: UUID, db: AsyncSession):
+    try:
+        event_result = await db.execute(select(DisruptionEvent).where(DisruptionEvent.id == disruption_event_id))
+        return event_result.scalar_one_or_none()
+    except (OperationalError, ProgrammingError):
+        await db.rollback()
+        row = (
+            await db.execute(
+                text(
+                    "SELECT id, trigger_type, zone_id, zone_name, slot_start, slot_end, severity, data_json, affected_riders, created_at "
+                    "FROM disruption_events WHERE id = :event_id"
+                ),
+                {"event_id": str(disruption_event_id)},
+            )
+        ).mappings().first()
+        if not row:
+            return None
+        return SimpleNamespace(
+            id=row["id"],
+            trigger_type=row["trigger_type"],
+            zone_id=row["zone_id"],
+            zone_name=row["zone_name"],
+            slot_start=row["slot_start"],
+            slot_end=row["slot_end"],
+            severity=row["severity"],
+            data_json=row["data_json"],
+            affected_riders=row["affected_riders"],
+            created_at=row["created_at"],
+            source="scheduler",
+            processing_status="completed",
+        )
+
+
 async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> int:
     """
     Called by Dev 3 when a DisruptionEvent is verified and created.
@@ -55,11 +116,16 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
     logger.info(f"Processing auto-claims for event {disruption_event_id}")
     claims_created = 0
 
-    event_result = await db.execute(select(DisruptionEvent).where(DisruptionEvent.id == disruption_event_id))
-    event = event_result.scalar_one_or_none()
+    event = await _load_event_compat(disruption_event_id, db)
     if not event:
         logger.error(f"DisruptionEvent {disruption_event_id} not found.")
         return 0
+
+    await update_event_processing_status(db, disruption_event_id, "processing")
+    await upsert_step(db, disruption_event_id, "riders_identified", status="in_progress", meta={"candidate_count": 0})
+    await upsert_step(db, disruption_event_id, "verification", status="pending", meta={"processed": 0})
+    await upsert_step(db, disruption_event_id, "payout", status="pending", meta={"paid": 0, "blocked": 0})
+    await persist_trace_state(db)
 
     zone_id = event.zone_id
     slot_start = event.slot_start
@@ -79,83 +145,291 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
     active_policies = active_policies_result.scalars().all()
 
     logger.info(f"Found {len(active_policies)} active policies in zone {zone_id} for week {current_week}")
+    await upsert_step(
+        db,
+        disruption_event_id,
+        "riders_identified",
+        status="completed",
+        meta={"candidate_count": len(active_policies)},
+    )
+    await upsert_step(
+        db,
+        disruption_event_id,
+        "verification",
+        status="in_progress",
+        meta={"candidate_count": len(active_policies), "processed": 0},
+    )
+    await persist_trace_state(db)
 
-    for policy in active_policies:
+    paid_count = 0
+    blocked_count = 0
+    verified_count = 0
+    system_failed_count = 0
+    ineligible_count = 0
+
+    for idx, policy in enumerate(active_policies, start=1):
         rider_id = policy.rider_id
-
-        if await check_duplicate_claim(rider_id, disruption_event_id, db):
-            continue
-
-        baseline_result = await db.execute(
-            select(RiderZoneBaseline).where(
-                RiderZoneBaseline.rider_id == rider_id,
-                RiderZoneBaseline.zone_id == zone_id,
-                RiderZoneBaseline.week == current_week,
-                RiderZoneBaseline.slot_time == slot_time_str
-            )
-        )
-        baseline = baseline_result.scalar_one_or_none()
-        expected_earnings = baseline.avg_earnings if baseline else FALLBACK_HOURLY_RATE * 3
-
-        snapshot_result = await db.execute(
-            select(PlatformSnapshot).where(
-                PlatformSnapshot.rider_id == rider_id,
-                PlatformSnapshot.time == slot_start
-            )
-        )
-        snapshot = snapshot_result.scalar_one_or_none()
-        actual_earnings = snapshot.earnings_current_slot if snapshot else 0
-
-        income_loss = expected_earnings - actual_earnings
-        if income_loss <= 0:
-            continue
-
-        fraud_score = await run_fraud_check(
+        trace = await create_rider_trace(
+            db,
+            disruption_event_id=disruption_event_id,
             rider_id=rider_id,
             zone_id=zone_id,
-            disruption_event_id=disruption_event_id,
-            actual_earnings=actual_earnings,
-            slot_start=slot_start,
-            db=db
+            processing_stage="detected",
+            verification_result="pending",
+            payout_status="pending",
+            trace_json={"policy_id": str(policy.id), "week": current_week, "candidate_index": idx},
         )
+        await persist_trace_state(db)
 
-        coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
-        payout_amount = min(income_loss, coverage_remaining)
-        if payout_amount <= 0:
-            continue
+        try:
+            if await check_duplicate_claim(rider_id, disruption_event_id, db):
+                await _update_trace(
+                    db,
+                    trace,
+                    processing_stage="fraud_flagged",
+                    verification_result="fail",
+                    verification_reason="duplicate_claim",
+                    payout_status="blocked",
+                    trace_json={**(trace.trace_json or {}), "duplicate_claim": True},
+                )
+                blocked_count += 1
+                continue
 
-        flagged = fraud_score >= AUTO_CLAIM_FRAUD_THRESHOLD
-        claim = Claim(
-            rider_id=rider_id,
-            policy_id=policy.id,
-            disruption_event_id=disruption_event_id,
-            type="auto",
-            disruption_type=event.trigger_type,
-            income_loss=income_loss,
-            expected_earnings=expected_earnings,
-            actual_earnings=actual_earnings,
-            payout_amount=0 if flagged else payout_amount,
-            fraud_score=fraud_score,
-            status="flagged" if flagged else "paid",
-            created_at=datetime.utcnow(),
-            processed_at=datetime.utcnow()
-        )
-        db.add(claim)
-        await db.flush()
-
-        if flagged:
-            logger.warning(
-                "Auto-claim flagged for review: rider=%s event=%s fraud_score=%s threshold=%s",
-                rider_id,
-                disruption_event_id,
-                fraud_score,
-                AUTO_CLAIM_FRAUD_THRESHOLD,
+            baseline_result = await db.execute(
+                select(RiderZoneBaseline).where(
+                    RiderZoneBaseline.rider_id == rider_id,
+                    RiderZoneBaseline.zone_id == zone_id,
+                    RiderZoneBaseline.week == current_week,
+                    RiderZoneBaseline.slot_time == slot_time_str
+                )
             )
-        else:
-            await process_upi_payout(claim.id, rider_id, payout_amount, db)
-        claims_created += 1
+            baseline = baseline_result.scalar_one_or_none()
+            expected_earnings = baseline.avg_earnings if baseline else FALLBACK_HOURLY_RATE * 3
 
-    await db.commit()
+            snapshot_result = await db.execute(
+                select(PlatformSnapshot).where(
+                    PlatformSnapshot.rider_id == rider_id,
+                    PlatformSnapshot.time >= slot_start,
+                    PlatformSnapshot.time <= event.slot_end,
+                )
+                .order_by(PlatformSnapshot.time.desc())
+                .limit(1)
+            )
+            snapshot = snapshot_result.scalar_one_or_none()
+            actual_earnings = snapshot.earnings_current_slot if snapshot else 0
+
+            await _update_trace(
+                db,
+                trace,
+                processing_stage="fetched",
+                expected_earnings=expected_earnings,
+                actual_earnings=actual_earnings,
+                snapshot_time=snapshot.time if snapshot else None,
+                trace_json={
+                    **(trace.trace_json or {}),
+                    "baseline_found": baseline is not None,
+                    "snapshot_found": snapshot is not None,
+                    "snapshot": _json_safe(
+                        {
+                            "time": snapshot.time if snapshot else None,
+                            "zone_id": str(snapshot.zone_id) if snapshot else None,
+                            "rider_status": snapshot.rider_status if snapshot else None,
+                            "platform_status": snapshot.platform_status if snapshot else None,
+                            "order_rate_drop_pct": float(snapshot.order_rate_drop_pct or 0) if snapshot else None,
+                            "congestion_index": snapshot.congestion_index if snapshot else None,
+                        }
+                    ),
+                },
+            )
+            await _update_trace(db, trace, processing_stage="under_verification")
+
+            income_loss = expected_earnings - actual_earnings
+            eligible_payout_amount = min(max(income_loss, 0), max(0, policy.coverage_limit - policy.coverage_used))
+            await _update_trace(
+                db,
+                trace,
+                income_loss=max(income_loss, 0),
+                eligible_payout_amount=eligible_payout_amount,
+            )
+
+            if not snapshot:
+                await _update_trace(
+                    db,
+                    trace,
+                    processing_stage="verified",
+                    verification_result="fail",
+                    verification_reason="missing_snapshot",
+                    payout_status="not_eligible",
+                )
+                ineligible_count += 1
+                continue
+
+            if income_loss <= 0:
+                await _update_trace(
+                    db,
+                    trace,
+                    processing_stage="verified",
+                    verification_result="pass",
+                    verification_reason="no_income_loss",
+                    payout_status="not_eligible",
+                )
+                ineligible_count += 1
+                continue
+
+            fraud_score = await run_fraud_check(
+                rider_id=rider_id,
+                zone_id=zone_id,
+                disruption_event_id=disruption_event_id,
+                actual_earnings=actual_earnings,
+                slot_start=slot_start,
+                slot_end=event.slot_end,
+                db=db
+            )
+            await _update_trace(
+                db,
+                trace,
+                fraud_score=fraud_score,
+                trace_json={
+                    **(trace.trace_json or {}),
+                    "verification": {
+                        "gps_snapshot_zone_match": str(snapshot.zone_id) == str(zone_id),
+                        "peer_comparison_applied": True,
+                        "baseline_found": baseline is not None,
+                        "duplicate_check": True,
+                        "anomaly_score_checked": True,
+                        "collusion_check": True,
+                    },
+                    "fraud_threshold": AUTO_CLAIM_FRAUD_THRESHOLD,
+                },
+            )
+
+            coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
+            payout_amount = min(income_loss, coverage_remaining)
+            if payout_amount <= 0:
+                await _update_trace(
+                    db,
+                    trace,
+                    verification_result="pass",
+                    verification_reason="no_coverage_remaining",
+                    payout_status="not_eligible",
+                    processing_stage="verified",
+                )
+                verified_count += 1
+                ineligible_count += 1
+                continue
+
+            flagged = fraud_score >= AUTO_CLAIM_FRAUD_THRESHOLD
+            claim = Claim(
+                rider_id=rider_id,
+                policy_id=policy.id,
+                disruption_event_id=disruption_event_id,
+                type="auto",
+                disruption_type=event.trigger_type,
+                income_loss=income_loss,
+                expected_earnings=expected_earnings,
+                actual_earnings=actual_earnings,
+                payout_amount=0 if flagged else payout_amount,
+                fraud_score=fraud_score,
+                status="flagged" if flagged else "paid",
+                created_at=datetime.utcnow(),
+                processed_at=datetime.utcnow()
+            )
+            db.add(claim)
+            await db.flush()
+            await _update_trace(
+                db,
+                trace,
+                claim_id=claim.id,
+                processing_stage="fraud_flagged" if flagged else "verified",
+                verification_result="fail" if flagged else "pass",
+                verification_reason="fraud_threshold_exceeded" if flagged else "eligible_for_payout",
+                payout_status="blocked" if flagged else "pending",
+            )
+
+            if flagged:
+                logger.warning(
+                    "Auto-claim flagged for review: rider=%s event=%s fraud_score=%s threshold=%s",
+                    rider_id,
+                    disruption_event_id,
+                    fraud_score,
+                    AUTO_CLAIM_FRAUD_THRESHOLD,
+                )
+                blocked_count += 1
+            else:
+                await _update_trace(db, trace, processing_stage="payout_queued")
+                await process_upi_payout(claim.id, rider_id, payout_amount, db)
+                payout_result = await db.execute(select(Payout).where(Payout.claim_id == claim.id).limit(1))
+                payout = payout_result.scalar_one_or_none()
+                await _update_trace(
+                    db,
+                    trace,
+                    payout_id=payout.id if payout else None,
+                    payout_status="completed",
+                    processing_stage="paid",
+                )
+                paid_count += 1
+                verified_count += 1
+            claims_created += 1
+        except Exception as exc:
+            logger.exception("Auto-claim processing failed for rider %s event %s: %s", rider_id, disruption_event_id, exc)
+            await _update_trace(
+                db,
+                trace,
+                processing_stage="failed",
+                verification_result="fail",
+                verification_reason="processing_error",
+                payout_status="blocked",
+                trace_json={**(trace.trace_json or {}), "error": str(exc)},
+            )
+            system_failed_count += 1
+
+        await upsert_step(
+            db,
+            disruption_event_id,
+            "verification",
+            status="in_progress",
+            meta={
+                "candidate_count": len(active_policies),
+                "processed": idx,
+                "verified": verified_count,
+                "blocked": blocked_count,
+                "ineligible": ineligible_count,
+                "failed": system_failed_count,
+            },
+        )
+        await upsert_step(
+            db,
+            disruption_event_id,
+            "payout",
+            status="in_progress",
+            meta={"paid": paid_count, "blocked": blocked_count, "ineligible": ineligible_count},
+        )
+        await persist_trace_state(db)
+
+    final_status = "failed" if system_failed_count > 0 else "completed"
+    await upsert_step(
+        db,
+        disruption_event_id,
+        "verification",
+        status="failed" if system_failed_count > 0 else "completed",
+        meta={
+            "candidate_count": len(active_policies),
+            "processed": len(active_policies),
+            "verified": verified_count,
+            "blocked": blocked_count,
+            "ineligible": ineligible_count,
+            "failed": system_failed_count,
+        },
+    )
+    await upsert_step(
+        db,
+        disruption_event_id,
+        "payout",
+        status="failed" if system_failed_count > 0 else "completed",
+        meta={"paid": paid_count, "blocked": blocked_count, "ineligible": ineligible_count},
+    )
+    await update_event_processing_status(db, disruption_event_id, final_status)
+    await persist_trace_state(db)
     logger.info(f"Auto-claims processing complete. Created {claims_created} claims.")
     return claims_created
 

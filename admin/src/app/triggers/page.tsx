@@ -42,6 +42,7 @@ export default function TriggersPage() {
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState<string | null>(null);
   const [selectedZone, setSelectedZone] = useState("");
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const zonesByCity = useMemo(() => {
     const groups: Record<string, Zone[]> = {};
@@ -55,14 +56,26 @@ export default function TriggersPage() {
 
   const loadData = async () => {
     try {
-      const [statusRes, eventsRes] = await Promise.all([
+      const [statusResult, eventsResult] = await Promise.allSettled([
         adminApi.triggers.getStatus(),
         adminApi.triggers.getDisruptionEvents(),
       ]);
-      setStatus(statusRes);
-      setEvents(eventsRes.events);
-    } catch (err) {
-      console.error("Failed to sync triggers:", err);
+
+      if (statusResult.status === "fulfilled") {
+        setStatus(statusResult.value);
+      } else {
+        console.error("Failed to sync trigger status:", statusResult.reason);
+        setStatus((current) => current);
+      }
+
+      if (eventsResult.status === "fulfilled") {
+        setEvents(eventsResult.value.events);
+        setHistoryError(null);
+      } else {
+        console.error("Failed to sync disruption history:", eventsResult.reason);
+        setEvents([]);
+        setHistoryError("Disruption history is temporarily unavailable.");
+      }
     } finally {
       setLoading(false);
     }
@@ -307,6 +320,15 @@ export default function TriggersPage() {
             <BarChart className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
           </div>
 
+          {historyError && (
+            <div
+              className="mb-4 rounded-xl px-4 py-3 text-sm font-medium"
+              style={{ background: "rgba(59,130,246,0.08)", color: "#bfdbfe" }}
+            >
+              {historyError}
+            </div>
+          )}
+
           <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 flex flex-col" style={{ scrollbarWidth: "thin" }}>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
@@ -314,7 +336,7 @@ export default function TriggersPage() {
               ))
             ) : events.length === 0 ? (
               <div className="text-center py-10 text-xs font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                Archive Empty
+                {historyError ? "History Unavailable" : "Archive Empty"}
               </div>
             ) : (
               events.map((event: DisruptionEvent, idx: number) => {

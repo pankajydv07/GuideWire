@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon, ShieldAlert, LineChart, Wallet } from "lucide-react";
+import { LayoutDashboard, FileText, Camera, Zap, Activity, Menu, X, Map as MapIcon, ShieldAlert, LineChart, Wallet, Workflow } from "lucide-react";
 import { adminApi } from "@/lib/api";
 
 const NAV_ITEMS = [
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/fraud-alerts", label: "Fraud Alerts", icon: ShieldAlert },
   { href: "/predictive", label: "Risk Forecast", icon: LineChart },
   { href: "/payout-analytics", label: "Payout Analytics", icon: Wallet },
+  { href: "/disruption-visualization", label: "Disruption Viz", icon: Workflow },
   { href: "/triggers", label: "Triggers", icon: Zap },
 ];
 

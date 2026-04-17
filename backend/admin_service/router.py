@@ -6,13 +6,19 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from shared.database import get_db
 from shared.auth import require_admin, create_access_token
 from manual_claims.models import ManualClaim
 from claims_service.models import Claim
 from rider_service.models import Rider, Zone
-from trigger_service.models import PlatformSnapshot, DisruptionEvent
+from trigger_service.models import (
+    PlatformSnapshot,
+    DisruptionEvent,
+    DisruptionExecutionStep,
+    DisruptionRiderTrace,
+)
 from claims_service.models import Payout
 from claims_service.service import (
     approve_manual_claim,
@@ -35,6 +41,21 @@ def _public_photo_url(photo_path: str | None) -> str | None:
         return None
 
     return f"/uploads/{filename}"
+
+
+def _iso_or_none(value):
+    return value.isoformat() if value else None
+
+
+def _trace_counts(traces: list[DisruptionRiderTrace]) -> dict[str, int]:
+    return {
+        "total_riders_detected": len(traces),
+        "verified_riders": sum(1 for t in traces if t.verification_result == "pass"),
+        "rejected_or_flagged_riders": sum(
+            1 for t in traces if t.processing_stage in {"fraud_flagged", "failed"} or t.payout_status == "blocked"
+        ),
+        "paid_riders": sum(1 for t in traces if t.processing_stage == "paid" or t.payout_status == "completed"),
+    }
 
 # ─── 1. Admin Login (Demo Hardcoded) ──────────────────────────
 @router.post("/login", summary="Admin login (demo)")
@@ -298,6 +319,148 @@ async def list_fraud_alerts(
             for claim in claims
         ]
     }
+
+
+@router.get("/disruptions/visualization", summary="Recent disruption visualization summaries")
+async def list_disruption_visualizations(
+    limit: int = Query(default=25, ge=1, le=100),
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        events = (
+            await db.execute(
+                select(DisruptionEvent).order_by(desc(DisruptionEvent.created_at)).limit(limit)
+            )
+        ).scalars().all()
+        event_ids = [event.id for event in events]
+
+        traces_by_event: dict = {event_id: [] for event_id in event_ids}
+        if event_ids:
+            traces = (
+                await db.execute(
+                    select(DisruptionRiderTrace).where(DisruptionRiderTrace.disruption_event_id.in_(event_ids))
+                )
+            ).scalars().all()
+            for trace in traces:
+                traces_by_event.setdefault(trace.disruption_event_id, []).append(trace)
+
+        summaries = []
+        for event in events:
+            counts = _trace_counts(traces_by_event.get(event.id, []))
+            summaries.append(
+                {
+                    "event_id": str(event.id),
+                    "trigger_type": event.trigger_type,
+                    "zone": event.zone_name or str(event.zone_id),
+                    "severity": event.severity,
+                    "source": getattr(event, "source", "scheduler") or "scheduler",
+                    "created_at": _iso_or_none(event.created_at),
+                    "processing_status": getattr(event, "processing_status", "completed") or "completed",
+                    **counts,
+                }
+            )
+
+        return {"events": summaries, "total": len(summaries)}
+    except (OperationalError, ProgrammingError):
+        return {"events": [], "total": 0, "traceability_ready": False}
+
+
+@router.get("/disruptions/{event_id}/visualization", summary="Detailed disruption visualization")
+async def disruption_visualization_detail(
+    event_id: UUID,
+    admin=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        event = (
+            await db.execute(select(DisruptionEvent).where(DisruptionEvent.id == event_id))
+        ).scalar_one_or_none()
+        if not event:
+            raise HTTPException(status_code=404, detail="Disruption event not found")
+
+        steps = (
+            await db.execute(
+                select(DisruptionExecutionStep)
+                .where(DisruptionExecutionStep.disruption_event_id == event_id)
+                .order_by(DisruptionExecutionStep.started_at, DisruptionExecutionStep.step_key)
+            )
+        ).scalars().all()
+        traces = (
+            await db.execute(
+                select(DisruptionRiderTrace)
+                .where(DisruptionRiderTrace.disruption_event_id == event_id)
+                .order_by(desc(DisruptionRiderTrace.updated_at), DisruptionRiderTrace.rider_id)
+            )
+        ).scalars().all()
+
+        rider_ids = {trace.rider_id for trace in traces}
+        riders_by_id = {}
+        if rider_ids:
+            rider_rows = await db.execute(select(Rider).where(Rider.id.in_(rider_ids)))
+            riders_by_id = {row.id: row for row in rider_rows.scalars().all()}
+
+        counts = _trace_counts(traces)
+        timeline = [
+            {
+                "step_key": step.step_key,
+                "status": step.status,
+                "started_at": _iso_or_none(step.started_at),
+                "completed_at": _iso_or_none(step.completed_at),
+                "meta": step.meta_json or {},
+            }
+            for step in steps
+        ]
+        rider_rows = []
+        for trace in traces:
+            rider = riders_by_id.get(trace.rider_id)
+            rider_rows.append(
+                {
+                    "trace_id": str(trace.id),
+                    "rider_id": str(trace.rider_id),
+                    "rider_name": rider.name if rider else None,
+                    "zone_name": event.zone_name,
+                    "snapshot_time": _iso_or_none(trace.snapshot_time),
+                    "processing_stage": trace.processing_stage,
+                    "verification_result": trace.verification_result,
+                    "verification_reason": trace.verification_reason,
+                    "fraud_score": trace.fraud_score,
+                    "expected_earnings": trace.expected_earnings,
+                    "actual_earnings": trace.actual_earnings,
+                    "income_loss": trace.income_loss,
+                    "eligible_payout_amount": trace.eligible_payout_amount,
+                    "payout_status": trace.payout_status,
+                    "claim_id": str(trace.claim_id) if trace.claim_id else None,
+                    "payout_id": str(trace.payout_id) if trace.payout_id else None,
+                    "trace": trace.trace_json or {},
+                    "updated_at": _iso_or_none(trace.updated_at),
+                }
+            )
+
+        return {
+            "summary": {
+                "event_id": str(event.id),
+                "trigger_type": event.trigger_type,
+                "zone": event.zone_name or str(event.zone_id),
+                "zone_id": str(event.zone_id),
+                "severity": event.severity,
+                "source": getattr(event, "source", "scheduler") or "scheduler",
+                "created_at": _iso_or_none(event.created_at),
+                "slot_start": _iso_or_none(event.slot_start),
+                "slot_end": _iso_or_none(event.slot_end),
+                "processing_status": getattr(event, "processing_status", "completed") or "completed",
+                **counts,
+            },
+            "timeline": timeline,
+            "riders": rider_rows,
+            "aggregate_counts": counts,
+            "refreshed_at": _iso_or_none(datetime.now(timezone.utc)),
+        }
+    except (OperationalError, ProgrammingError):
+        raise HTTPException(
+            status_code=503,
+            detail="Disruption traceability data is not ready yet for this environment.",
+        )
 
 
 @router.get("/analytics/payouts", summary="Payout analytics by trigger, zone and day")

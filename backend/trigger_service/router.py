@@ -8,7 +8,8 @@ Trigger Service Router — 3 endpoints as specified in TASK-3:
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
@@ -95,38 +96,78 @@ async def list_disruption_events(
     Returns paginated disruption events.
     Query: ?zone=koramangala&from=2026-03-30T00:00:00Z
     """
-    stmt = select(DisruptionEvent).order_by(desc(DisruptionEvent.created_at))
+    try:
+        stmt = select(DisruptionEvent).order_by(desc(DisruptionEvent.created_at))
 
-    if zone:
-        zone_obj = get_zone_by_name(zone)
-        if not zone_obj:
-            raise HTTPException(status_code=404, detail=f"Zone '{zone}' not found")
-        stmt = stmt.where(DisruptionEvent.zone_id == uuid.UUID(zone_obj["id"]))
+        if zone:
+            zone_obj = get_zone_by_name(zone)
+            if not zone_obj:
+                raise HTTPException(status_code=404, detail=f"Zone '{zone}' not found")
+            stmt = stmt.where(DisruptionEvent.zone_id == uuid.UUID(zone_obj["id"]))
 
-    if trigger_type:
-        stmt = stmt.where(DisruptionEvent.trigger_type == trigger_type)
+        if trigger_type:
+            stmt = stmt.where(DisruptionEvent.trigger_type == trigger_type)
 
-    if from_ts:
-        stmt = stmt.where(DisruptionEvent.created_at >= from_ts)
+        if from_ts:
+            stmt = stmt.where(DisruptionEvent.created_at >= from_ts)
 
-    stmt = stmt.limit(limit)
-    result = await db.execute(stmt)
-    rows = result.scalars().all()
+        stmt = stmt.limit(limit)
+        result = await db.execute(stmt)
+        rows = result.scalars().all()
 
-    events = [
-        DisruptionEventOut(
-            event_id    = r.id,
-            trigger_type= r.trigger_type,
-            zone        = r.zone_name or str(r.zone_id),
-            zone_id     = r.zone_id,
-            slot        = f"{r.slot_start.strftime('%H:%M')}-{r.slot_end.strftime('%H:%M')}",
-            severity    = r.severity,
-            affected_riders = r.affected_riders or 0,
-            data        = r.data_json,
-            created_at  = r.created_at,
+        events = [
+            DisruptionEventOut(
+                event_id    = r.id,
+                trigger_type= r.trigger_type,
+                zone        = r.zone_name or str(r.zone_id),
+                zone_id     = r.zone_id,
+                slot        = f"{r.slot_start.strftime('%H:%M')}-{r.slot_end.strftime('%H:%M')}",
+                severity    = r.severity,
+                affected_riders = r.affected_riders or 0,
+                data        = r.data_json,
+                created_at  = r.created_at,
+            )
+            for r in rows
+        ]
+    except (OperationalError, ProgrammingError):
+        await db.rollback()
+        clauses = []
+        params: dict[str, object] = {"limit": limit}
+        if zone:
+            zone_obj = get_zone_by_name(zone)
+            if not zone_obj:
+                raise HTTPException(status_code=404, detail=f"Zone '{zone}' not found")
+            clauses.append("zone_id = :zone_id")
+            params["zone_id"] = zone_obj["id"]
+        if trigger_type:
+            clauses.append("trigger_type = :trigger_type")
+            params["trigger_type"] = trigger_type
+        if from_ts:
+            clauses.append("created_at >= :from_ts")
+            params["from_ts"] = from_ts
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        result = await db.execute(
+            text(
+                "SELECT id, trigger_type, zone_id, zone_name, slot_start, slot_end, severity, data_json, affected_riders, created_at "
+                f"FROM disruption_events {where_sql} ORDER BY created_at DESC LIMIT :limit"
+            ),
+            params,
         )
-        for r in rows
-    ]
+        rows = result.mappings().all()
+        events = [
+            DisruptionEventOut(
+                event_id=row["id"],
+                trigger_type=row["trigger_type"],
+                zone=row["zone_name"] or str(row["zone_id"]),
+                zone_id=row["zone_id"],
+                slot=f"{row['slot_start'].strftime('%H:%M')}-{row['slot_end'].strftime('%H:%M')}",
+                severity=row["severity"],
+                affected_riders=row["affected_riders"] or 0,
+                data=row["data_json"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
 
     return DisruptionEventListResponse(events=events, total=len(events))
 

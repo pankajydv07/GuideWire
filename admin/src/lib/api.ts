@@ -1,6 +1,8 @@
 import type {
   AutoClaim,
   DashboardStats,
+  DisruptionVisualizationDetail,
+  DisruptionVisualizationSummary,
   DisruptionEvent,
   FraudAlertItem,
   ManualClaimReview,
@@ -224,6 +226,19 @@ class AdminApiClient {
       this.request<PoolHealth>("GET", "/api/admin/analytics/pool-health"),
     stressTest: (days = 14) =>
       this.request<Record<string, unknown>>("GET", `/api/admin/analytics/stress-test?monsoon_days=${days}`),
+  };
+
+  disruptions = {
+    listVisualization: (limit = 25) =>
+      this.request<{ events: DisruptionVisualizationSummary[]; total: number }>(
+        "GET",
+        `/api/admin/disruptions/visualization?limit=${encodeURIComponent(String(limit))}`,
+      ),
+    getVisualization: (eventId: string) =>
+      this.request<DisruptionVisualizationDetail>(
+        "GET",
+        `/api/admin/disruptions/${eventId}/visualization`,
+      ),
   };
 
   health() {

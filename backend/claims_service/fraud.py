@@ -53,6 +53,7 @@ async def detect_collusion(
     disruption_event_id: UUID,
     zone_id: UUID,
     slot_start: datetime,
+    slot_end: datetime,
     db: AsyncSession,
 ) -> int:
     window_start = datetime.utcnow() - timedelta(minutes=10)
@@ -69,7 +70,8 @@ async def detect_collusion(
     online_riders_result = await db.execute(
         select(func.count(distinct(PlatformSnapshot.rider_id))).where(
             PlatformSnapshot.zone_id == zone_id,
-            PlatformSnapshot.time == slot_start,
+            PlatformSnapshot.time >= slot_start,
+            PlatformSnapshot.time <= slot_end,
             PlatformSnapshot.rider_status == "ONLINE",
         )
     )
@@ -93,6 +95,7 @@ async def run_fraud_check(
     disruption_event_id: UUID,
     actual_earnings: int,
     slot_start: datetime,
+    slot_end: datetime,
     db: AsyncSession
 ) -> int:
     """
@@ -106,8 +109,11 @@ async def run_fraud_check(
     snapshot_result = await db.execute(
         select(PlatformSnapshot).where(
             PlatformSnapshot.rider_id == rider_id,
-            PlatformSnapshot.time == slot_start
+            PlatformSnapshot.time >= slot_start,
+            PlatformSnapshot.time <= slot_end,
         )
+        .order_by(PlatformSnapshot.time.desc())
+        .limit(1)
     )
     snapshot = snapshot_result.scalar_one_or_none()
     
@@ -120,7 +126,8 @@ async def run_fraud_check(
     peer_avg_result = await db.execute(
         select(func.avg(PlatformSnapshot.earnings_current_slot)).where(
             PlatformSnapshot.zone_id == zone_id,
-            PlatformSnapshot.time == slot_start,
+            PlatformSnapshot.time >= slot_start,
+            PlatformSnapshot.time <= slot_end,
             PlatformSnapshot.rider_id != rider_id
         )
     )
@@ -169,6 +176,7 @@ async def run_fraud_check(
         disruption_event_id=disruption_event_id,
         zone_id=zone_id,
         slot_start=slot_start,
+        slot_end=slot_end,
         db=db,
     )
 
