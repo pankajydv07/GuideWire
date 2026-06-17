@@ -147,3 +147,18 @@ async def predict(request: PredictRequest):
         "risk_band": probability_to_band(prediction),
         "expected_earnings_multiplier": round(1.0 - prediction * 0.6, 4),
     }
+
+class AnomalyRequest(BaseModel):
+    orders_per_hour: float
+    earnings_current_slot: float
+    earnings_rolling_baseline: float
+    order_rate_drop_pct: float
+    avg_pickup_wait_sec: float
+    congestion_index: float
+
+@app.post("/predict/anomaly")
+async def predict_anomaly_endpoint(request: AnomalyRequest):
+    payload = request.model_dump()
+    score = predict_anomaly(payload)
+    return {"anomaly_score": score}
+

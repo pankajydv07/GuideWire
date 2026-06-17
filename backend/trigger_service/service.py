@@ -730,15 +730,25 @@ async def _create_event(
     await db.commit()
     await db.refresh(event)
 
-    claims_created = 0
+    # Publish DisruptionEventCreated event to Redis Stream
+    from shared.redis_client import publish_event
     try:
-        from claims_service.service import process_auto_claims
-
-        claims_created = await process_auto_claims(event_id, db)
+        await publish_event(
+            "stream:disruption",
+            "DisruptionEventCreated",
+            {
+                "event_id": str(event_id),
+                "trigger_type": result["trigger_type"],
+                "zone_id": str(zone_id),
+                "zone_name": zone_name,
+                "slot_start": slot_start.isoformat() if hasattr(slot_start, "isoformat") else str(slot_start),
+                "slot_end": slot_end.isoformat() if hasattr(slot_end, "isoformat") else str(slot_end),
+                "severity": result["severity"]
+            }
+        )
+        print(f"[TriggerService] ✅ DisruptionEventCreated event published for event {event_id}")
     except Exception as exc:
-        print(f"[TriggerService] Auto-claims failed for event {event_id}: {exc}")
-    print(f"[TriggerService] ✅ DisruptionEvent created: {result['trigger_type']} @ {zone_name} "
-          f"({claims_created} claims anchored)")
+        print(f"[TriggerService] Failed to publish DisruptionEventCreated event: {exc}")
     return event_id
 
 

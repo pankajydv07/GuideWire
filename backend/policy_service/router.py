@@ -92,11 +92,19 @@ async def get_active_policy_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     """Get rider's active policy for the current week."""
+    from shared.redis_client import cache_get, cache_set
+    cache_key = f"policy:active:{rider.id}"
+    
+    cached_policy = await cache_get(cache_key)
+    if cached_policy:
+        cached_policy["cached"] = True
+        return cached_policy
+
     policy = await get_active_policy(str(rider.id), db)
     if not policy:
         raise HTTPException(status_code=404, detail="No active policy for this week")
 
-    return {
+    policy_data = {
         "policy_id": str(policy.id),
         "rider_id": str(policy.rider_id),
         "plan_tier": policy.plan_tier,
@@ -110,7 +118,11 @@ async def get_active_policy_endpoint(
         "slots_covered": policy.slots_covered,
         "hours_remaining": calculate_hours_remaining(policy),
         "expires_at": str(policy.expires_at) if policy.expires_at else None,
+        "cached": False
     }
+
+    await cache_set(cache_key, policy_data, ttl=600)
+    return policy_data
 
 
 @router.get("/{policy_id}")

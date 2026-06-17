@@ -18,8 +18,7 @@ logger = logging.getLogger("zylo.payouts")
 async def process_upi_payout(claim_id: UUID, rider_id: UUID, amount: int, db: AsyncSession) -> Payout:
     """
     Simulates sending an instant UPI payment.
-    Always succeeds and returns the created Payout record.
-    Also incrementally updates the policy's coverage_used.
+    Always succeeds, returns the created Payout record, and publishes a PayoutCompleted event.
     """
     logger.info(f"Processing UPI payout of ₹{amount} for claim {claim_id}")
 
@@ -28,20 +27,7 @@ async def process_upi_payout(claim_id: UUID, rider_id: UUID, amount: int, db: As
     rider = rider_result.scalar_one_or_none()
     upi_id = rider.upi_id if rider else "mock@upi"
 
-    # 2. Fetch Claim to get policy_id
-    claim_result = await db.execute(select(Claim).where(Claim.id == claim_id))
-    claim = claim_result.scalar_one_or_none()
-
-    if claim and claim.policy_id:
-        # 3. Update Policy coverage_used atomically
-        policy_result = await db.execute(select(Policy).where(Policy.id == claim.policy_id))
-        policy = policy_result.scalar_one_or_none()
-        if policy:
-            policy.coverage_used += amount
-            db.add(policy)
-            logger.info(f"Updated policy {policy.id} coverage_used +{amount} (now {policy.coverage_used})")
-
-    # 4. Create Payout record
+    # 2. Create Payout record
     payout = Payout(
         id=uuid4(),
         claim_id=claim_id,
@@ -56,9 +42,29 @@ async def process_upi_payout(claim_id: UUID, rider_id: UUID, amount: int, db: As
     )
     
     db.add(payout)
-    await db.flush()  # assign ID without full commit
+    await db.commit()
     
     logger.info(f"Payout {payout.id} completed. Ref: {payout.reference_id}")
+
+    # 3. Publish PayoutCompleted event
+    from shared.redis_client import publish_event
+    try:
+        await publish_event(
+            "stream:payout_completed",
+            "PayoutCompleted",
+            {
+                "payout_id": str(payout.id),
+                "claim_id": str(claim_id),
+                "rider_id": str(rider_id),
+                "amount": float(amount),
+                "status": "success",
+                "reference_id": payout.reference_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to publish PayoutCompleted event: {e}")
+
     return payout
 
 

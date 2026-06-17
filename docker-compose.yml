@@ -86,6 +86,123 @@ services:
       - upload_data:/app/uploads
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
+  # ─── Policy Service ─────────────────────────────────
+  policy-service:
+    build: ./backend
+    ports:
+      - "8002:8002"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+    command: uvicorn policy_service.main:app --host 0.0.0.0 --port 8002 --reload
+
+  # ─── Claims Service ─────────────────────────────────
+  claims-service:
+    build: ./backend
+    ports:
+      - "8003:8003"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+      - upload_data:/app/uploads
+    command: uvicorn claims_service.main:app --host 0.0.0.0 --port 8003 --reload
+
+  # ─── Payout Service ─────────────────────────────────
+  payout-service:
+    build: ./backend
+    ports:
+      - "8004:8004"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+    command: uvicorn payout_service.main:app --host 0.0.0.0 --port 8004 --reload
+
+  # ─── Risk Scoring Service ───────────────────────────
+  risk-scoring-service:
+    build: ./backend
+    ports:
+      - "8005:8005"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+    command: uvicorn risk_scoring_service.main:app --host 0.0.0.0 --port 8005 --reload
+
+  # ─── Fraud Detection Service ────────────────────────
+  fraud-detection-service:
+    build: ./backend
+    ports:
+      - "8006:8006"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-ankush}@postgres:5432/${POSTGRES_DB:-postgres}
+      REDIS_URL: redis://redis:6379/0
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-zylo12345}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+    command: uvicorn fraud_detection_service.main:app --host 0.0.0.0 --port 8006 --reload
+
   # ─── Trigger Scheduler ─────────────────────────────
   scheduler:
     build: ./backend

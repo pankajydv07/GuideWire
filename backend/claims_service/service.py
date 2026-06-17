@@ -110,21 +110,11 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
         if income_loss <= 0:
             continue
 
-        fraud_score = await run_fraud_check(
-            rider_id=rider_id,
-            zone_id=zone_id,
-            disruption_event_id=disruption_event_id,
-            actual_earnings=actual_earnings,
-            slot_start=slot_start,
-            db=db
-        )
-
         coverage_remaining = max(0, policy.coverage_limit - policy.coverage_used)
         payout_amount = min(income_loss, coverage_remaining)
         if payout_amount <= 0:
             continue
 
-        flagged = fraud_score >= AUTO_CLAIM_FRAUD_THRESHOLD
         claim = Claim(
             rider_id=rider_id,
             policy_id=policy.id,
@@ -134,25 +124,35 @@ async def process_auto_claims(disruption_event_id: UUID, db: AsyncSession) -> in
             income_loss=income_loss,
             expected_earnings=expected_earnings,
             actual_earnings=actual_earnings,
-            payout_amount=0 if flagged else payout_amount,
-            fraud_score=fraud_score,
-            status="flagged" if flagged else "paid",
+            payout_amount=payout_amount,
+            fraud_score=0,
+            status="submitted",
             created_at=datetime.utcnow(),
-            processed_at=datetime.utcnow()
+            processed_at=None
         )
         db.add(claim)
         await db.flush()
 
-        if flagged:
-            logger.warning(
-                "Auto-claim flagged for review: rider=%s event=%s fraud_score=%s threshold=%s",
-                rider_id,
-                disruption_event_id,
-                fraud_score,
-                AUTO_CLAIM_FRAUD_THRESHOLD,
+        from shared.redis_client import publish_event
+        try:
+            await publish_event(
+                "stream:claim",
+                "ClaimSubmitted",
+                {
+                    "claim_id": str(claim.id),
+                    "rider_id": str(rider_id),
+                    "policy_id": str(policy.id),
+                    "disruption_event_id": str(disruption_event_id),
+                    "disruption_type": event.trigger_type,
+                    "payout_amount": float(payout_amount),
+                    "income_loss": float(income_loss),
+                    "expected_earnings": float(expected_earnings),
+                    "actual_earnings": float(actual_earnings),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
             )
-        else:
-            await process_upi_payout(claim.id, rider_id, payout_amount, db)
+        except Exception as e:
+            logger.error(f"Failed to publish ClaimSubmitted event: {e}")
         claims_created += 1
 
     await db.commit()
@@ -280,15 +280,32 @@ async def approve_manual_claim(claim_id: UUID, db: AsyncSession, allow_override:
     if claim.status == "rejected" and not allow_override:
         raise HTTPException(status_code=400, detail="CLAIM_ALREADY_REVIEWED")
 
-    claim.status = "paid"
+    claim.status = "approved"
     claim.processed_at = datetime.utcnow()
 
-    payout = await process_upi_payout(claim.id, claim.rider_id, claim.payout_amount, db)
+    import uuid
+    payout_id = str(uuid.uuid4())
+    from shared.redis_client import publish_event
+    try:
+        await publish_event(
+            "stream:payout",
+            "PayoutTriggered",
+            {
+                "payout_id": payout_id,
+                "claim_id": str(claim.id),
+                "rider_id": str(claim.rider_id),
+                "amount": float(claim.payout_amount),
+                "vpa": "rider@upi",
+                "idempotency_key": f"payout_{claim.id}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to publish PayoutTriggered event: {e}")
 
     return {
         "claim_id": str(claim.id),
         "status": "approved",
-        "payout_id": str(payout.id),
+        "payout_id": payout_id,
         "payout_amount": claim.payout_amount,
         "overridden": allow_override,
     }

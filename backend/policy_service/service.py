@@ -277,6 +277,26 @@ async def create_policy(
     db.add(policy)
     await db.commit()
     await db.refresh(policy)
+
+    # Publish PolicyCreated event asynchronously
+    from shared.redis_client import publish_event
+    try:
+        await publish_event(
+            "stream:policy",
+            "PolicyCreated",
+            {
+                "policy_id": str(policy.id),
+                "rider_id": str(policy.rider_id),
+                "plan_tier": policy.plan_tier,
+                "premium_amount": float(policy.premium),
+                "start_date": str(policy.created_at) if policy.created_at else None,
+                "end_date": str(policy.expires_at) if policy.expires_at else None
+            }
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger("zylo").error(f"Failed to publish PolicyCreated event: {e}")
+
     return policy
 
 

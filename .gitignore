@@ -1,6 +1,8 @@
 # Artifacts
 .agent/
-
+.agents/
+.specify/
+specs/
 # Dependencies
 node_modules/
 admin/node_modules/
