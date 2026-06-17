@@ -8,7 +8,8 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from claims_service.models import Claim, Payout
+from claims_service.models import Claim
+from payout_service.models import Payout
 from policy_service.models import Policy
 from rider_service.models import Rider
 
